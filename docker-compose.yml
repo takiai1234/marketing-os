@@ -1,0 +1,108 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: marketing_os_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    # Postgres intentionally not exposed to host — internal network only
+    networks:
+      - internal
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: marketing_os_app
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env.production
+    # run-migrations.cjs first, then start the Next.js standalone server
+    command: sh -c "node scripts/run-migrations.cjs && node server.js"
+    expose:
+      - "3000"
+    volumes:
+      # Skill library: file zip upload sống ngoài image để không bị mất khi
+      # container restart hoặc deploy mới. Host path ./data/skills phải có
+      # owner uid=1001 (Dockerfile create user nextjs:nodejs với UID 1001).
+      - ./data/skills:/app/storage/skills
+    networks:
+      - internal
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: marketing_os_nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/sites:/etc/nginx/conf.d:ro
+      - certbot-etc:/etc/letsencrypt:ro
+      - certbot-www:/var/www/certbot:ro
+    depends_on:
+      - app
+    networks:
+      - internal
+      - default
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ---------------------------------------------------------------------------
+  # Certbot — uncomment for initial SSL certificate issuance ONLY.
+  # After the cert is obtained, comment this block out and use the host
+  # crontab for renewals: `certbot renew --quiet`
+  #
+  # First-run procedure (see scripts/setup-vps.md):
+  #   1. Start only nginx on port 80 first: docker compose up -d nginx
+  #   2. Uncomment this block, then: docker compose run --rm certbot
+  #   3. Re-comment, then: docker compose up -d
+  # ---------------------------------------------------------------------------
+  # certbot:
+  #   image: certbot/certbot:latest
+  #   volumes:
+  #     - certbot-etc:/etc/letsencrypt
+  #     - certbot-www:/var/www/certbot
+  #   command: >
+  #     certonly --webroot
+  #     --webroot-path=/var/www/certbot
+  #     --email ${ADMIN_EMAIL}
+  #     --agree-tos
+  #     --no-eff-email
+  #     -d ${DOMAIN}
+
+volumes:
+  pgdata: {}
+  certbot-etc: {}
+  certbot-www: {}
+
+networks:
+  internal:
+    driver: bridge

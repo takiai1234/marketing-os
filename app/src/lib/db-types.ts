@@ -1,0 +1,193 @@
+// TypeScript interfaces matching database table columns (snake_case)
+// All uuid columns typed as string; timestamptz as Date; bytea as Buffer
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+export type PlatformT =
+  | 'facebook'
+  | 'tiktok'
+  | 'youtube'
+  | 'instagram'
+  | 'threads'
+  | 'zalo'
+  // Added in migration 021 to support Bundle.social-mediated channels.
+  | 'linkedin'
+  | 'pinterest'
+  | 'reddit'
+  | 'mastodon'
+  | 'bluesky'
+  | 'twitter';
+
+export type AccountStatusT = 'active' | 'token_expired' | 'disconnected';
+
+export type PostTypeT =
+  | 'photo'
+  | 'video'
+  | 'reel'
+  | 'status'
+  | 'link'
+  | 'album'
+  | 'sticker'
+  | 'share';
+
+export type SeverityT = 'info' | 'warning' | 'critical';
+
+export type SyncTypeT =
+  | 'page_insights'
+  | 'posts'
+  | 'health_recompute'
+  | 'manual_refresh'
+  | 'ladipage'
+  | 'news_ingestion';
+
+export type SyncStatusT = 'running' | 'success' | 'failed';
+
+// ─── Tables ───────────────────────────────────────────────────────────────────
+
+export interface TeamMember {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  password_hash: string | null;
+  bundle_team_id: string | null;
+  created_at: Date;
+}
+
+export interface SocialAccount {
+  id: string;
+  platform: PlatformT;
+  external_id: string;
+  name: string;
+  /** Arbitrary JSON metadata (audience, location, category, etc.) */
+  persona_json: Record<string, unknown> | null;
+  /** pgcrypto pgp_sym_encrypt output — opaque bytes at app layer.
+   *  NULL for Bundle-mediated channels (Bundle holds the token). */
+  access_token_encrypted: Buffer | null;
+  connected_at: Date;
+  last_synced_at: Date | null;
+  status: AccountStatusT;
+  owner_member_id: string | null;
+  // Bundle.social linkage — populated only for non-FB channels (migration 021).
+  bundle_team_id: string | null;
+  bundle_social_account_id: string | null;
+  bundle_username: string | null;
+  bundle_avatar_url: string | null;
+  // Async post import tracking (migration 022) — set after triggering an import,
+  // cleared by the poller cron when the import finalizes (COMPLETED or FAILED).
+  pending_bundle_import_id: string | null;
+  pending_bundle_import_at: Date | null;
+}
+
+export interface SocialPost {
+  id: string;
+  account_id: string;
+  external_id: string;
+  content: string | null;
+  media_url: string | null;
+  post_type: PostTypeT;
+  published_at: Date;
+  permalink: string | null;
+  campaign_tag: string | null;
+}
+
+export interface PostMetricDaily {
+  post_id: string;
+  date: Date;
+  reactions: number;
+  comments: number;
+  shares: number;
+  reach: number;
+  impressions: number;
+  clicks: number;
+  video_views: number;
+  /** GENERATED ALWAYS AS STORED — read-only, never write */
+  engagement_rate: number;
+  updated_at: Date;
+}
+
+export interface AccountMetricDaily {
+  account_id: string;
+  date: Date;
+  followers: number;
+  follower_growth: number;
+  /** @deprecated NOT NULL DEFAULT 0. KHÔNG ghi từ code — query đọc bằng COUNT
+   *  từ social_post (single source of truth). Column còn để legacy data, sẽ
+   *  drop trong migration sau. */
+  posts_count: number;
+  total_reach: number;
+  total_reach_unique: number;
+  total_engagement: number;
+  total_actions: number;
+  page_views: number;
+  post_reactions_total: number;
+  updated_at: Date;
+}
+
+export interface ChannelHealthDaily {
+  account_id: string;
+  date: Date;
+  health_score: number;
+  er_score: number;
+  consistency_score: number;
+  growth_score: number;
+  reach_score: number;
+  computed_at: Date;
+}
+
+export interface LandingPageConversion {
+  id: string;
+  account_id: string;
+  occurred_date: Date | string;
+  conversion_count: number;
+  raw_response: Record<string, unknown> | null;
+  synced_at: Date;
+}
+
+export interface ManualRevenue {
+  id: string;
+  account_id: string;
+  amount_vnd: number;
+  occurred_date: Date | string;
+  note: string | null;
+  created_by: string | null;
+  created_at: Date;
+}
+
+export interface ApiSyncLog {
+  id: string;
+  sync_type: SyncTypeT;
+  account_id: string | null;
+  started_at: Date;
+  finished_at: Date | null;
+  status: SyncStatusT;
+  records_upserted: number;
+  error_message: string | null;
+}
+
+export interface Alert {
+  id: string;
+  severity: SeverityT;
+  type: string;
+  title: string;
+  message: string;
+  account_id: string | null;
+  post_id: string | null;
+  is_read: boolean;
+  created_at: Date;
+}
+
+export interface SkillLib {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  original_filename: string;
+  size_bytes: number;
+  sha256: string;
+  /** Relative path under SKILL_STORAGE_PATH, ví dụ `<uuid>.zip`. Tránh
+   *  hard-code absolute path để dễ migrate sang S3 sau (chỉ đổi prefix). */
+  storage_path: string;
+  uploaded_by: string | null;
+  created_at: Date;
+}

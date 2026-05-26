@@ -1,0 +1,84 @@
+# ============================================
+# SECRETS & CREDENTIALS — NEVER COMMIT THESE
+# ============================================
+# Folder chứa tokens, API keys, credentials của các services
+# (Coolify, Cloudflare, Vercel, AWS, database passwords...)
+.secrets/
+
+# Environment files chứa biến môi trường nhạy cảm
+.env
+.env.local
+.env.production
+.env.*.local
+*.env
+
+# Cho phép commit file .example (template không chứa secrets thật)
+!.env.example
+!.env.*.example
+
+# Private keys & certificates
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+
+# ============================================
+# OS FILES
+# ============================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================================
+# IDE / EDITOR
+# ============================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ============================================
+# DEPENDENCIES & BUILD
+# ============================================
+node_modules/
+dist/
+build/
+.next/
+out/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# ============================================
+# RUNTIME DATA (skill uploads, runtime artifacts)
+# ============================================
+# File user upload — không bao giờ commit dù dev hay prod
+data/
+storage/
+
+# ============================================
+# LOGS
+# ============================================
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+
+# ============================================
+# PLANS & RAW DATA — local-only, không push lên GitHub
+# ============================================
+plans/
+.fb-raw-*.json
+
+# ============================================
+# CLAUDE CODE / AI TOOLS (local state only)
+# ============================================
+.claude/local/
+.claude/cache/
+**/.claude/settings.local.json
+**/.claude/scheduled_tasks.lock
+.dlog.json
