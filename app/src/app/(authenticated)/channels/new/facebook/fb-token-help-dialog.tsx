@@ -108,7 +108,7 @@ export function FbTokenHelpDialog() {
 
           <Step
             num={3}
-            title="Sinh User Access Token với 2 quyền cần thiết"
+            title="Sinh User Access Token với 3 quyền cần thiết"
             body={
               <>
                 <p className="text-zinc-600">
@@ -119,20 +119,35 @@ export function FbTokenHelpDialog() {
 
                 <div className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs">
                   <div className="font-semibold text-zinc-700 mb-1">
-                    Bấm <em>Add a Permission</em> và tick 2 quyền:
+                    Bấm <em>Add a Permission</em> và tick đủ 3 quyền:
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     <PermissionPill>pages_show_list</PermissionPill>
                     <PermissionPill>pages_read_engagement</PermissionPill>
+                    <PermissionPill>pages_read_user_content</PermissionPill>
                   </div>
-                  <p className="text-zinc-500 mt-1.5">
-                    <code className="bg-white px-1 rounded">pages_show_list</code>{' '}
-                    để liệt kê page bạn quản lý.{' '}
-                    <code className="bg-white px-1 rounded">
-                      pages_read_engagement
-                    </code>{' '}
-                    để Marketing OS đọc insights về sau.
-                  </p>
+                  <ul className="text-zinc-600 mt-2 space-y-0.5 list-disc list-inside leading-snug">
+                    <li>
+                      <code className="bg-white px-1 rounded">pages_show_list</code>{' '}
+                      — liệt kê page bạn quản lý
+                    </li>
+                    <li>
+                      <code className="bg-white px-1 rounded">pages_read_engagement</code>{' '}
+                      — đọc reach / impressions / clicks
+                    </li>
+                    <li>
+                      <code className="bg-white px-1 rounded">pages_read_user_content</code>{' '}
+                      — đọc comments / reactions trên bài viết
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="rounded-md bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-xs text-amber-900">
+                  ⚠ Nếu dropdown không hiện <code>pages_read_user_content</code>:{' '}
+                  gõ thẳng tên permission vào ô search trên dropdown. Vẫn không
+                  hiện → mở App Dashboard → <strong>App Review → Permissions
+                  and Features</strong> → search → bấm <strong>Get advanced
+                  access</strong> (Dev mode tự auto-grant).
                 </div>
 
                 <p className="text-zinc-600">
@@ -250,7 +265,39 @@ export function FbTokenHelpDialog() {
               </p>
             </Faq>
 
-            <Faq question="Response báo (#10) Application does not have permission?">
+            <Faq question="Lỗi (#10) 'requires pages_read_engagement permission' — nhưng tôi đã có quyền đó rồi?">
+              <p>
+                Đây là <strong>message gây hiểu nhầm của Facebook</strong>.
+                Thực ra bạn thiếu{' '}
+                <code className="bg-white px-1 rounded font-mono">
+                  pages_read_user_content
+                </code>
+                , không phải <code className="bg-white px-1 rounded font-mono">pages_read_engagement</code>.
+              </p>
+              <p className="mt-1">
+                FB trả về (#10) cho 2 trường hợp khác nhau với cùng 1 message:
+              </p>
+              <ul className="list-disc list-inside ml-1 mt-0.5 space-y-0.5">
+                <li>
+                  Đọc <code>insights.metric(...)</code> → cần{' '}
+                  <code>pages_read_engagement</code>
+                </li>
+                <li>
+                  Đọc <code>comments.summary(true)</code> hoặc{' '}
+                  <code>reactions.summary(true)</code> → cần{' '}
+                  <code>pages_read_user_content</code> (nhưng FB vẫn báo "requires pages_read_engagement")
+                </li>
+              </ul>
+              <p className="mt-1">
+                Fix: quay lại Bước 3, tick thêm{' '}
+                <code className="bg-white px-1 rounded">
+                  pages_read_user_content
+                </code>{' '}
+                → Generate token lại → paste token mới.
+              </p>
+            </Faq>
+
+            <Faq question="App Review báo Application does not have permission (Dev mode)?">
               <p>
                 Meta App của bạn ở chế độ <strong>Development</strong> và chưa
                 add tài khoản FB của bạn vào danh sách tester.

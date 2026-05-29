@@ -55,7 +55,20 @@ interface TestResult {
   };
 }
 
-const REQUIRED_SCOPES = ['pages_read_engagement'];
+/**
+ * Scope nào không có thì tính năng nào bị ảnh hưởng.
+ * Đặt array (không Set) vì UI cần ổn định thứ tự hiển thị.
+ */
+const REQUIRED_SCOPES: Array<{ key: string; effect: string }> = [
+  {
+    key: 'pages_read_engagement',
+    effect: 'reach / impressions / clicks (insights)',
+  },
+  {
+    key: 'pages_read_user_content',
+    effect: 'comments + reactions của bài viết',
+  },
+];
 
 function formatExpiry(expiresAt: number): { label: string; tone: 'good' | 'warn' | 'bad' } {
   if (expiresAt === 0) return { label: 'Vĩnh viễn', tone: 'good' };
@@ -299,12 +312,29 @@ export function ManualConnectForm() {
               </div>
               {(() => {
                 const missing = REQUIRED_SCOPES.filter(
-                  (s) => !result.token!.scopes.includes(s)
+                  (s) => !result.token!.scopes.includes(s.key)
                 );
                 if (missing.length === 0) return null;
                 return (
-                  <div className="mt-1 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-                    ⚠ Thiếu scope: <code>{missing.join(', ')}</code> — sync data có thể fail
+                  <div className="mt-1 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 space-y-1">
+                    <div className="font-semibold">
+                      ⚠ Token thiếu {missing.length} permission — sync vẫn chạy,
+                      nhưng các field sau sẽ trống:
+                    </div>
+                    <ul className="list-disc list-inside ml-1 space-y-0.5">
+                      {missing.map((m) => (
+                        <li key={m.key}>
+                          <code className="bg-white px-1 rounded font-mono">
+                            {m.key}
+                          </code>{' '}
+                          → mất: {m.effect}
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="text-amber-800">
+                      Generate token lại với đủ permission ở Graph Explorer để
+                      khắc phục.
+                    </div>
                   </div>
                 );
               })()}

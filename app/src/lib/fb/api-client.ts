@@ -36,12 +36,26 @@ export function fbThrottle(): Promise<void> {
   return sleep(FB_DELAY_MIN_MS + Math.random() * span);
 }
 
-/** Posts field expansion — fetches everything in ONE call per page.
- * Includes metadata + comments/reactions summary + shares + insights expansion.
- * Mirrors the curl spec: post_media_view + post_total_media_view_unique +
- * post_clicks_by_type + post_reactions_by_type_total.
- * On #100 (dead metric), caller falls back to POSTS_FIELDS_MINIMAL.
- * NO whitespace inside the value — Graph API is picky. */
+/** Posts field expansion — 3-tier fallback ladder.
+ *
+ * The ladder exists because tokens have heterogeneous scopes — not every
+ * caller has `pages_read_user_content` (for comments/reactions) AND
+ * `pages_read_engagement` (for insights). We try the richest spec first and
+ * step down on FB error #10 / #100.
+ *
+ *   FULL              → everything (needs both scopes)
+ *   NO_USER_CONTENT   → drops comments.summary + reactions.summary
+ *                       (used when token lacks pages_read_user_content)
+ *   MINIMAL           → drops insights too (used on #100 invalid metric)
+ *
+ * Caveat about FB's (#10) error: when comments.summary(true) / reactions.summary(true)
+ * is requested without `pages_read_user_content`, FB returns (#10) with the
+ * MISLEADING message "requires pages_read_engagement permission". The real
+ * missing scope is `pages_read_user_content`. Don't be fooled by the
+ * error text — degrade to NO_USER_CONTENT and retry.
+ *
+ * NO whitespace inside the value — Graph API is picky.
+ */
 const POSTS_FIELDS_FULL = [
   'id',
   'message',
@@ -56,7 +70,23 @@ const POSTS_FIELDS_FULL = [
   'insights.metric(post_media_view,post_total_media_view_unique,post_clicks_by_type,post_reactions_by_type_total)',
 ].join(',');
 
-/** Fallback: posts without insights expansion (used when #100 occurs). */
+/** Mid-tier: keeps insights + shares, drops user-content (comments/reactions).
+ *  Used when token only has pages_read_engagement (no user_content). */
+const POSTS_FIELDS_NO_USER_CONTENT = [
+  'id',
+  'message',
+  'story',
+  'created_time',
+  'permalink_url',
+  'full_picture',
+  'attachments{media_type,type,title,description,media,subattachments}',
+  'shares',
+  'insights.metric(post_media_view,post_total_media_view_unique,post_clicks_by_type,post_reactions_by_type_total)',
+].join(',');
+
+/** Bottom tier: drops insights too. Used when even NO_USER_CONTENT
+ *  fails (e.g. #100 dead metric). Lose reach/impressions but still
+ *  get post metadata so the rest of the pipeline keeps working. */
 const POSTS_FIELDS_MINIMAL = [
   'id',
   'message',
@@ -65,9 +95,7 @@ const POSTS_FIELDS_MINIMAL = [
   'permalink_url',
   'full_picture',
   'attachments{media_type,type,title,description,media,subattachments}',
-  'comments.summary(true)',
   'shares',
-  'reactions.summary(true)',
 ].join(',');
 
 /** Sleep helper for backoff delays. */
@@ -288,7 +316,18 @@ export async function fetchPagePosts(
     limit: '25',
   };
 
-  // Try full field expansion first (1 call returns everything per page)
+  // Helper: tell which FB error codes are recoverable via field-stripping.
+  // (#10)  = permission issue on user-content (comments/reactions). Misleading
+  //         message — FB says "requires pages_read_engagement" but the actual
+  //         missing scope is pages_read_user_content.
+  // (#100) = invalid metric (FB deprecated a metric name we still request).
+  const isRecoverableFieldError = (msg: string): boolean =>
+    msg.includes('(code 10)') ||
+    msg.includes('(#10)') ||
+    msg.includes('(code 100)') ||
+    msg.includes('(#100)');
+
+  // Tier 1 — full expansion (insights + comments + reactions + shares)
   try {
     return await fetchAllPaginated<FBPagePost>(
       `/${pageId}/posts`,
@@ -297,15 +336,37 @@ export async function fetchPagePosts(
     );
   } catch (err) {
     const msg = (err as Error).message;
-    // Fall back ONLY for #100 invalid metric — other errors propagate
-    if (!msg.includes('(code 100)') && !msg.includes('(#100)')) throw err;
-    console.warn('[fetchPagePosts] insights expansion failed, falling back to metadata-only');
-    return await fetchAllPaginated<FBPagePost>(
-      `/${pageId}/posts`,
-      { ...baseParams, fields: POSTS_FIELDS_MINIMAL },
-      token
+    if (!isRecoverableFieldError(msg)) throw err;
+    console.warn(
+      `[fetchPagePosts] FULL expansion failed (${msg.slice(0, 120)}) — ` +
+        `falling back to NO_USER_CONTENT (drops comments+reactions, keeps insights). ` +
+        `Likely cause: token missing pages_read_user_content scope.`
     );
   }
+
+  // Tier 2 — keep insights + shares, drop comments/reactions
+  try {
+    return await fetchAllPaginated<FBPagePost>(
+      `/${pageId}/posts`,
+      { ...baseParams, fields: POSTS_FIELDS_NO_USER_CONTENT },
+      token
+    );
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (!isRecoverableFieldError(msg)) throw err;
+    console.warn(
+      `[fetchPagePosts] NO_USER_CONTENT expansion failed (${msg.slice(0, 120)}) — ` +
+        `falling back to MINIMAL (metadata only, no insights, no engagement). ` +
+        `Likely cause: deprecated insights metric or token missing pages_read_engagement.`
+    );
+  }
+
+  // Tier 3 — last resort: metadata only. If this fails, propagate.
+  return await fetchAllPaginated<FBPagePost>(
+    `/${pageId}/posts`,
+    { ...baseParams, fields: POSTS_FIELDS_MINIMAL },
+    token
+  );
 }
 
 /** Page-level metrics fetched in ONE /insights call.
