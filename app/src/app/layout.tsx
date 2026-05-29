@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Montserrat, Geist_Mono } from "next/font/google";
+import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
 // Montserrat — display font cho toàn app. Subset 'vietnamese' để hiển thị đúng dấu tiếng Việt.
@@ -29,7 +30,14 @@ export default function RootLayout({
       lang="en"
       className={`${montserrat.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        {/* Sonner Toaster — mount tại root để toast.success/info/warning/error
+            được hiển thị từ bất kỳ trang nào (login, dashboard, channels...).
+            position=top-right để không bị navbar/footer che. richColors=true
+            cho màu nền theo từng level (xanh/đỏ/vàng). */}
+        <Toaster position="top-right" richColors closeButton />
+      </body>
     </html>
   );
 }
