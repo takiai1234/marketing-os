@@ -38,18 +38,18 @@ export function FbTokenHelpDialog() {
         Hướng dẫn chi tiết
       </DialogTrigger>
 
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-base">
+      <DialogContent className="w-full sm:max-w-3xl max-h-[85vh] overflow-y-auto overflow-x-hidden">
+        <DialogHeader className="min-w-0">
+          <DialogTitle className="text-base break-words">
             Lấy 3 thông tin từ Graph API Explorer
           </DialogTitle>
-          <p className="text-xs text-zinc-500 mt-1">
+          <p className="text-xs text-zinc-500 mt-1 break-words">
             Page ID · Page Name · Page Access Token — copy lại để dán vào form
             bên trái.
           </p>
         </DialogHeader>
 
-        <div className="flex flex-col gap-5 text-sm">
+        <div className="flex flex-col gap-5 text-sm min-w-0">
           {/* Requirements section */}
           <section className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs">
             <div className="font-semibold text-amber-900 mb-1">
@@ -329,15 +329,15 @@ function Step({
   body: React.ReactNode;
 }) {
   return (
-    <section className="flex gap-3">
-      <div className="flex flex-col items-center pt-0.5">
+    <section className="flex gap-3 min-w-0">
+      <div className="flex flex-col items-center pt-0.5 shrink-0">
         <div className="flex size-6 items-center justify-center rounded-full bg-blue-600 text-white text-xs font-semibold shrink-0">
           {num}
         </div>
         <div className="flex-1 w-px bg-zinc-200 mt-1" aria-hidden />
       </div>
-      <div className="flex-1 pb-1 flex flex-col gap-2 min-w-0">
-        <h3 className="font-semibold text-zinc-900 text-sm leading-snug">
+      <div className="flex-1 pb-1 flex flex-col gap-2 min-w-0 break-words">
+        <h3 className="font-semibold text-zinc-900 text-sm leading-snug break-words">
           {title}
         </h3>
         {body}
