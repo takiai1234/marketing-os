@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { DbPreview } from './db-preview';
+import { FbTokenHelpDialog } from './fb-token-help-dialog';
 
 /**
  * Manual page connect form (Cách A — bypass OAuth).
@@ -167,20 +168,29 @@ export function ManualConnectForm() {
       onSubmit={onSubmit}
       className="rounded-xl border border-zinc-200 bg-white p-6 flex flex-col gap-4 shadow-sm"
     >
-      <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-800 leading-relaxed">
-        Lấy 3 thông tin tại{' '}
-        <a
-          href="https://developers.facebook.com/tools/explorer/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="underline font-semibold"
-        >
-          Graph API Explorer
-        </a>
-        : query{' '}
-        <code className="bg-white px-1 rounded">
-          /me/accounts?fields=id,name,access_token
-        </code>
+      <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2.5 text-xs text-blue-900 leading-relaxed flex items-start justify-between gap-3 flex-wrap">
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold mb-0.5">
+            Cần 3 thông tin: Page ID · Page Name · Page Access Token
+          </div>
+          <div className="text-blue-800">
+            Lấy bằng query{' '}
+            <code className="bg-white px-1 rounded font-mono">
+              /me/accounts?fields=id,name,access_token
+            </code>{' '}
+            tại{' '}
+            <a
+              href="https://developers.facebook.com/tools/explorer/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline font-semibold"
+            >
+              Graph API Explorer
+            </a>
+            .
+          </div>
+        </div>
+        <FbTokenHelpDialog />
       </div>
 
       <div className="flex flex-col gap-1.5">
