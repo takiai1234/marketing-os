@@ -3,10 +3,12 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { fetchChannelsList, fetchChannelsSummary } from '@/lib/queries/channels-list';
 import { fetchTopReachLeaderboard } from '@/lib/queries/channels-top-reach';
+import { fetchTopConversionLeaderboard } from '@/lib/queries/channels-top-conversion';
 import { ChannelCard } from './channel-card';
 import { ChannelsFilterBar } from './channels-filter-bar';
 import { PlatformTabs } from './platform-tabs';
 import { TopReachLeaderboard } from './top-reach-leaderboard';
+import { TopConversionLeaderboard } from './top-conversion-leaderboard';
 import { Button } from '@/components/ui/button';
 
 export const metadata: Metadata = {
@@ -35,8 +37,8 @@ export default async function ChannelsPage({ searchParams }: PageProps) {
   }
 
   // Fetch list (filtered) + summary (always all-channels for KPI cards) +
-  // top reach leaderboard (3 windows prefetched) in parallel.
-  const [channels, summary, topReach] = await Promise.all([
+  // top reach + top conversion leaderboards (mỗi cái prefetch 3 windows) in parallel.
+  const [channels, summary, topReach, topConversion] = await Promise.all([
     fetchChannelsList({
       platform: sp.platform ?? null,
       status: sp.status ?? null,
@@ -44,6 +46,7 @@ export default async function ChannelsPage({ searchParams }: PageProps) {
     }),
     fetchChannelsSummary(),
     fetchTopReachLeaderboard(),
+    fetchTopConversionLeaderboard(),
   ]);
 
   return (
@@ -91,6 +94,11 @@ export default async function ChannelsPage({ searchParams }: PageProps) {
       {/* Đặt cuối trang sau channel grid — user xem leaderboard sau khi đã
           duyệt qua các kênh, không phải hero section. */}
       <TopReachLeaderboard data={topReach} defaultPeriod={7} />
+
+      {/* ─── Top Conversion leaderboard (7/14/30 ngày toggle) ──────── */}
+      {/* Đặt dưới Top Reach — flow tự nhiên: ai reach to nhất → ai
+          convert lead nhiều nhất (next step trong funnel). */}
+      <TopConversionLeaderboard data={topConversion} defaultPeriod={7} />
     </div>
   );
 }
