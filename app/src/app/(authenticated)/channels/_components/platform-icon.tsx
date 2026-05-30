@@ -19,14 +19,15 @@ const META: Record<string, PlatformMeta> = {
   zalo: { label: 'Zalo', bg: 'bg-sky-500', letter: 'Z' },
 };
 
-const SIZE_CLASS: Record<'md' | 'lg', string> = {
+const SIZE_CLASS: Record<'sm' | 'md' | 'lg', string> = {
+  sm: 'size-7 text-[10px]',
   md: 'size-12 text-base',
   lg: 'size-14 text-lg',
 };
 
 interface Props {
   platform: string;
-  size?: 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg';
   className?: string;
 }
 

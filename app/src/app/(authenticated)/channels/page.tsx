@@ -2,9 +2,11 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { fetchChannelsList, fetchChannelsSummary } from '@/lib/queries/channels-list';
+import { fetchTopReachLeaderboard } from '@/lib/queries/channels-top-reach';
 import { ChannelCard } from './channel-card';
 import { ChannelsFilterBar } from './channels-filter-bar';
 import { PlatformTabs } from './platform-tabs';
+import { TopReachLeaderboard } from './top-reach-leaderboard';
 import { Button } from '@/components/ui/button';
 
 export const metadata: Metadata = {
@@ -32,14 +34,16 @@ export default async function ChannelsPage({ searchParams }: PageProps) {
     redirect(`/bundle/callback?session=${encodeURIComponent(sp.bundle_session)}`);
   }
 
-  // Fetch list (filtered) + summary (always all-channels for KPI cards) in parallel.
-  const [channels, summary] = await Promise.all([
+  // Fetch list (filtered) + summary (always all-channels for KPI cards) +
+  // top reach leaderboard (3 windows prefetched) in parallel.
+  const [channels, summary, topReach] = await Promise.all([
     fetchChannelsList({
       platform: sp.platform ?? null,
       status: sp.status ?? null,
       sort: sp.sort ?? null,
     }),
     fetchChannelsSummary(),
+    fetchTopReachLeaderboard(),
   ]);
 
   return (
@@ -61,6 +65,9 @@ export default async function ChannelsPage({ searchParams }: PageProps) {
 
       {/* ─── KPI summary cards ──────────────────────────────────────── */}
       <SummaryCards summary={summary} />
+
+      {/* ─── Top Reach leaderboard (7/14/30 ngày toggle) ────────────── */}
+      <TopReachLeaderboard data={topReach} defaultPeriod={7} />
 
       {/* ─── Tabs theo platform (count động từ data thật) ───────────── */}
       <PlatformTabs
