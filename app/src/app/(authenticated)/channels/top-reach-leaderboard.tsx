@@ -8,12 +8,17 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { PlatformIcon } from './_components/platform-icon';
-import {
-  TOP_REACH_PERIODS,
-  type TopReachLeaderboard,
-  type TopReachPeriod,
-  type TopReachRow,
+import type {
+  TopReachLeaderboard,
+  TopReachPeriod,
+  TopReachRow,
 } from '@/lib/queries/channels-top-reach';
+
+// Inline copy of TOP_REACH_PERIODS — KHÔNG import value từ
+// channels-top-reach.ts vì file đó import `pg`. Client bundle không có Node
+// built-ins (dns, net, ...) → Turbopack build fail "Module not found: 'dns'".
+// Server query file dùng cùng const để giữ source of truth ở 1 chỗ.
+const TOP_REACH_PERIODS = [7, 14, 30] as const satisfies readonly TopReachPeriod[];
 import { TrendingUpIcon, AwardIcon } from 'lucide-react';
 
 interface Props {
