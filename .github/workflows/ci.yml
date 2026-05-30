@@ -1,0 +1,106 @@
+# CI — TypeScript + Next.js build check
+#
+# Mục tiêu: chặn merge nếu code không build được. Lý do tạo workflow này:
+# commit f7f899a + b89a31e đã merge thẳng vào main rồi Coolify mới phát hiện
+# build fail (Turbopack pull `pg` vào client bundle → "Module not found:
+# 'dns'"). tsc --noEmit pass nhưng build fail vì client/server boundary là
+# bundler concern, không phải type concern.
+#
+# Run trên: mỗi push to main + mỗi PR mở vào main.
+# Skip nếu chỉ đổi file trong .secrets/, *.md, docs/ (không ảnh hưởng build).
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '.secrets/**'
+      - 'docs/**'
+      - '**.md'
+      - 'plans/**'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - '.secrets/**'
+      - 'docs/**'
+      - '**.md'
+      - 'plans/**'
+
+# Cho phép cancel run cũ nếu push mới đến trong khi đang chạy
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: TypeScript + Next.js build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Node 20 LTS khớp với Dockerfile (FROM node:20-alpine).
+      # Cache npm dựa trên package-lock.json — đổi lock → invalidate cache.
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies (npm ci — deterministic)
+        run: npm ci
+
+      # tsc strict — bắt type errors trước (rẻ, fail fast).
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      # Cache .next/cache để Turbopack reuse compiled chunks giữa các run.
+      # Hit cache đầy đủ → build ~10s thay vì ~30s. Key dựa trên source files;
+      # đổi source → cache miss tự nhiên.
+      - name: Cache .next build
+        uses: actions/cache@v4
+        with:
+          path: app/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('app/package-lock.json') }}-${{ hashFiles('app/src/**/*.{ts,tsx,js,jsx}') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('app/package-lock.json') }}-
+
+      # Build phải pass với env vars dummy. CI không có DB thật, không có FB
+      # App thật — chỉ cần các biến >= validation tối thiểu để module load
+      # được mà không throw. Build sẽ "Compiled successfully" + "Collecting
+      # page data" mà không thực sự gọi DB (page data collection chỉ gather
+      # metadata, không execute server queries cho dynamic routes).
+      - name: Next.js build (Turbopack — catch client/server boundary issues)
+        env:
+          NODE_ENV: production
+          # DB connection — format hợp lệ, không cần thật. Build không query.
+          DATABASE_URL: postgresql://ci_user:ci_pass@localhost:5432/ci_db
+          # Min 32 chars cho iron-session validation
+          SESSION_PASSWORD: ci_dummy_session_password_at_least_32_chars_long
+          # 32-byte hex cho pgcrypto AES key
+          ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          # Admin credentials — bcrypt hash format hợp lệ, không cần login được
+          ADMIN_EMAIL: ci@example.com
+          ADMIN_PASSWORD_HASH: $2b$12$abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN
+          # URLs
+          APP_URL: http://localhost:3000
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          DOMAIN: localhost
+          # Optional services — để placeholder để code nhận trạng thái "not configured"
+          FB_APP_ID: ''
+          FB_APP_SECRET: ''
+          FB_REDIRECT_URI: ''
+          LADIPAGE_WEBHOOK_URL: ''
+          LADIPAGE_API_KEY: ''
+          BUNDLE_API_KEY: ''
+          MCP_BEARER_TOKENS_JSON: ''
+          SKILL_STORAGE_PATH: /tmp/ci-skills
+        run: npm run build
