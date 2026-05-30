@@ -57,7 +57,7 @@ export function RecentPostsList({ posts }: Props) {
                     {truncate(post.content, 120)}
                   </p>
 
-                  {/* Hàng 1: thời gian + ER badge */}
+                  {/* Hàng 1: thời gian + ER badge + CTR badge (nếu có data) */}
                   <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                     {postedAgo && (
                       <span className="text-xs text-zinc-400">{postedAgo}</span>
@@ -67,16 +67,42 @@ export function RecentPostsList({ posts }: Props) {
                         ER {(post.engagementRate * 100).toFixed(2)}%
                       </Badge>
                     )}
+                    {/* CTR badge — chỉ hiện khi có data thực (clicks + impressions > 0).
+                        Color-coded để admin scan nhanh: ≥2% = good (green), 1-2% =
+                        average (zinc), <1% = poor (amber). FB benchmark CTR cho post
+                        link ~1-3% organic. */}
+                    {post.ctr !== null && (
+                      <Badge
+                        variant="secondary"
+                        className={`text-xs ${
+                          post.ctr >= 0.02
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : post.ctr >= 0.01
+                            ? 'bg-zinc-50 text-zinc-700 border-zinc-200'
+                            : 'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}
+                        title={`Click-Through Rate = ${post.clicks} clicks / ${post.views ?? '?'} impressions`}
+                      >
+                        CTR {(post.ctr * 100).toFixed(2)}%
+                      </Badge>
+                    )}
                   </div>
 
-                  {/* Hàng 2: views + 3 metric (reactions/comments/shares).
+                  {/* Hàng 2: views + clicks + 3 metric (reactions/comments/shares).
                       views = video_views nếu post là video, fallback impressions.
-                      Ẩn hoàn toàn khi cả 2 = 0/null (computeViews trả null). */}
+                      clicks tách riêng vì không phải subset của views.
+                      Ẩn hoàn toàn khi 0/null. */}
                   <div className="flex items-center gap-3 mt-2 text-xs text-zinc-600">
                     {post.views !== null && post.views > 0 && (
                       <span title="Lượt xem" className="flex items-center gap-1">
                         <span aria-hidden>👁</span>
                         <span className="tabular-nums">{formatCount(post.views)}</span>
+                      </span>
+                    )}
+                    {post.clicks !== null && post.clicks > 0 && (
+                      <span title="Lượt click" className="flex items-center gap-1">
+                        <span aria-hidden>🖱</span>
+                        <span className="tabular-nums">{formatCount(post.clicks)}</span>
                       </span>
                     )}
                     <span title="Tương tác" className="flex items-center gap-1">

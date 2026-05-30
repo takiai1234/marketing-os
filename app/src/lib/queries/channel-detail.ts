@@ -50,6 +50,12 @@ export interface ChannelPost {
   // Lượt xem hợp nhất: ưu tiên video_views (nếu >0), fallback impressions.
   // null khi cả hai = 0/null → UI ẩn hoàn toàn icon 👁.
   views: number | null;
+  // Số click vào post (link click + lightbox + other). NULL khi chưa sync
+  // được click data (vd token thiếu pages_read_engagement hoặc post mới).
+  clicks: number | null;
+  // Click-through rate = clicks / impressions (tỉ lệ, render UI nhân 100).
+  // NULL khi impressions=0 hoặc clicks=0 (không có ý nghĩa để show).
+  ctr: number | null;
 }
 
 export interface SyncLogEntry {
@@ -214,16 +220,19 @@ export async function fetchRecentPosts(
     shares: number | null;
     video_views: number | null;
     impressions: number | null;
+    clicks: number | null;
   }>(
     // LATERAL lấy 1 row metric mới nhất / post — đảm bảo ER + các chỉ số đồng nhất cùng snapshot.
-    // video_views + impressions raw → JS layer apply COALESCE để tránh CASE/IF rườm rà ở SQL.
+    // video_views + impressions + clicks raw → JS layer apply COALESCE để
+    // tránh CASE/IF rườm rà ở SQL. CTR compute ở JS layer cho dễ debug
+    // (chia 0 case rõ ràng).
     `SELECT sp.id, sp.external_id, sp.content, sp.media_url, sp.permalink,
             sp.published_at,
             pm.engagement_rate, pm.reactions, pm.comments, pm.shares,
-            pm.video_views, pm.impressions
+            pm.video_views, pm.impressions, pm.clicks
      FROM social_post sp
      LEFT JOIN LATERAL (
-       SELECT engagement_rate, reactions, comments, shares, video_views, impressions
+       SELECT engagement_rate, reactions, comments, shares, video_views, impressions, clicks
        FROM post_metric_daily
        WHERE post_id = sp.id ORDER BY date DESC LIMIT 1
      ) pm ON TRUE
@@ -247,6 +256,8 @@ export async function fetchRecentPosts(
     shares: row.shares,
     // Ưu tiên video_views nếu >0 (post video), fallback impressions, null nếu cả hai trống.
     views: computeViews(row.video_views, row.impressions),
+    clicks: row.clicks ?? null,
+    ctr: computeCtr(row.clicks, row.impressions),
   }));
 }
 
@@ -263,6 +274,24 @@ function computeViews(
   if (videoViews !== null && videoViews > 0) return videoViews;
   if (impressions !== null && impressions > 0) return impressions;
   return null;
+}
+
+/**
+ * CTR = clicks / impressions. Trả tỉ lệ (0..1) — UI nhân 100 để render %.
+ * NULL khi:
+ *   - impressions = 0/null (chia 0 → infinity, vô nghĩa)
+ *   - clicks = 0/null (CTR = 0% không cung cấp thông tin gì)
+ * Cap soft tại 100% — về lý thuyết CTR > 100% impossible (1 user chỉ
+ * counted impression 1 lần) nhưng FB đôi khi inconsistent giữa clicks
+ * sum-of-types vs total → tin clicks nhiều hơn, không cap.
+ */
+function computeCtr(
+  clicks: number | null,
+  impressions: number | null
+): number | null {
+  if (!clicks || clicks <= 0) return null;
+  if (!impressions || impressions <= 0) return null;
+  return clicks / impressions;
 }
 
 export async function fetchSyncLog(

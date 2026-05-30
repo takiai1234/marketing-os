@@ -102,18 +102,41 @@ export function parsePost(
   post: FBPagePost,
   fallbackInsights: Record<string, number> = {}
 ): ParsedPost {
+  // impressions: chỉ có deprecated `post_media_view` (FB v25 không có
+  // `post_impressions` cho post-level — kiểm chứng trả #100 invalid metric).
+  // `post_impressions_unique` là REACH (unique viewers), không phải total
+  // impressions — không dùng cho impressions column.
   const impressions =
     sumInsightValue(getInsight(post.insights, 'post_media_view')) ||
     fallbackInsights['post_media_view'] ||
     0;
+
+  // reach: ưu tiên modern `post_impressions_unique`, fallback deprecated
+  // `post_total_media_view_unique`.
   const reach =
+    sumInsightValue(getInsight(post.insights, 'post_impressions_unique')) ||
     sumInsightValue(getInsight(post.insights, 'post_total_media_view_unique')) ||
+    fallbackInsights['post_impressions_unique'] ||
     fallbackInsights['post_total_media_view_unique'] ||
     0;
+
+  // clicks: ưu tiên modern `post_clicks` (scalar), fallback deprecated
+  // `post_clicks_by_type` (object summed). Modern trả 1 số duy nhất (tổng
+  // click), deprecated breakdown by type (other/photo/video).
   const clicks =
+    sumInsightValue(getInsight(post.insights, 'post_clicks')) ||
     sumInsightValue(getInsight(post.insights, 'post_clicks_by_type')) ||
+    fallbackInsights['post_clicks'] ||
     fallbackInsights['post_clicks_by_type'] ||
     0;
+
+  // video_views: modern `post_video_views` (scalar). Trước đây hardcode 0
+  // vì không request — giờ request rồi, parse được.
+  const video_views =
+    sumInsightValue(getInsight(post.insights, 'post_video_views')) ||
+    fallbackInsights['post_video_views'] ||
+    0;
+
   const reactionsFromInsight =
     sumInsightValue(getInsight(post.insights, 'post_reactions_by_type_total')) ||
     fallbackInsights['post_reactions_by_type_total'] ||
@@ -133,7 +156,7 @@ export function parsePost(
       impressions,
       reach,
       clicks,
-      video_views: 0,
+      video_views,
       reactions,
       comments: post.comments?.summary?.total_count ?? 0,
       shares: post.shares?.count ?? 0,
