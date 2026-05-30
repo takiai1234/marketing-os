@@ -66,9 +66,6 @@ export default async function ChannelsPage({ searchParams }: PageProps) {
       {/* ─── KPI summary cards ──────────────────────────────────────── */}
       <SummaryCards summary={summary} />
 
-      {/* ─── Top Reach leaderboard (7/14/30 ngày toggle) ────────────── */}
-      <TopReachLeaderboard data={topReach} defaultPeriod={7} />
-
       {/* ─── Tabs theo platform (count động từ data thật) ───────────── */}
       <PlatformTabs
         currentPlatform={sp.platform ?? 'all'}
@@ -89,6 +86,11 @@ export default async function ChannelsPage({ searchParams }: PageProps) {
           ))}
         </div>
       )}
+
+      {/* ─── Top Reach leaderboard (7/14/30 ngày toggle) ────────────── */}
+      {/* Đặt cuối trang sau channel grid — user xem leaderboard sau khi đã
+          duyệt qua các kênh, không phải hero section. */}
+      <TopReachLeaderboard data={topReach} defaultPeriod={7} />
     </div>
   );
 }
