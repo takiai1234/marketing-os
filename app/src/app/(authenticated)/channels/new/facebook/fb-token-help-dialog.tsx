@@ -117,16 +117,20 @@ export function FbTokenHelpDialog() {
                   bước này lấy User Token để query danh sách Page).
                 </p>
 
-                <div className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs">
-                  <div className="font-semibold text-zinc-700 mb-1">
-                    Bấm <em>Add a Permission</em> và tick đủ 3 quyền:
+                {/* ─── PHẦN A — Add a Permission trong Graph Explorer ─── */}
+                <div className="rounded-md border-2 border-blue-300 bg-blue-50/50 px-3 py-2.5 text-xs">
+                  <div className="font-bold text-blue-900 mb-1 flex items-center gap-1.5">
+                    <span className="inline-flex size-4 items-center justify-center rounded-full bg-blue-600 text-white text-[10px]">
+                      A
+                    </span>
+                    Bấm <em>Add a Permission</em> và tick 3 permission:
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-1.5 mb-1.5">
                     <PermissionPill>pages_show_list</PermissionPill>
                     <PermissionPill>pages_read_engagement</PermissionPill>
                     <PermissionPill>pages_read_user_content</PermissionPill>
                   </div>
-                  <ul className="text-zinc-600 mt-2 space-y-0.5 list-disc list-inside leading-snug">
+                  <ul className="text-zinc-600 space-y-0.5 list-disc list-inside leading-snug">
                     <li>
                       <code className="bg-white px-1 rounded">pages_show_list</code>{' '}
                       — liệt kê page bạn quản lý
@@ -150,16 +154,73 @@ export function FbTokenHelpDialog() {
                   access</strong> (Dev mode tự auto-grant).
                 </div>
 
+                {/* ─── PHẦN B — Popup OAuth Facebook (chỗ hay bỏ sót) ─── */}
+                <div className="rounded-md border-2 border-rose-300 bg-rose-50/50 px-3 py-2.5 text-xs">
+                  <div className="font-bold text-rose-900 mb-1 flex items-center gap-1.5">
+                    <span className="inline-flex size-4 items-center justify-center rounded-full bg-rose-600 text-white text-[10px]">
+                      B
+                    </span>
+                    Bấm{' '}
+                    <strong className="text-blue-700">
+                      Generate Access Token
+                    </strong>{' '}
+                    → popup OAuth Facebook hiện ra
+                  </div>
+                  <div className="text-rose-900 mb-1.5">
+                    🚨 <strong>Bước hay bỏ sót:</strong> Popup show permissions
+                    theo NHÓM CHA. Phải tick 2 nhóm cha sau, sub-permission ở
+                    Phần A mới được apply:
+                  </div>
+                  <ul className="space-y-1.5 ml-1">
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-rose-600 font-bold shrink-0">☑</span>
+                      <div>
+                        <code className="bg-white px-1 rounded font-mono">
+                          Tạo và quản lý quảng cáo bằng API Marketing
+                        </code>
+                        <div className="text-zinc-600 text-[11px]">
+                          → unlock <code>pages_show_list</code>
+                          {' + '}
+                          <code>ads_*</code> (nhóm advertising)
+                        </div>
+                      </div>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-rose-600 font-bold shrink-0">☑</span>
+                      <div>
+                        <code className="bg-white px-1 rounded font-mono">
+                          Quản lý mọi thứ trên Trang
+                        </code>
+                        <div className="text-zinc-600 text-[11px]">
+                          → unlock <code>pages_read_engagement</code>
+                          {' + '}
+                          <code>pages_read_user_content</code>
+                          {' + '}
+                          các quyền page khác
+                        </div>
+                      </div>
+                    </li>
+                  </ul>
+                  <div className="text-rose-900 mt-2 text-[11px] italic">
+                    Không tick nhóm cha → permission con bị xám / silently bị
+                    bỏ → token sinh ra thiếu scope → sync fail với lỗi (#10).
+                  </div>
+                </div>
+
                 <p className="text-zinc-600">
-                  Bấm{' '}
-                  <strong className="text-blue-700">Generate Access Token</strong>
-                  . Facebook hiện popup OAuth — đăng nhập + chọn page muốn cấp
-                  quyền → bấm <strong>Continue / Done</strong>.
+                  Sau khi tick đủ 2 nhóm cha → bấm{' '}
+                  <strong>Continue / Done</strong> → chọn page muốn cấp quyền
+                  (nếu có hỏi <em>Edit access</em>, tick page cụ thể) →{' '}
+                  <strong>Done</strong>.
                 </p>
 
                 <div className="rounded-md bg-blue-50 border border-blue-200 px-2.5 py-1.5 text-xs text-blue-900">
                   💡 Token vừa sinh nằm trong ô <strong>Access Token</strong>{' '}
-                  phía trên — sẵn sàng dùng cho bước 4.
+                  phía trên — đây là <strong>User Token short-lived</strong>{' '}
+                  (sống ~1-2 giờ). Bước 4 dùng nó để query{' '}
+                  <code>/me/accounts</code>. Muốn token sống lâu/vĩnh viễn →
+                  xem section <strong>"Gia hạn token"</strong> bên dưới sau
+                  Bước 5.
                 </div>
               </>
             }
@@ -249,6 +310,105 @@ export function FbTokenHelpDialog() {
             }
           />
 
+          {/* ─── Bonus: Gia hạn token vĩnh viễn ─────────────────────── */}
+          <section className="border-t pt-4 mt-1">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="flex size-6 items-center justify-center rounded-full bg-emerald-600 text-white text-xs font-bold shrink-0">
+                ★
+              </div>
+              <h3 className="text-sm font-semibold text-zinc-900">
+                Bonus — Gia hạn token để sống vĩnh viễn (khuyên dùng)
+              </h3>
+            </div>
+            <p className="text-xs text-zinc-600 mb-2.5">
+              Page Token vừa lấy ở Bước 5 chỉ sống <strong>~1-2 giờ</strong>{' '}
+              vì nó kế thừa từ User Token short-lived. Marketing OS sẽ fail
+              sync sau đó. Đổi sang token <strong>vĩnh viễn</strong> qua 2
+              bước nhỏ — chỉ làm 1 lần, dùng mãi.
+            </p>
+
+            <div className="rounded-md border border-emerald-200 bg-emerald-50/40 px-3 py-2.5 text-xs">
+              <div className="font-bold text-emerald-900 mb-1.5">
+                Cách 1 — Access Token Tool (dễ nhất, không cần code)
+              </div>
+              <ol className="list-decimal list-inside space-y-1 text-zinc-700 leading-relaxed">
+                <li>
+                  Mở{' '}
+                  <ExternalLink href="https://developers.facebook.com/tools/debug/accesstoken/">
+                    Access Token Debugger
+                  </ExternalLink>
+                </li>
+                <li>
+                  Paste User Token short-lived (token User ở Bước 3, KHÔNG
+                  phải Page Token) → bấm <strong>Debug</strong>
+                </li>
+                <li>
+                  Cuộn xuống cuối trang → bấm{' '}
+                  <strong className="text-blue-700">
+                    Extend Access Token
+                  </strong>
+                </li>
+                <li>
+                  FB hỏi confirm + nhập mật khẩu FB → trả về{' '}
+                  <strong>User Token long-lived (60 ngày)</strong> ở ô{' '}
+                  <em>New Access Token</em>
+                </li>
+                <li>
+                  Copy long-lived User Token này → quay lại Graph Explorer →
+                  paste vào ô Access Token → chạy lại{' '}
+                  <code className="bg-white px-1 rounded">
+                    /me/accounts?fields=id,name,access_token
+                  </code>
+                </li>
+                <li>
+                  Page Token trả về lần này = <strong>vĩnh viễn</strong> (FB
+                  không set expiry cho Page Token khi source User Token đã
+                  long-lived). Paste vào Marketing OS form.
+                </li>
+              </ol>
+            </div>
+
+            <div className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-xs mt-2">
+              <div className="font-bold text-zinc-900 mb-1.5">
+                Cách 2 — qua curl (dành cho dev, automate được)
+              </div>
+              <p className="text-zinc-600 mb-1">
+                Chạy lệnh sau trong terminal — thay 3 placeholder:
+              </p>
+              <CopyableCode value="curl -G 'https://graph.facebook.com/v25.0/oauth/access_token' -d 'grant_type=fb_exchange_token' -d 'client_id=YOUR_APP_ID' -d 'client_secret=YOUR_APP_SECRET' -d 'fb_exchange_token=SHORT_LIVED_USER_TOKEN'" />
+              <ul className="text-zinc-600 mt-1.5 space-y-0.5 list-disc list-inside leading-snug">
+                <li>
+                  <code>YOUR_APP_ID</code> + <code>YOUR_APP_SECRET</code>: ở
+                  App Dashboard → Settings → Basic
+                </li>
+                <li>
+                  <code>SHORT_LIVED_USER_TOKEN</code>: User Token ở Bước 3
+                </li>
+              </ul>
+              <p className="text-zinc-500 mt-1.5 text-[11px]">
+                Trả về JSON{' '}
+                <code className="bg-white px-1 rounded">
+                  {`{"access_token": "<long-lived>", "expires_in": 5184000}`}
+                </code>{' '}
+                (60 ngày). Dùng nó query <code>/me/accounts</code> để lấy
+                Page Token vĩnh viễn.
+              </p>
+            </div>
+
+            <div className="rounded-md bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-xs text-amber-900 mt-2">
+              ⚠ <strong>App Secret là bí mật</strong> — không paste vào ChatGPT,
+              không commit lên Git, không share screen. Nếu lộ → vào App
+              Dashboard → Settings → Basic → bấm <strong>Show</strong> bên
+              cạnh App Secret → <strong>Reset</strong>.
+            </div>
+
+            <div className="rounded-md bg-emerald-50 border border-emerald-300 px-2.5 py-2 text-xs text-emerald-900 mt-2 font-medium">
+              ✅ Sau khi đổi xong: Page Token mới <strong>không có expiry
+              date</strong>. Marketing OS sync chạy mãi mãi (trừ khi bạn
+              revoke quyền hoặc bị xoá khỏi page).
+            </div>
+          </section>
+
           {/* FAQ section */}
           <section className="border-t pt-4 mt-1">
             <h3 className="text-sm font-semibold text-zinc-900 mb-2">
@@ -257,11 +417,25 @@ export function FbTokenHelpDialog() {
 
             <Faq question="Token này dùng được bao lâu?">
               <p>
-                User Access Token mặc định Graph Explorer cấp chỉ sống ~1 giờ.
-                Nhưng Page Access Token (cái bạn copy ở <code>data[].access_token</code>)
-                được Facebook tự gia hạn — thường <strong>không hết hạn</strong>{' '}
-                miễn là tài khoản admin còn quyền trên page. Marketing OS sẽ tự
-                refresh nếu cần.
+                <strong>Mặc định: ~1-2 giờ.</strong> Cả User Token (Graph
+                Explorer) lẫn Page Token sinh ra từ nó đều short-lived. Sau
+                đó Marketing OS gọi sync sẽ fail{' '}
+                <code>"OAuthException (code 190)"</code>.
+              </p>
+              <p className="mt-1">
+                Để token sống <strong>60 ngày → vĩnh viễn</strong>: làm theo
+                section{' '}
+                <strong className="text-emerald-700">
+                  "Gia hạn token vĩnh viễn"
+                </strong>{' '}
+                bên trên (chỉ cần làm 1 lần — extend User Token short-lived
+                thành long-lived, query lại <code>/me/accounts</code> → Page
+                Token mới không có expiry).
+              </p>
+              <p className="mt-1 text-zinc-500">
+                Khi nào token vẫn fail mặc dù đã long-lived: bạn bị xoá khỏi
+                Page (mất role), hoặc admin Meta App revoke quyền, hoặc đổi
+                mật khẩu FB (đôi khi triggers revoke).
               </p>
             </Faq>
 
