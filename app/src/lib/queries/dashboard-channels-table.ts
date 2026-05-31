@@ -34,6 +34,12 @@ export interface ChannelTableRow {
   kpiTotal: number;
   /** Tăng trưởng followers % trong range. null nếu thiếu data đầu range. */
   growthPercent: number | null;
+  /** Followers tuyệt đối hiện tại (snapshot mới nhất). null khi account
+   *  chưa có metric row nào (vừa connect, chưa sync). */
+  followers: number | null;
+  /** Delta tuyệt đối = followers_end - followers_start. null khi thiếu 1
+   *  trong 2 anchor — phân biệt với 0 (đứng yên thật sự). */
+  followersDelta: number | null;
 }
 
 export async function fetchChannelsTable(days: number): Promise<ChannelTableRow[]> {
@@ -173,6 +179,13 @@ export async function fetchChannelsTable(days: number): Promise<ChannelTableRow[
       growthPercent = ((followerEnd - followerStart) / followerStart) * 100;
     }
 
+    // Delta tuyệt đối — chỉ tính khi có cả 2 anchor. Nếu chỉ có 1 → null
+    // (không claim "đứng yên" khi thật ra thiếu data).
+    const followersDelta =
+      followerStart !== null && followerEnd !== null
+        ? followerEnd - followerStart
+        : null;
+
     return {
       accountId: row.account_id,
       name: row.name,
@@ -183,6 +196,8 @@ export async function fetchChannelsTable(days: number): Promise<ChannelTableRow[
       postsCount,
       kpiTotal: kpiPerDay * days,
       growthPercent,
+      followers: followerEnd,
+      followersDelta,
     };
   });
 }

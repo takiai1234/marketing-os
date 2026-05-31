@@ -50,6 +50,43 @@ function GrowthCell({ value }: { value: number | null }) {
   );
 }
 
+/**
+ * Followers cell: số tuyệt đối + delta nhỏ phía dưới.
+ *   12.4K
+ *   +200 (xanh, nếu tăng) / -50 (đỏ) / cùng line nếu = 0
+ * Delta null (thiếu anchor đầu range) → không hiện dòng dưới.
+ */
+function FollowersCell({
+  current,
+  delta,
+}: {
+  current: number | null;
+  delta: number | null;
+}) {
+  if (current === null) {
+    return <span className="text-zinc-400">—</span>;
+  }
+
+  const showDelta = delta !== null && delta !== 0;
+  const positive = (delta ?? 0) >= 0;
+  const deltaColor = positive ? 'text-emerald-600' : 'text-red-500';
+  const sign = positive ? '+' : '';
+
+  return (
+    <div className="flex flex-col items-end leading-tight">
+      <span className="font-semibold text-zinc-800 tabular-nums">
+        {formatCompact(current)}
+      </span>
+      {showDelta && delta !== null && (
+        <span className={cn('text-[10.5px] tabular-nums', deltaColor)}>
+          {sign}
+          {formatCompact(Math.abs(delta))}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function ChannelsTable({ data, days }: Props) {
   return (
     <div className="rounded-xl bg-white ring-1 ring-zinc-200 shadow-sm">
@@ -75,6 +112,7 @@ export function ChannelsTable({ data, days }: Props) {
             <thead>
               <tr className="border-t border-zinc-200 bg-zinc-50 text-xs text-zinc-500">
                 <th className="text-left font-medium px-5 py-2.5">Tên kênh</th>
+                <th className="text-right font-medium px-3 py-2.5">Followers</th>
                 <th className="text-right font-medium px-3 py-2.5">Reach</th>
                 <th className="text-right font-medium px-3 py-2.5">Lead</th>
                 <th className="text-right font-medium px-3 py-2.5">
@@ -100,6 +138,12 @@ export function ChannelsTable({ data, days }: Props) {
                         {row.name}
                       </span>
                     </Link>
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    <FollowersCell
+                      current={row.followers}
+                      delta={row.followersDelta}
+                    />
                   </td>
                   <td className="px-3 py-3 text-right tabular-nums text-zinc-700">
                     {formatCompact(row.reach)}
