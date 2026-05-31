@@ -3,10 +3,12 @@ import { getKpiData, getTrendData } from '@/lib/cache/dashboard-cache';
 import { fetchChannelsTable } from '@/lib/queries/dashboard-channels-table';
 import { fetchUnreadAlerts } from '@/lib/queries/alerts';
 import { fetchTopPerformers } from '@/lib/queries/dashboard-top-performers';
+import { fetchFollowersTrend } from '@/lib/queries/dashboard-followers-trend';
 import { parseRangeParam } from '@/lib/dashboard/time-range';
 import { KpiHeroGrid } from '@/components/dashboard/kpi-hero-grid';
 import { PerformanceTrendChart } from '@/components/dashboard/performance-trend-chart';
 import { ChannelsTable } from '@/components/dashboard/channels-table';
+import { FollowersTrendChart } from '@/components/dashboard/followers-trend-chart';
 import { TopPerformersRankedList } from '@/components/dashboard/top-performers-ranked-list';
 import { ActiveCampaignsList } from '@/components/dashboard/active-campaigns-list';
 import { AlertsFeed } from '@/components/dashboard/alerts-feed';
@@ -25,13 +27,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const days = parseRangeParam(params.range);
 
   // Fetch in parallel — independent queries, no shared state.
-  const [kpi, trend, channels, alerts, topPerformers] = await Promise.all([
-    getKpiData(days),
-    getTrendData(days),
-    fetchChannelsTable(days),
-    fetchUnreadAlerts(10),
-    fetchTopPerformers(days, 5),
-  ]);
+  const [kpi, trend, channels, alerts, topPerformers, followersTrend] =
+    await Promise.all([
+      getKpiData(days),
+      getTrendData(days),
+      fetchChannelsTable(days),
+      fetchUnreadAlerts(10),
+      fetchTopPerformers(days, 5),
+      fetchFollowersTrend(days),
+    ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -54,6 +58,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
       {/* Tier 3: Chanel table full-width (replaces sidebar Channel Health widget) */}
       <ChannelsTable data={channels} days={days} />
+
+      {/* Tier 3b: Multi-line follower trend per channel — đặt ngay sau bảng
+          channels vì cùng "domain" (per-channel detail) và chart cung cấp
+          context cho cột Followers ở table phía trên. */}
+      <FollowersTrendChart data={followersTrend} days={days} />
 
       {/* Tier 4: Top Performers / Alerts / Active Campaigns.
           On <lg, stack full-width. On md, 2-col with campaigns wrapping. */}
