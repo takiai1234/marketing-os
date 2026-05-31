@@ -33,6 +33,16 @@ export interface MemberAggregateRow {
 
   // Top 3 active account names — used as tags
   account_names: string[];
+
+  // ─── GOAL TRACKING (migration 023) ─────────────────────────────
+  // Số kênh active mà member đang quản lý (denominator cho posts_per_channel)
+  num_channels: number;
+  // Tổng follower gained 30d qua tất cả kênh member quản (SUM follower_growth)
+  follow_growth_30d: number;
+  // 3 cột target — admin set qua UI dialog. 0 nghĩa "chưa đặt target".
+  goal_follow_growth_30d: number;
+  goal_reach_30d: number;
+  goal_posts_per_channel_30d: number;
 }
 
 // Why one big CTE: a single roundtrip is cheaper than 5 sequential queries
@@ -139,6 +149,32 @@ account_tags AS (
   FROM social_account sa
   WHERE sa.owner_member_id IS NOT NULL
   GROUP BY sa.owner_member_id
+),
+
+-- Đếm số kênh active member quản — dùng làm denominator cho
+-- actual_posts_per_channel. Loại disconnected vì member không còn ownership ý nghĩa.
+channel_count AS (
+  SELECT
+    sa.owner_member_id AS member_id,
+    COUNT(*)::INT      AS num_channels
+  FROM social_account sa
+  WHERE sa.owner_member_id IS NOT NULL
+    AND sa.status != 'disconnected'
+  GROUP BY sa.owner_member_id
+),
+
+-- Follower growth 30d: SUM(follower_growth) cho mọi kênh member quản,
+-- 30 ngày qua. follower_growth là delta hằng ngày từ amd row trước
+-- (xem upsert-helpers.ts) → SUM = net growth qua window.
+follow_growth AS (
+  SELECT
+    sa.owner_member_id                       AS member_id,
+    COALESCE(SUM(amd.follower_growth), 0)::INT AS follow_growth_30d
+  FROM social_account sa
+  JOIN account_metric_daily amd ON amd.account_id = sa.id
+  WHERE sa.owner_member_id IS NOT NULL
+    AND amd.date >= CURRENT_DATE - INTERVAL '30 days'
+  GROUP BY sa.owner_member_id
 )
 
 SELECT
@@ -160,7 +196,13 @@ SELECT
   COALESCE(b30.briefs_published_30d, 0) AS briefs_published_30d,
   COALESCE(ba30.brief_actions_30d, 0) AS brief_actions_30d,
   COALESCE(ba30.brief_status_changes_30d, 0) AS brief_status_changes_30d,
-  COALESCE(at.names[1:3], ARRAY[]::TEXT[]) AS account_names
+  COALESCE(at.names[1:3], ARRAY[]::TEXT[]) AS account_names,
+  -- Goal tracking
+  COALESCE(cc.num_channels, 0) AS num_channels,
+  COALESCE(fg.follow_growth_30d, 0) AS follow_growth_30d,
+  tm.goal_follow_growth_30d,
+  tm.goal_reach_30d,
+  tm.goal_posts_per_channel_30d
 
 FROM team_member tm
 LEFT JOIN agg_7d  a7   ON a7.member_id   = tm.id
@@ -169,6 +211,8 @@ LEFT JOIN viral_30d v30 ON v30.member_id = tm.id
 LEFT JOIN brief_30d b30 ON b30.member_id = tm.id
 LEFT JOIN brief_activity_30d ba30 ON ba30.member_id = tm.id
 LEFT JOIN account_tags at ON at.member_id = tm.id
+LEFT JOIN channel_count cc ON cc.member_id = tm.id
+LEFT JOIN follow_growth fg ON fg.member_id = tm.id
 ORDER BY tm.created_at ASC;
 `;
 
@@ -194,5 +238,10 @@ export async function fetchMemberAggregates(): Promise<MemberAggregateRow[]> {
     brief_actions_30d: Number(row.brief_actions_30d),
     brief_status_changes_30d: Number(row.brief_status_changes_30d),
     account_names: row.account_names ?? [],
+    num_channels: Number(row.num_channels),
+    follow_growth_30d: Number(row.follow_growth_30d),
+    goal_follow_growth_30d: Number(row.goal_follow_growth_30d),
+    goal_reach_30d: Number(row.goal_reach_30d),
+    goal_posts_per_channel_30d: Number(row.goal_posts_per_channel_30d),
   }));
 }

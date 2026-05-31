@@ -17,6 +17,37 @@ export interface KpiMetric {
   value: string; // pre-formatted so UI does not own units
 }
 
+/** Goal vs actual progress cho 1 metric. UI render bar progressPct + 2 số. */
+export interface GoalProgress {
+  /** Vd "Follow growth (30d)". */
+  label: string;
+  /** Actual số raw (12300, 8). */
+  actual: number;
+  /** Goal admin set (0 = chưa đặt). */
+  goal: number;
+  /** Display-friendly actual ("12.3K", "8 bài/kênh"). */
+  actualLabel: string;
+  /** Display-friendly goal. */
+  goalLabel: string;
+  /** Progress % capped 100 cho bar UI. NULL nếu goal=0 (chưa đặt). */
+  progressPct: number | null;
+}
+
+export interface MemberGoals {
+  /** Raw goal values — gửi nguyên cho PATCH endpoint khi user save. */
+  goalFollowGrowth30d: number;
+  goalReach30d: number;
+  goalPostsPerChannel30d: number;
+  /** 3 metric goal vs actual đã format sẵn cho UI. */
+  progress: {
+    follow: GoalProgress;
+    reach: GoalProgress;
+    postsPerChannel: GoalProgress;
+  };
+  /** Số kênh member quản — denom của posts_per_channel. UI show "X kênh". */
+  numChannels: number;
+}
+
 export interface TeamMemberKpi {
   id: string;
   name: string;
@@ -31,6 +62,7 @@ export interface TeamMemberKpi {
   radar: RadarDimension[];
   metrics: KpiMetric[];
   tags: string[];
+  goals: MemberGoals;
 }
 
 export interface TeamKpiSummary {

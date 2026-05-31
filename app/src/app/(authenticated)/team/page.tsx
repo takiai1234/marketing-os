@@ -7,6 +7,7 @@ import { TeamMemberGrid } from '@/components/team/team-member-grid';
 import { AddMemberDialog } from './add-member-dialog';
 import { DeleteMemberButton } from './delete-member-button';
 import { ResetPasswordDialog } from './reset-password-dialog';
+import { GoalEditorDialog } from './goal-editor-dialog';
 
 export const metadata: Metadata = {
   title: 'Team — Marketing OS',
@@ -38,19 +39,31 @@ export default async function TeamPage() {
       {/* Tier 1: 4 summary cards */}
       <TeamKpiSummaryCards data={summary} />
 
-      {/* Tier 2: Member cards grid — admin sees a delete button per row,
-          except their own row (self-delete locks everyone out). */}
+      {/* Tier 2: Member cards grid — admin sees: GoalEditorDialog cho mọi
+          member (kể cả chính mình), + ResetPassword/Delete cho member khác
+          (không cho self-action → tránh lock-out). Non-admin chỉ thấy goal
+          read-only (qua progress bars trong card body). */}
       <TeamMemberGrid
         members={members}
         renderAction={
           isAdmin
-            ? (m) =>
-                m.id !== currentUserId ? (
-                  <div className="flex items-center gap-1.5">
-                    <ResetPasswordDialog id={m.id} name={m.name} />
-                    <DeleteMemberButton id={m.id} name={m.name} />
-                  </div>
-                ) : null
+            ? (m) => (
+                <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                  <GoalEditorDialog
+                    memberId={m.id}
+                    memberName={m.name}
+                    initialFollowGrowth={m.goals.goalFollowGrowth30d}
+                    initialReach={m.goals.goalReach30d}
+                    initialPostsPerChannel={m.goals.goalPostsPerChannel30d}
+                  />
+                  {m.id !== currentUserId && (
+                    <>
+                      <ResetPasswordDialog id={m.id} name={m.name} />
+                      <DeleteMemberButton id={m.id} name={m.name} />
+                    </>
+                  )}
+                </div>
+              )
             : undefined
         }
       />

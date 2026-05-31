@@ -1,6 +1,10 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
-import type { TeamMemberKpi, MemberStatus } from '@/lib/queries/team-kpi';
+import type {
+  GoalProgress,
+  TeamMemberKpi,
+  MemberStatus,
+} from '@/lib/queries/team-kpi';
 import { EMPTY_ROLE_LABEL } from '@/lib/queries/team-kpi';
 import { TeamRadarChart } from './team-radar-chart';
 
@@ -99,6 +103,13 @@ export function TeamMemberCard({ member, action }: TeamMemberCardProps) {
         </ul>
       </div>
 
+      {/* Goals section — 3 progress bars (Follow / Reach / Posts per channel).
+          Chỉ hiển thị khi có ít nhất 1 goal được set; nếu cả 3 = 0 (chưa set)
+          → chỉ show 1 dòng nhắc admin có thể đặt mục tiêu qua nút trên header.
+          Display luôn bất kể empty/measured member — admin có thể đặt goal
+          cho member chưa có data để baseline trước. */}
+      <GoalsSection goals={member.goals} />
+
       {/* Footer tags */}
       {member.tags.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -113,5 +124,94 @@ export function TeamMemberCard({ member, action }: TeamMemberCardProps) {
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Goals subcomponent ────────────────────────────────────────────────────
+
+function GoalsSection({ goals }: { goals: TeamMemberKpi['goals'] }) {
+  const items = [goals.progress.follow, goals.progress.reach, goals.progress.postsPerChannel];
+  const hasAnyGoal = items.some((g) => g.goal > 0);
+
+  return (
+    <div className="border-t border-zinc-100 pt-3">
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+          Mục tiêu 30 ngày
+        </h4>
+        {goals.numChannels > 0 && (
+          <span className="text-[10px] text-zinc-400">
+            {goals.numChannels} kênh
+          </span>
+        )}
+      </div>
+
+      {!hasAnyGoal ? (
+        <p className="text-xs text-zinc-400 italic">
+          Chưa đặt mục tiêu. Admin bấm <strong>Mục tiêu</strong> ở góc phải để đặt.
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {items.map((g) => (
+            <GoalProgressRow key={g.label} goal={g} />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function GoalProgressRow({ goal }: { goal: GoalProgress }) {
+  // Cap bar 100% nhưng số raw có thể > 100% (vd 120% = đạt vượt mục tiêu)
+  const barWidth = goal.progressPct === null
+    ? 0
+    : Math.min(100, goal.progressPct);
+
+  // Color theo % đạt: ≥100% green, 70-99% blue, 40-69% amber, <40% rose
+  // null (chưa set goal) → neutral zinc
+  const colorClass =
+    goal.progressPct === null ? 'bg-zinc-200'
+    : goal.progressPct >= 100 ? 'bg-emerald-500'
+    : goal.progressPct >= 70  ? 'bg-blue-500'
+    : goal.progressPct >= 40  ? 'bg-amber-500'
+    :                            'bg-rose-500';
+
+  const labelColorClass =
+    goal.progressPct === null ? 'text-zinc-400'
+    : goal.progressPct >= 100 ? 'text-emerald-700'
+    : goal.progressPct >= 70  ? 'text-blue-700'
+    : goal.progressPct >= 40  ? 'text-amber-700'
+    :                            'text-rose-700';
+
+  return (
+    <li className="flex flex-col gap-1">
+      <div className="flex items-baseline justify-between gap-2 text-xs">
+        <span className="text-zinc-700 truncate min-w-0">{goal.label}</span>
+        <span className="tabular-nums shrink-0 text-zinc-500">
+          <span className={cn('font-semibold', labelColorClass)}>
+            {goal.actualLabel}
+          </span>
+          {goal.goal > 0 && (
+            <>
+              {' / '}
+              <span className="text-zinc-600">{goal.goalLabel}</span>
+              {goal.progressPct !== null && (
+                <span className={cn('ml-1.5 text-[10px] font-bold', labelColorClass)}>
+                  {goal.progressPct}%
+                </span>
+              )}
+            </>
+          )}
+        </span>
+      </div>
+      {goal.goal > 0 && (
+        <div className="h-1.5 rounded-full bg-zinc-100 overflow-hidden">
+          <div
+            className={cn('h-full rounded-full transition-all', colorClass)}
+            style={{ width: `${Math.max(barWidth, 2)}%` }}
+          />
+        </div>
+      )}
+    </li>
   );
 }

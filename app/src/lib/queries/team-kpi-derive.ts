@@ -1,6 +1,7 @@
 import type { MemberAggregateRow } from './team-kpi-sql';
 import type {
   KpiMetric,
+  MemberGoals,
   MemberRoleVariant,
   MemberStatus,
   RadarDimension,
@@ -133,6 +134,64 @@ function isEmptyMember(row: MemberAggregateRow): boolean {
       && row.brief_actions_30d === 0;
 }
 
+/**
+ * Build MemberGoals từ raw aggregate row. 3 metric: follow growth, reach,
+ * posts per channel. Mỗi metric: actual + goal + progress %.
+ *
+ * Quy ước:
+ *   - goal = 0 → "chưa đặt mục tiêu" → progressPct = null (UI dùng để
+ *     toggle giữa progress bar và placeholder "Chưa đặt")
+ *   - actualPostsPerChannel = posts_30d / num_channels (round 1 decimal)
+ *     khi num_channels > 0; = 0 khi member chưa quản kênh nào
+ */
+function buildGoals(row: MemberAggregateRow): MemberGoals {
+  const actualPostsPerChannel = row.num_channels > 0
+    ? Math.round((row.posts_30d / row.num_channels) * 10) / 10
+    : 0;
+
+  const pct = (actual: number, goal: number): number | null =>
+    goal > 0 ? Math.round((actual / goal) * 100) : null;
+
+  return {
+    goalFollowGrowth30d: row.goal_follow_growth_30d,
+    goalReach30d: row.goal_reach_30d,
+    goalPostsPerChannel30d: row.goal_posts_per_channel_30d,
+    numChannels: row.num_channels,
+    progress: {
+      follow: {
+        label: 'Follow growth (30d)',
+        actual: row.follow_growth_30d,
+        goal: row.goal_follow_growth_30d,
+        actualLabel: formatCompact(row.follow_growth_30d),
+        goalLabel: row.goal_follow_growth_30d > 0
+          ? formatCompact(row.goal_follow_growth_30d)
+          : '—',
+        progressPct: pct(row.follow_growth_30d, row.goal_follow_growth_30d),
+      },
+      reach: {
+        label: 'Reach (30d)',
+        actual: row.reach_30d,
+        goal: row.goal_reach_30d,
+        actualLabel: formatCompact(row.reach_30d),
+        goalLabel: row.goal_reach_30d > 0
+          ? formatCompact(row.goal_reach_30d)
+          : '—',
+        progressPct: pct(row.reach_30d, row.goal_reach_30d),
+      },
+      postsPerChannel: {
+        label: 'Bài viết / kênh (30d)',
+        actual: actualPostsPerChannel,
+        goal: row.goal_posts_per_channel_30d,
+        actualLabel: `${actualPostsPerChannel}`,
+        goalLabel: row.goal_posts_per_channel_30d > 0
+          ? String(row.goal_posts_per_channel_30d)
+          : '—',
+        progressPct: pct(actualPostsPerChannel, row.goal_posts_per_channel_30d),
+      },
+    },
+  };
+}
+
 export function deriveKpiFromAggregate(row: MemberAggregateRow, idx: number): TeamMemberKpi {
   const avatarColor = AVATAR_COLORS[idx % AVATAR_COLORS.length] ?? 'bg-zinc-500';
 
@@ -151,6 +210,9 @@ export function deriveKpiFromAggregate(row: MemberAggregateRow, idx: number): Te
       radar: CREATOR_RADAR.map((label) => ({ label, value: 0 })),
       metrics: CREATOR_METRICS.map((label) => ({ label, value: '—' })),
       tags: [],
+      // Empty member vẫn cho phép admin set goal — UI dialog "Sửa mục tiêu"
+      // vẫn hoạt động kể cả khi chưa có data thực.
+      goals: buildGoals(row),
     };
   }
 
@@ -175,5 +237,6 @@ export function deriveKpiFromAggregate(row: MemberAggregateRow, idx: number): Te
     radar,
     metrics,
     tags: row.account_names,
+    goals: buildGoals(row),
   };
 }
