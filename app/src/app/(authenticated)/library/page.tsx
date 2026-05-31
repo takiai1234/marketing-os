@@ -8,6 +8,7 @@ import {
   fetchLibraryPosts,
 } from '@/lib/queries/library-posts';
 import { fetchLibraryStats } from '@/lib/queries/library-stats';
+import { fetchLibraryTopConversion } from '@/lib/queries/library-top-conversion';
 import { parseFilterParams } from '@/lib/library/parse-filter-params';
 import { LibraryStatsCards } from './library-stats-cards';
 import { LibrarySearchBar } from './library-search-bar';
@@ -16,6 +17,7 @@ import { LibraryFilterSidebar } from './library-filter-sidebar';
 import { LibraryPlatformTabs } from './library-platform-tabs';
 import { PostGrid } from './post-grid';
 import { LoadMoreButton } from './load-more-button';
+import { TopConversionSection } from './top-conversion-section';
 
 export const metadata: Metadata = {
   title: 'Thư viện — Marketing OS',
@@ -33,10 +35,11 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
   const filter = parseFilterParams(params);
 
   // Parallel fetch — independent queries.
-  const [stats, postResult, accounts] = await Promise.all([
+  const [stats, postResult, accounts, topConversion] = await Promise.all([
     fetchLibraryStats(filter),
     fetchLibraryPosts(filter),
     fetchActiveAccounts(),
+    fetchLibraryTopConversion(),
   ]);
 
   const { posts, nextCursor } = postResult;
@@ -55,6 +58,11 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
 
       {/* Stats cards */}
       <LibraryStatsCards stats={stats} />
+
+      {/* Top link/video chuyển đổi — 7/14/30d toggle, posts có click cao
+          nhất proxy cho conversion. Đặt trên toolbar vì là insight cao value
+          (admin scan trước khi browse full list). */}
+      <TopConversionSection data={topConversion} defaultPeriod={7} />
 
       {/* Toolbar — search · sort · advanced filters */}
       <div className="flex flex-wrap items-center gap-3">
