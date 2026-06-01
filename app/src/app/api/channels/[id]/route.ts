@@ -133,7 +133,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: RouteContext
 ): Promise<NextResponse> {
   const user = await getCurrentUser();
@@ -155,7 +155,56 @@ export async function DELETE(
     return NextResponse.json({ error: 'Invalid channel id' }, { status: 400 });
   }
 
+  // Permanent flag: ?permanent=true → hard delete (CASCADE xoá posts, metrics,
+  // sync log, member assignments, conversion data...). Default false →
+  // soft delete (UPDATE status='disconnected').
+  //
+  // SAFETY: hard delete CHỈ work khi channel đã ở state 'disconnected'.
+  // Tránh admin lỡ tay 1-click destroy active channel có data quan trọng.
+  // Must "Hủy kết nối" trước → MỚI có option "Xoá vĩnh viễn".
+  const permanent = req.nextUrl.searchParams.get('permanent') === 'true';
+
   try {
+    if (permanent) {
+      // Check channel exists + đang disconnected
+      const check = await db.query<{ status: string; name: string }>(
+        `SELECT status, name FROM social_account WHERE id = $1`,
+        [id]
+      );
+      const row = check.rows[0];
+      if (!row) {
+        return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
+      }
+      if (row.status !== 'disconnected') {
+        return NextResponse.json(
+          {
+            error: `Phải Hủy kết nối kênh "${row.name}" trước. Status hiện tại: ${row.status}`,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Hard delete — ON DELETE CASCADE auto-removes:
+      //   social_post → post_metric_daily
+      //   account_metric_daily
+      //   landing_page_conversion
+      //   api_sync_log
+      //   social_account_member
+      //   channel_health_daily
+      const result = await db.query(
+        `DELETE FROM social_account WHERE id = $1 AND status = 'disconnected' RETURNING id`,
+        [id]
+      );
+      if (result.rowCount === 0) {
+        return NextResponse.json(
+          { error: 'Channel not found or status changed during request' },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json({ ok: true, deleted: 'permanent' });
+    }
+
+    // Default — soft delete
     const result = await db.query(
       `UPDATE social_account
        SET status = 'disconnected'
@@ -168,10 +217,13 @@ export async function DELETE(
       return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, deleted: 'soft' });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Internal error';
     console.error('[DELETE /api/channels/[id]] Error:', message);
-    return NextResponse.json({ error: 'Failed to disconnect channel' }, { status: 500 });
+    return NextResponse.json(
+      { error: permanent ? 'Failed to permanently delete channel' : 'Failed to disconnect channel' },
+      { status: 500 }
+    );
   }
 }

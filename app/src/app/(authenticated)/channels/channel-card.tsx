@@ -17,6 +17,7 @@ import { StatusDot } from './_components/status-dot';
 import { CopyIdButton } from './_components/copy-id-button';
 import { HealthTooltip } from './_components/health-tooltip';
 import { PlatformIcon } from './_components/platform-icon';
+import { PermanentDeleteButton } from './permanent-delete-button';
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 function formatCompact(n: number | null): string {
@@ -41,9 +42,14 @@ function healthColor(score: number | null): string {
 
 interface Props {
   channel: ChannelListItem;
+  /** Admin sees "Xoá vĩnh viễn" button trên channel đã disconnected.
+   *  Non-admin: button không render — chỉ thấy chip status. */
+  isAdmin?: boolean;
 }
 
-export function ChannelCard({ channel }: Props) {
+export function ChannelCard({ channel, isAdmin = false }: Props) {
+  const isDisconnected = channel.status === 'disconnected';
+
   const syncedAgo = channel.lastSyncedAt
     ? formatDistanceToNow(new Date(channel.lastSyncedAt), {
         addSuffix: true,
@@ -105,14 +111,27 @@ export function ChannelCard({ channel }: Props) {
         <Stat label="Lead" value={formatCompact(channel.lead30d)} />
       </div>
 
-      {/* ─── Owner footer ─── */}
-      <div className="mt-3 flex items-center gap-2 border-t border-zinc-100 pt-3">
-        <span className="text-[10px] uppercase tracking-wide text-zinc-500">
-          Quản lý:
-        </span>
-        <span className="text-xs font-medium text-zinc-700">
-          {channel.ownerName ?? 'Chưa gán'}
-        </span>
+      {/* ─── Owner footer + admin actions for disconnected ─── */}
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-zinc-100 pt-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-[10px] uppercase tracking-wide text-zinc-500">
+            Quản lý:
+          </span>
+          <span className="text-xs font-medium text-zinc-700 truncate">
+            {channel.ownerName ?? 'Chưa gán'}
+          </span>
+        </div>
+
+        {/* Hard delete chỉ available khi:
+            - channel đã ở status='disconnected' (1 lớp safety)
+            - user role là admin (server check thêm lần 2)
+            Button stop event propagation để không trigger <Link> navigate. */}
+        {isAdmin && isDisconnected && (
+          <PermanentDeleteButton
+            accountId={channel.id}
+            channelName={channel.name}
+          />
+        )}
       </div>
     </Link>
   );

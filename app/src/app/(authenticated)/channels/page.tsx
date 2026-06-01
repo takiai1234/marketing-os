@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation';
 import { fetchChannelsList, fetchChannelsSummary } from '@/lib/queries/channels-list';
 import { fetchTopReachLeaderboard } from '@/lib/queries/channels-top-reach';
 import { fetchTopConversionLeaderboard } from '@/lib/queries/channels-top-conversion';
+import { getCurrentUser } from '@/lib/auth/get-session';
+import { getUserRole } from '@/lib/auth/get-role';
 import { ChannelCard } from './channel-card';
 import { ChannelsFilterBar } from './channels-filter-bar';
 import { PlatformTabs } from './platform-tabs';
@@ -37,8 +39,9 @@ export default async function ChannelsPage({ searchParams }: PageProps) {
   }
 
   // Fetch list (filtered) + summary (always all-channels for KPI cards) +
-  // top reach + top conversion leaderboards (mỗi cái prefetch 3 windows) in parallel.
-  const [channels, summary, topReach, topConversion] = await Promise.all([
+  // top reach + top conversion leaderboards (mỗi cái prefetch 3 windows) +
+  // current user role (admin có thể hard-delete disconnected channels) in parallel.
+  const [channels, summary, topReach, topConversion, user] = await Promise.all([
     fetchChannelsList({
       platform: sp.platform ?? null,
       status: sp.status ?? null,
@@ -47,7 +50,11 @@ export default async function ChannelsPage({ searchParams }: PageProps) {
     fetchChannelsSummary(),
     fetchTopReachLeaderboard(),
     fetchTopConversionLeaderboard(),
+    getCurrentUser(),
   ]);
+
+  const role = user ? await getUserRole(user.userId) : null;
+  const isAdmin = role === 'admin';
 
   return (
     <div className="flex flex-col gap-6">
@@ -85,7 +92,7 @@ export default async function ChannelsPage({ searchParams }: PageProps) {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {channels.map((c) => (
-            <ChannelCard key={c.id} channel={c} />
+            <ChannelCard key={c.id} channel={c} isAdmin={isAdmin} />
           ))}
         </div>
       )}
