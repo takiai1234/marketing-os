@@ -83,9 +83,11 @@ export async function fetchFollowersTrend(
     return { rows: [], channels: [] };
   }
 
-  // Bước 2: lấy daily followers cho các channel đó với forward-fill.
-  // generate_series tạo full date axis → LEFT JOIN amd để có row mọi ngày →
-  // window LAST_VALUE IGNORE NULLS carry-forward.
+  // Bước 2: lấy daily followers cho các channel đó. Forward-fill làm ở JS
+  // layer thay vì SQL — Postgres KHÔNG support `IGNORE NULLS` trên window
+  // function (chỉ có ở SQL Server/Oracle/Snowflake). Workaround SQL cho
+  // forward-fill phức tạp (cần COUNT-based grouping pattern), JS đơn giản
+  // hơn và dễ debug.
   const accountIds = channels.map((c) => c.accountId);
 
   const trendRes = await db.query<{
@@ -107,53 +109,59 @@ export async function fetchFollowersTrend(
       SELECT sa.id, sa.name, sa.platform
       FROM social_account sa
       WHERE sa.id = ANY($1::UUID[])
-    ),
-    -- Cartesian: every (date, account) tuple, LEFT JOIN amd để có row dù
-    -- ngày đó không có metric (forward-fill ở next CTE).
-    raw AS (
-      SELECT
-        da.date,
-        ta.id AS account_id,
-        ta.name,
-        ta.platform,
-        amd.followers
-      FROM date_axis da
-      CROSS JOIN target_accounts ta
-      LEFT JOIN account_metric_daily amd
-        ON amd.account_id = ta.id AND amd.date = da.date
     )
-    -- Forward-fill: nếu followers NULL ở 1 ngày, dùng giá trị non-NULL gần
-    -- nhất TRƯỚC đó của cùng account. Window function LAST_VALUE với frame
-    -- ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW + IGNORE NULLS.
+    -- Cartesian (date, account) → LEFT JOIN amd cho mỗi ngày. Followers có
+    -- thể NULL khi cron skip ngày đó. JS layer fill xuôi từ giá trị non-NULL
+    -- gần nhất TRƯỚC đó của cùng account.
+    -- ORDER BY (account_id, date) để JS pass duy nhất, forward-fill stateful.
     SELECT
-      date::TEXT AS date,
-      account_id::TEXT AS account_id,
-      name,
-      platform,
-      COALESCE(
-        followers,
-        last_value(followers) IGNORE NULLS OVER (
-          PARTITION BY account_id ORDER BY date
-          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-        )
-      )::TEXT AS followers
-    FROM raw
-    ORDER BY date ASC, name ASC
+      da.date::TEXT AS date,
+      ta.id::TEXT   AS account_id,
+      ta.name,
+      ta.platform,
+      amd.followers::TEXT AS followers
+    FROM date_axis da
+    CROSS JOIN target_accounts ta
+    LEFT JOIN account_metric_daily amd
+      ON amd.account_id = ta.id AND amd.date = da.date
+    ORDER BY ta.id, da.date ASC
     `,
     [accountIds, days]
   );
 
-  const rows: FollowerTrendRow[] = trendRes.rows
-    // Filter NULL followers (xảy ra với những ngày đầu range NẾU account chưa
-    // có data nào trước range). Tránh gap đầu line nhưng giữ tail-fill OK.
-    .filter((r) => r.followers !== null)
-    .map((r) => ({
+  // Forward-fill state per account. Pass 1 lần qua rows đã sort by
+  // (account_id, date ASC) → giữ lastSeen per account, NULL → dùng lastSeen.
+  const lastSeenByAccount = new Map<string, number>();
+  const rows: FollowerTrendRow[] = [];
+  for (const r of trendRes.rows) {
+    let followers: number | null =
+      r.followers !== null ? Number(r.followers) : null;
+
+    if (followers === null) {
+      // Use last non-null value of cùng account (if any)
+      const prev = lastSeenByAccount.get(r.account_id);
+      if (prev !== undefined) followers = prev;
+    } else {
+      // Update state với giá trị non-null mới
+      lastSeenByAccount.set(r.account_id, followers);
+    }
+
+    // Skip rows vẫn null sau forward-fill (đầu range, account chưa có data
+    // nào trước đó) — tránh gap đầu line trên chart
+    if (followers === null) continue;
+
+    rows.push({
       date: r.date,
       accountId: r.account_id,
       name: r.name,
       platform: r.platform,
-      followers: Number(r.followers),
-    }));
+      followers,
+    });
+  }
+
+  // Re-sort by date asc cho chart (server trả theo account_id để forward-fill,
+  // nhưng Recharts cần data point sort by x-axis date ASC).
+  rows.sort((a, b) => a.date.localeCompare(b.date));
 
   return { rows, channels };
 }
