@@ -1,9 +1,13 @@
 'use client';
 
-// Top "link/video chuyển đổi" section — leaderboard top 10 posts by clicks
-// trong 7/14/30 ngày. Click-to-toggle period giống Top Reach / Top
+// "Top link/video click cao nhất" section — leaderboard top 10 posts by
+// clicks trong 7/14/30 ngày. Click-to-toggle period giống Top Reach / Top
 // Conversion ở /channels. Mỗi item compact: rank + thumbnail + content
 // excerpt + clicks + CTR + channel.
+//
+// Note: section này TRƯỚC ĐÂY tên "Top link/video chuyển đổi" — gây hiểu
+// nhầm vì data là CLICKS chứ không phải conversion thật (chưa có per-post
+// conversion attribution). Đổi tên rõ ràng hơn 2026-06-01.
 //
 // Click row → mở permalink trong tab mới (xem bài thật trên FB).
 // Click channel name → /channels/[id].
@@ -123,10 +127,11 @@ function Header({
         </div>
         <div className="min-w-0">
           <h3 className="font-semibold text-zinc-900 text-base leading-tight">
-            Top link / video tạo chuyển đổi
+            Top link / video click cao nhất
           </h3>
           <p className="text-xs text-zinc-500 mt-0.5">
-            Post link/video/reel có click cao nhất · {totalPosts} post có data
+            Sắp xếp post link / video / reel theo lượt click ·{' '}
+            {totalPosts} post có data
           </p>
         </div>
       </div>

@@ -59,9 +59,11 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
       {/* Stats cards */}
       <LibraryStatsCards stats={stats} />
 
-      {/* Top link/video chuyển đổi — 7/14/30d toggle, posts có click cao
-          nhất proxy cho conversion. Đặt trên toolbar vì là insight cao value
-          (admin scan trước khi browse full list). */}
+      {/* Top link/video click cao nhất — 7/14/30d toggle, posts có click
+          cao nhất. Đặt trên toolbar vì là insight cao value (admin scan
+          trước khi browse full list). NOTE: 2026-06-01 đổi tên từ "chuyển
+          đổi" sang "click cao nhất" để rõ ràng — data là clicks, chưa có
+          per-post conversion attribution. */}
       <TopConversionSection data={topConversion} defaultPeriod={7} />
 
       {/* Toolbar — search · sort · advanced filters */}
