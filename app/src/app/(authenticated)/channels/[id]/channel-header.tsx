@@ -15,6 +15,7 @@ import { vi } from 'date-fns/locale';
 import { ChannelMembersEditor } from './channel-members-editor';
 import type { ChannelMember } from './channel-members-editor';
 import { KpiEditor } from './kpi-editor';
+import { UpdateTokenDialog } from './update-token-dialog';
 import { StatusDot } from '../_components/status-dot';
 import { CopyIdButton } from '../_components/copy-id-button';
 import { PlatformIcon } from '../_components/platform-icon';
@@ -175,7 +176,7 @@ export function ChannelHeader({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
         <Button
           onClick={handleSync}
           disabled={syncing || isCoolingDown}
@@ -184,6 +185,13 @@ export function ChannelHeader({
         >
           {syncing ? 'Đang đồng bộ…' : 'Đồng bộ ngay'}
         </Button>
+        {isAdmin && (
+          <UpdateTokenDialog
+            accountId={accountId}
+            channelName={name}
+            externalId={externalId}
+          />
+        )}
         {isAdmin && (
           <Button onClick={handleDisconnect} variant="destructive" size="sm">
             Hủy kết nối
