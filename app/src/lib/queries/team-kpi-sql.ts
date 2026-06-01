@@ -47,6 +47,14 @@ export interface MemberAggregateRow {
 
 // Why one big CTE: a single roundtrip is cheaper than 5 sequential queries
 // and keeps "viral baseline" derivation (median × 3) consistent within one snapshot.
+//
+// Multi-owner KPI rule (Cách A + B2 chốt trong chat):
+//   primary role → 100% KPI credit (max 1 primary per channel enforced ở API)
+//   editor role  → 0 KPI credit nhưng vẫn hiện trong account_tags với suffix
+//
+// Vì max 1 primary, JOIN trực tiếp = same math như single-owner cũ.
+// Team total = sum channels (no inflation). Editor chỉ recognition, không
+// ảnh hưởng aggregate.
 const TEAM_KPI_SQL = `
 WITH windows AS (
   SELECT NOW() - INTERVAL '7 days'  AS w7,
@@ -62,20 +70,24 @@ latest_metric AS (
   ORDER BY post_id, date DESC
 ),
 
+-- member_posts: 1 row per (post, primary_member). Editor không tham gia.
+-- Filter sam.role = 'primary' — chỉ primary nhận KPI credit.
 member_posts AS (
   SELECT
-    sa.owner_member_id                      AS member_id,
+    sam.member_id                           AS member_id,
     sa.platform::TEXT                       AS platform,
     sp.post_type::TEXT                      AS post_type,
     sp.published_at,
     COALESCE(lm.reach, 0)::INT              AS reach,
     COALESCE(lm.engagement_rate, 0)::FLOAT  AS engagement_rate
-  FROM social_account sa
-  JOIN social_post   sp  ON sp.account_id = sa.id
+  FROM social_account_member sam
+  JOIN social_account sa ON sa.id = sam.account_id
+  JOIN social_post    sp ON sp.account_id = sa.id
   LEFT JOIN latest_metric lm ON lm.post_id = sp.id
-  WHERE sa.owner_member_id IS NOT NULL
+  WHERE sam.role = 'primary'  -- editor không tham gia KPI math
 ),
 
+-- Math giống single-owner cũ — không split vì max 1 primary per channel.
 agg_30d AS (
   SELECT
     mp.member_id,
@@ -142,39 +154,46 @@ brief_activity_30d AS (
 ),
 
 -- Tag pool: alphabetically-sorted active account names per member.
+-- B2 rule: include CẢ primary + editor để admin nhìn thấy mọi kênh
+-- member assist. Editor suffix " · editor" trong string → UI render nhạt hơn.
+-- Order: primary trước (no suffix), editor sau, sort theo name trong group.
 account_tags AS (
   SELECT
-    sa.owner_member_id AS member_id,
-    array_agg(sa.name ORDER BY sa.name) FILTER (WHERE sa.status = 'active') AS names
-  FROM social_account sa
-  WHERE sa.owner_member_id IS NOT NULL
-  GROUP BY sa.owner_member_id
+    sam.member_id,
+    array_agg(
+      sa.name || CASE WHEN sam.role = 'editor' THEN ' · editor' ELSE '' END
+      ORDER BY CASE WHEN sam.role = 'primary' THEN 0 ELSE 1 END, sa.name
+    ) FILTER (WHERE sa.status = 'active') AS names
+  FROM social_account_member sam
+  JOIN social_account sa ON sa.id = sam.account_id
+  GROUP BY sam.member_id
 ),
 
--- Đếm số kênh active member quản — dùng làm denominator cho
--- actual_posts_per_channel. Loại disconnected vì member không còn ownership ý nghĩa.
+-- Đếm số kênh active member quản (CHỈ primary, vì editor không tính KPI →
+-- không dùng làm denominator cho posts_per_channel goal). Loại disconnected.
 channel_count AS (
   SELECT
-    sa.owner_member_id AS member_id,
-    COUNT(*)::INT      AS num_channels
-  FROM social_account sa
-  WHERE sa.owner_member_id IS NOT NULL
+    sam.member_id,
+    COUNT(*)::INT AS num_channels
+  FROM social_account_member sam
+  JOIN social_account sa ON sa.id = sam.account_id
+  WHERE sam.role = 'primary'
     AND sa.status != 'disconnected'
-  GROUP BY sa.owner_member_id
+  GROUP BY sam.member_id
 ),
 
--- Follower growth 30d: SUM(follower_growth) cho mọi kênh member quản,
--- 30 ngày qua. follower_growth là delta hằng ngày từ amd row trước
--- (xem upsert-helpers.ts) → SUM = net growth qua window.
+-- Follower growth 30d: SUM(follower_growth) cho mọi kênh primary của member.
+-- Editor không count (sam.role = 'primary' filter).
 follow_growth AS (
   SELECT
-    sa.owner_member_id                       AS member_id,
+    sam.member_id,
     COALESCE(SUM(amd.follower_growth), 0)::INT AS follow_growth_30d
-  FROM social_account sa
+  FROM social_account_member sam
+  JOIN social_account sa ON sa.id = sam.account_id
   JOIN account_metric_daily amd ON amd.account_id = sa.id
-  WHERE sa.owner_member_id IS NOT NULL
+  WHERE sam.role = 'primary'
     AND amd.date >= CURRENT_DATE - INTERVAL '30 days'
-  GROUP BY sa.owner_member_id
+  GROUP BY sam.member_id
 )
 
 SELECT

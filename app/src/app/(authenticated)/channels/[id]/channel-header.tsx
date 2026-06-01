@@ -12,7 +12,8 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
-import { OwnerSelector } from './owner-selector';
+import { ChannelMembersEditor } from './channel-members-editor';
+import type { ChannelMember } from './channel-members-editor';
 import { KpiEditor } from './kpi-editor';
 import { StatusDot } from '../_components/status-dot';
 import { CopyIdButton } from '../_components/copy-id-button';
@@ -32,13 +33,14 @@ interface Props {
   platform: string;
   status: string;
   lastSyncedAt: string | null;
-  ownerId: string | null;
-  ownerName: string | null;
-  members: MemberOption[];
+  /** Danh sách member của kênh (đã sort primary-first ở server). */
+  channelMembers: ChannelMember[];
+  /** Full team pool — admin chọn từ đây để add. Empty cho non-admin. */
+  allTeamMembers: MemberOption[];
   // KPI số bài đăng / ngày — chỉnh được qua KpiEditor
   kpiPostsPerDay: number;
-  // Quyền admin → mới được đổi owner & hủy kết nối kênh.
-  // Non-admin chỉ thấy text owner read-only, không thấy nút Hủy kết nối.
+  // Quyền admin → mới được sửa member list & hủy kết nối kênh.
+  // Non-admin chỉ thấy chips read-only, không thấy nút Hủy kết nối.
   isAdmin: boolean;
 }
 
@@ -49,9 +51,8 @@ export function ChannelHeader({
   platform,
   status,
   lastSyncedAt,
-  ownerId,
-  ownerName,
-  members,
+  channelMembers,
+  allTeamMembers,
   kpiPostsPerDay,
   isAdmin,
 }: Props) {
@@ -154,20 +155,17 @@ export function ChannelHeader({
             <span className="font-sans">Sync: {syncedAgo}</span>
           </p>
 
-          {/* Row 3: Người phụ trách */}
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-sm text-zinc-500">Người phụ trách:</span>
-            {isAdmin ? (
-              <OwnerSelector
-                accountId={accountId}
-                currentOwnerId={ownerId}
-                members={members}
-              />
-            ) : (
-              <span className="text-sm font-medium text-zinc-700">
-                {ownerName ?? <span className="italic text-zinc-400">Chưa gán</span>}
-              </span>
-            )}
+          {/* Row 3: Người phụ trách — multi-member với 1 primary + N editor */}
+          <div className="flex flex-wrap items-center gap-2 mt-1">
+            <span className="text-sm text-zinc-500 shrink-0">
+              Người phụ trách:
+            </span>
+            <ChannelMembersEditor
+              accountId={accountId}
+              initialMembers={channelMembers}
+              allTeamMembers={allTeamMembers}
+              isAdmin={isAdmin}
+            />
           </div>
 
           {/* Row 4: KPI editor — số bài đăng mục tiêu / ngày */}

@@ -23,7 +23,9 @@ export interface ChannelAccount {
   kpiPostsPerDay: number;
   // Người trong team đang phụ trách kênh — null nếu owner đã bị xóa khỏi team
   owner: ChannelOwner | null;
-  // Raw FK — dùng cho OwnerSelector dropdown (giữ riêng để frontend không phải dò owner.id)
+  // Raw FK — kept for callers còn dùng "single owner" reference (vd channels
+  // list card hiển thị tên primary). Sau migration 024 đây là denormalized
+  // "primary member" — chỉ 1 primary per channel (Rule A enforced).
   ownerId: string | null;
 }
 
