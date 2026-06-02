@@ -1,16 +1,17 @@
 // POST /api/skills/[id]/chat/sessions/[sessionId]/messages
 //
-// Send user message, call Claude, save assistant response, return both.
+// Send user message, call OpenRouter (with whatever model session uses),
+// save assistant response, return both.
 //
 // Non-streaming initially — UX hơi chậm cho long response nhưng đơn giản
-// hơn streaming SSE. Add streaming sau nếu cần (commit follow-up).
+// hơn streaming SSE. Add streaming sau nếu cần.
 //
 // Flow:
 //   1. Load session (verify ownership)
 //   2. Load skill content → build system prompt
-//   3. Load message history → format cho Anthropic SDK
+//   3. Load message history → format cho OpenAI SDK
 //   4. Append new user message vào DB
-//   5. Call Claude API
+//   5. Call OpenRouter (model picked at session creation)
 //   6. Append assistant message với tokens_in/out
 //   7. Return both messages cho UI
 
@@ -27,10 +28,10 @@ import {
   loadSkillContent,
   buildSystemPrompt,
 } from '@/lib/skill-lib/load-skill-content';
-import { getAnthropic, isAnthropicConfigured } from '@/lib/anthropic/client';
+import { getOpenRouter, isOpenRouterConfigured } from '@/lib/llm/openrouter';
 
 export const runtime = 'nodejs';
-// Long-running call to Anthropic — cho phép tới 5 phút (Opus 4 hard topics)
+// Long-running LLM call — cho phép tới 5 phút (Opus / GPT-5 cho hard topics)
 export const maxDuration = 300;
 
 const UUID_RE =
@@ -48,11 +49,11 @@ export async function POST(
   req: NextRequest,
   { params }: RouteContext
 ): Promise<NextResponse> {
-  if (!(await isAnthropicConfigured())) {
+  if (!(await isOpenRouterConfigured())) {
     return NextResponse.json(
       {
         error:
-          'ANTHROPIC_API_KEY chưa được cấu hình. Admin vào /settings/integrations để set.',
+          'OPENROUTER_API_KEY chưa được cấu hình. Admin vào /settings/integrations để set.',
       },
       { status: 503 }
     );
@@ -109,53 +110,49 @@ export async function POST(
     );
   }
 
-  // 3. Format messages history cho Anthropic SDK
-  //    SDK expect alternating user/assistant. Đảm bảo last existing là assistant
-  //    (hoặc list rỗng) trước khi append user message mới.
+  // 3. Format messages history cho OpenAI SDK
+  //    OpenAI/OpenRouter expect alternating user/assistant. System message
+  //    đặt RIÊNG trong messages array (khác với Anthropic SDK dùng `system` param).
   const historyMessages = session.messages.map((m) => ({
     role: m.role,
     content: m.content,
   }));
 
-  // 4. Persist user message TRƯỚC khi call Claude (in case Claude fail,
-  //    user message vẫn lưu — không mất input)
+  // 4. Persist user message TRƯỚC khi call LLM (preserve input if API fails)
   const userMessage = await appendMessage(sessionId, 'user', userText, 0, 0);
 
-  // 5. Call Claude
-  const anthropic = await getAnthropic();
+  // 5. Call OpenRouter
+  const client = await getOpenRouter();
   let assistantText = '';
   let tokensIn = 0;
   let tokensOut = 0;
 
   try {
-    const response = await anthropic.messages.create({
+    const response = await client.chat.completions.create({
       model: session.model,
       max_tokens: 8192,
-      system: systemPrompt,
       messages: [
+        { role: 'system', content: systemPrompt },
         ...historyMessages,
         { role: 'user', content: userText },
       ],
     });
 
-    // Concat all text content blocks (Claude có thể trả multi-block: text, tool_use,...)
-    for (const block of response.content) {
-      if (block.type === 'text') assistantText += block.text;
-    }
-
-    tokensIn = response.usage.input_tokens;
-    tokensOut = response.usage.output_tokens;
+    const choice = response.choices[0];
+    assistantText = choice?.message?.content ?? '';
+    tokensIn = response.usage?.prompt_tokens ?? 0;
+    tokensOut = response.usage?.completion_tokens ?? 0;
 
     if (!assistantText) {
-      assistantText = '(Claude không trả về nội dung text — có thể skill cần tool execution chưa support.)';
+      assistantText = '(Model không trả về nội dung — có thể bị filter hoặc skill cần tool execution chưa support.)';
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Anthropic API error';
+    const msg = err instanceof Error ? err.message : 'OpenRouter API error';
     // Lưu error vào DB như assistant message để user thấy + retry
     await appendMessage(
       sessionId,
       'assistant',
-      `❌ Lỗi gọi Claude API: ${msg}\n\nThử lại bằng nút send.`,
+      `❌ Lỗi gọi LLM: ${msg}\n\nThử lại bằng nút send hoặc đổi model khác.`,
       0,
       0
     );
@@ -172,7 +169,6 @@ export async function POST(
   );
 
   // 7. Auto-set session title từ first user message (truncate 60 chars)
-  //    nếu vẫn title default "Cuộc trò chuyện mới"
   if (
     session.title === 'Cuộc trò chuyện mới' &&
     session.messages.length === 0

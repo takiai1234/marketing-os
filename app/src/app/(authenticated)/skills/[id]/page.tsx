@@ -11,7 +11,7 @@ import { readZipTree, SkillFileMissingError } from '@/lib/skill-lib/zip-reader';
 import type { ZipEntryNode } from '@/lib/skill-lib/zip-reader';
 import { AlertTriangle } from 'lucide-react';
 import { resolveSkillPath } from '@/lib/skill-lib/storage';
-import { isAnthropicConfigured } from '@/lib/anthropic/client';
+import { isOpenRouterConfigured } from '@/lib/llm/openrouter';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { FileTree } from './file-tree';
@@ -31,11 +31,11 @@ export default async function SkillDetailPage({ params }: PageProps) {
   if (!user) redirect('/login');
 
   const { id } = await params;
-  const [skill, storage, role, anthropicReady] = await Promise.all([
+  const [skill, storage, role, llmReady] = await Promise.all([
     getSkillById(id),
     getSkillStoragePath(id),
     getUserRole(user.userId),
-    isAnthropicConfigured(),
+    isOpenRouterConfigured(),
   ]);
 
   if (!skill || !storage) notFound();
@@ -94,7 +94,7 @@ export default async function SkillDetailPage({ params }: PageProps) {
         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
           {/* Chat button — chỉ hiện nếu Anthropic API configured (graceful
               degrade). Link sang chat page riêng. */}
-          {anthropicReady && (
+          {llmReady && (
             <Link
               href={`/skills/${skill.id}/chat`}
               className={cn(

@@ -11,8 +11,8 @@ import { getSkillById } from '@/lib/queries/skill-lib';
 import { listSessions, getSessionForUser } from '@/lib/queries/skill-chat';
 import {
   AVAILABLE_MODELS,
-  isAnthropicConfigured,
-} from '@/lib/anthropic/client';
+  isOpenRouterConfigured,
+} from '@/lib/llm/openrouter';
 import { ChatShell } from './chat-shell';
 
 interface PageProps {
@@ -31,7 +31,7 @@ export default async function SkillChatPage({
   const sp = await searchParams;
   const sessionParam = typeof sp.session === 'string' ? sp.session : null;
 
-  if (!(await isAnthropicConfigured())) {
+  if (!(await isOpenRouterConfigured())) {
     return (
       <div className="flex flex-col gap-6 max-w-2xl">
         <Link
@@ -46,7 +46,7 @@ export default async function SkillChatPage({
             Feature Chat chưa được bật
           </h2>
           <p className="text-sm text-amber-800">
-            Admin cần set <code className="bg-white px-1 rounded">ANTHROPIC_API_KEY</code>{' '}
+            Admin cần set <code className="bg-white px-1 rounded">OPENROUTER_API_KEY</code>{' '}
             tại{' '}
             <Link
               href="/settings/integrations"
@@ -56,12 +56,12 @@ export default async function SkillChatPage({
             </Link>
             . Lấy key tại{' '}
             <a
-              href="https://console.anthropic.com/settings/keys"
+              href="https://openrouter.ai/keys"
               target="_blank"
               rel="noopener noreferrer"
               className="underline font-semibold"
             >
-              console.anthropic.com
+              openrouter.ai/keys
             </a>
             .
           </p>

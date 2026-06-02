@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { listSessions, createSession } from '@/lib/queries/skill-chat';
-import { isValidModelId, AVAILABLE_MODELS } from '@/lib/anthropic/client';
+import { isValidModelId, AVAILABLE_MODELS } from '@/lib/llm/openrouter';
 
 export const runtime = 'nodejs';
 

@@ -1,7 +1,9 @@
 'use client';
 
-// Form input cho Anthropic API key — admin only (server đã enforce).
+// Form input cho OpenRouter API key — admin only.
 // 3 actions: Lưu (PUT), Test (POST /test), Xoá (DELETE).
+// OpenRouter = unified gateway → 1 key access tới mọi model
+// (Claude, GPT, Gemini, Grok, open-source).
 
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
@@ -18,14 +20,13 @@ import {
   EyeIcon,
   EyeOffIcon,
   Loader2Icon,
+  SparklesIcon,
 } from 'lucide-react';
 
 interface Props {
-  /** Đã set trong DB? (KHÔNG plaintext) */
   initialIsSet: boolean;
   initialUpdatedAt: string | null;
   initialUpdatedByName: string | null;
-  /** Env var có set không (fallback nếu DB chưa có) */
   hasEnvFallback: boolean;
 }
 
@@ -48,7 +49,7 @@ function formatRelativeTime(iso: string | null): string {
   return d.toLocaleDateString('vi-VN');
 }
 
-export function AnthropicKeyForm({
+export function OpenRouterKeyForm({
   initialIsSet,
   initialUpdatedAt,
   initialUpdatedByName,
@@ -65,11 +66,10 @@ export function AnthropicKeyForm({
   const [updatedAt, setUpdatedAt] = useState(initialUpdatedAt);
   const [updatedByName, setUpdatedByName] = useState(initialUpdatedByName);
 
-  // Hiển thị status badge phía trên form
   const sourceText = isSet
     ? `✓ Đã set trong DB (encrypted) ${updatedByName ? `bởi ${updatedByName}` : ''} ${formatRelativeTime(updatedAt)}`
     : hasEnvFallback
-      ? '⚙ Đang dùng env var (ANTHROPIC_API_KEY). Set qua UI để override.'
+      ? '⚙ Đang dùng env var OPENROUTER_API_KEY. Set qua UI để override.'
       : '✗ CHƯA SET — chưa có ở DB lẫn env. Feature Chat sẽ bị tắt.';
 
   async function onSave(e: FormEvent) {
@@ -81,7 +81,7 @@ export function AnthropicKeyForm({
     setSaving(true);
     setTestResult(null);
     try {
-      const res = await fetch('/api/settings/integrations/anthropic', {
+      const res = await fetch('/api/settings/integrations/openrouter', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ apiKey: apiKey.trim() }),
@@ -91,7 +91,7 @@ export function AnthropicKeyForm({
         toast.error(data.error ?? 'Lưu thất bại');
         return;
       }
-      toast.success('Đã lưu API key (encrypted)');
+      toast.success('Đã lưu OpenRouter API key (encrypted)');
       setApiKey('');
       setIsSet(true);
       setUpdatedAt(new Date().toISOString());
@@ -108,7 +108,7 @@ export function AnthropicKeyForm({
     setTesting(true);
     setTestResult(null);
     try {
-      const res = await fetch('/api/settings/integrations/anthropic/test', {
+      const res = await fetch('/api/settings/integrations/openrouter/test', {
         method: 'POST',
       });
       const data = (await res.json()) as TestResult;
@@ -121,10 +121,10 @@ export function AnthropicKeyForm({
   }
 
   async function onDelete() {
-    if (!confirm('Xoá API key đã lưu? Feature Chat sẽ fall back về env var (nếu có) hoặc bị tắt.')) return;
+    if (!confirm('Xoá OpenRouter API key đã lưu? Feature Chat sẽ tắt (trừ khi có env fallback).')) return;
     setDeleting(true);
     try {
-      const res = await fetch('/api/settings/integrations/anthropic', {
+      const res = await fetch('/api/settings/integrations/openrouter', {
         method: 'DELETE',
       });
       if (!res.ok) {
@@ -148,29 +148,36 @@ export function AnthropicKeyForm({
   return (
     <section className="rounded-xl bg-white ring-1 ring-zinc-200 shadow-sm p-5">
       <div className="flex items-start gap-3 mb-4">
-        <div className="flex size-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600 shrink-0">
-          <KeyRoundIcon className="size-4" />
+        <div className="flex size-9 items-center justify-center rounded-lg bg-violet-50 text-violet-600 shrink-0">
+          <SparklesIcon className="size-4" />
         </div>
         <div className="min-w-0 flex-1">
           <h4 className="text-sm font-semibold text-zinc-900">
-            Anthropic Claude API
+            OpenRouter API (Unified LLM Gateway)
           </h4>
           <p className="text-xs text-zinc-500 mt-0.5">
-            Bật feature "Chat với Skill" tại{' '}
-            <code className="bg-zinc-100 px-1 rounded">/skills/[id]/chat</code>.
-            Lấy key tại{' '}
+            1 API key cho mọi model — Claude, GPT, Gemini, Grok, Llama, ...
+            Bật feature "Chat với Skill". Lấy key tại{' '}
             <a
-              href="https://console.anthropic.com/settings/keys"
+              href="https://openrouter.ai/keys"
               target="_blank"
               rel="noopener noreferrer"
-              className="underline text-blue-600 hover:text-blue-800"
+              className="underline text-violet-600 hover:text-violet-800"
             >
-              console.anthropic.com
+              openrouter.ai/keys
+            </a>{' '}
+            (cần nạp credit:{' '}
+            <a
+              href="https://openrouter.ai/credits"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline text-violet-600 hover:text-violet-800"
+            >
+              openrouter.ai/credits
             </a>
-            .
+            ).
           </p>
 
-          {/* Status banner */}
           <div
             className={cn(
               'mt-3 rounded-md border px-3 py-2 text-xs flex items-start gap-2',
@@ -191,20 +198,19 @@ export function AnthropicKeyForm({
         </div>
       </div>
 
-      {/* Form */}
       <form onSubmit={onSave} className="flex flex-col gap-3">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="anthropic-key" className="text-sm">
+          <Label htmlFor="openrouter-key" className="text-sm">
             {isSet ? 'Cập nhật API key mới' : 'Paste API key'}
           </Label>
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Input
-                id="anthropic-key"
+                id="openrouter-key"
                 type={showKey ? 'text' : 'password'}
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-ant-api03-..."
+                placeholder="sk-or-v1-..."
                 autoComplete="off"
                 disabled={saving}
                 className="pr-10 font-mono text-xs"
@@ -223,13 +229,11 @@ export function AnthropicKeyForm({
             </Button>
           </div>
           <p className="text-[11px] text-zinc-500">
-            Bắt đầu <code className="bg-zinc-100 px-1 rounded">sk-ant-</code>.
-            Encrypted bằng AES-256 (pgcrypto) trước khi lưu DB — admin khác
-            không đọc plaintext.
+            Bắt đầu <code className="bg-zinc-100 px-1 rounded">sk-or-v1-</code>.
+            Encrypted bằng AES-256 (pgcrypto) trước khi lưu DB.
           </p>
         </div>
 
-        {/* Test + Delete action bar */}
         {isSet && (
           <div className="flex flex-wrap items-center gap-2 border-t border-zinc-100 pt-3 mt-1">
             <Button
@@ -245,7 +249,7 @@ export function AnthropicKeyForm({
                   Đang test...
                 </>
               ) : (
-                'Test key (gọi /messages, ~$0.0001)'
+                'Test key (cost ~$0.0001 — dùng Gemini Flash)'
               )}
             </Button>
             <Button
@@ -262,7 +266,6 @@ export function AnthropicKeyForm({
           </div>
         )}
 
-        {/* Test result */}
         {testResult && (
           <div
             className={cn(
@@ -282,8 +285,7 @@ export function AnthropicKeyForm({
                   {testResult.usage && (
                     <div>
                       Token: {testResult.usage.tokensIn} in /{' '}
-                      {testResult.usage.tokensOut} out (cost ~$
-                      {((testResult.usage.tokensIn * 3 + testResult.usage.tokensOut * 15) / 1_000_000).toFixed(6)})
+                      {testResult.usage.tokensOut} out
                     </div>
                   )}
                 </div>
@@ -297,6 +299,29 @@ export function AnthropicKeyForm({
           </div>
         )}
       </form>
+
+      {/* Quick model reference */}
+      <details className="mt-3">
+        <summary className="text-xs text-zinc-500 cursor-pointer hover:text-zinc-700">
+          Xem 8 model available
+        </summary>
+        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px]">
+          {[
+            ['anthropic/claude-sonnet-4.5', 'Claude Sonnet 4.5 · $3/$15'],
+            ['anthropic/claude-opus-4.5', 'Claude Opus 4.5 · $15/$75'],
+            ['openai/gpt-4o', 'GPT-4o · $2.5/$10'],
+            ['openai/gpt-4o-mini', 'GPT-4o Mini · $0.15/$0.6'],
+            ['google/gemini-2.5-pro', 'Gemini 2.5 Pro · $1.25/$5'],
+            ['google/gemini-2.5-flash', 'Gemini 2.5 Flash · $0.075/$0.3'],
+            ['x-ai/grok-3', 'Grok 3 · $3/$15'],
+            ['meta-llama/llama-3.3-70b-instruct', 'Llama 3.3 70B · $0.6/$0.6'],
+          ].map(([id, label]) => (
+            <div key={id} className="text-zinc-600 truncate">
+              {label}
+            </div>
+          ))}
+        </div>
+      </details>
     </section>
   );
 }

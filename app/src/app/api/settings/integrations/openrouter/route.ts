@@ -1,8 +1,7 @@
-// PUT    /api/settings/integrations/anthropic — set/update key
-// DELETE /api/settings/integrations/anthropic — remove key (fall back to env)
+// PUT    /api/settings/integrations/openrouter — set/update key
+// DELETE /api/settings/integrations/openrouter — remove key (fall back env)
 //
-// Admin-only. Save encrypted via pgcrypto. Invalidate Anthropic client
-// cache để next request dùng key mới ngay.
+// Admin-only. Encrypted save via pgcrypto.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -10,23 +9,22 @@ import { getCurrentUser } from '@/lib/auth/get-session';
 import { getUserRole } from '@/lib/auth/get-role';
 import { setSetting, deleteSetting } from '@/lib/settings/api-keys';
 import {
-  ANTHROPIC_KEY_NAME,
-  invalidateAnthropicKeyCache,
-} from '@/lib/anthropic/client';
+  OPENROUTER_KEY_NAME,
+  invalidateOpenRouterKeyCache,
+} from '@/lib/llm/openrouter';
 
 export const runtime = 'nodejs';
 
-// Anthropic key format: bắt đầu sk-ant-api03-... + 95 char hex/alpha
-// Validate sớm để báo lỗi rõ ràng nếu user paste nhầm (vd User Token FB).
+// OpenRouter key format: sk-or-v1-... (64 char hex sau prefix)
 const bodySchema = z.object({
   apiKey: z
     .string()
     .trim()
-    .min(50, 'API key quá ngắn — kiểm tra lại')
+    .min(20, 'API key quá ngắn — kiểm tra lại')
     .max(500, 'API key quá dài — kiểm tra lại')
     .regex(
-      /^sk-ant-/,
-      'API key phải bắt đầu "sk-ant-". Bạn có paste nhầm key khác?'
+      /^sk-or-/,
+      'API key phải bắt đầu "sk-or-" (OpenRouter). Bạn có paste nhầm key khác?'
     ),
 });
 
@@ -55,14 +53,13 @@ export async function PUT(req: NextRequest): Promise<NextResponse> {
   }
 
   await setSetting(
-    ANTHROPIC_KEY_NAME,
+    OPENROUTER_KEY_NAME,
     parsed.data.apiKey,
     user.userId,
-    'Anthropic Claude API key — feature Chat với Skill'
+    'OpenRouter API key — unified gateway cho Claude/GPT/Gemini/Grok'
   );
 
-  // Quan trọng: clear cache để next chat dùng key mới (KHÔNG đợi 1 phút TTL)
-  invalidateAnthropicKeyCache();
+  invalidateOpenRouterKeyCache();
 
   return NextResponse.json({ ok: true });
 }
@@ -76,8 +73,8 @@ export async function DELETE(): Promise<NextResponse> {
     return NextResponse.json({ error: 'Admin only' }, { status: 403 });
   }
 
-  const removed = await deleteSetting(ANTHROPIC_KEY_NAME);
-  invalidateAnthropicKeyCache();
+  const removed = await deleteSetting(OPENROUTER_KEY_NAME);
+  invalidateOpenRouterKeyCache();
 
   return NextResponse.json({ ok: true, removed });
 }

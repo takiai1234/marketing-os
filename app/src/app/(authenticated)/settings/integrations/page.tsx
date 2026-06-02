@@ -5,8 +5,8 @@ import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { getUserRole } from '@/lib/auth/get-role';
 import { listSettingsMetadata } from '@/lib/settings/api-keys';
-import { ANTHROPIC_KEY_NAME } from '@/lib/anthropic/client';
-import { AnthropicKeyForm } from './anthropic-key-form';
+import { OPENROUTER_KEY_NAME } from '@/lib/llm/openrouter';
+import { OpenRouterKeyForm } from './openrouter-key-form';
 
 export const metadata = {
   title: 'Tích hợp API — Marketing OS',
@@ -30,11 +30,11 @@ export default async function IntegrationsPage() {
     );
   }
 
-  const [anthropicMeta] = await listSettingsMetadata([ANTHROPIC_KEY_NAME]);
+  const [orMeta] = await listSettingsMetadata([OPENROUTER_KEY_NAME]);
   // listSettingsMetadata trả full array các keys requested → first phần tử
   // luôn tồn tại. Local var để TS narrow type.
-  const anthropic = anthropicMeta ?? {
-    key: ANTHROPIC_KEY_NAME,
+  const openrouter = orMeta ?? {
+    key: OPENROUTER_KEY_NAME,
     isSet: false,
     updatedAt: null,
     updatedByName: null,
@@ -50,17 +50,17 @@ export default async function IntegrationsPage() {
         </p>
       </div>
 
-      <AnthropicKeyForm
-        initialIsSet={anthropic.isSet}
-        initialUpdatedAt={anthropic.updatedAt}
-        initialUpdatedByName={anthropic.updatedByName}
-        hasEnvFallback={Boolean(process.env[ANTHROPIC_KEY_NAME])}
+      <OpenRouterKeyForm
+        initialIsSet={openrouter.isSet}
+        initialUpdatedAt={openrouter.updatedAt}
+        initialUpdatedByName={openrouter.updatedByName}
+        hasEnvFallback={Boolean(process.env[OPENROUTER_KEY_NAME])}
       />
 
-      {/* Future: OpenAI, Stability AI, Google Vertex (Veo), ... */}
+      {/* Future: Stability AI (image), Replicate (video), ... */}
       <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 px-5 py-4 text-xs text-zinc-500 italic">
-        Provider khác (OpenAI / Stability / Veo / ...) sẽ thêm vào khi mở rộng
-        Phase 2 (image) + Phase 3 (video).
+        Provider khác cho image (Stability / Imagen) + video (Veo / Runway)
+        sẽ thêm khi mở rộng Phase 2 + 3. OpenRouter chỉ cover LLM text.
       </div>
     </div>
   );
