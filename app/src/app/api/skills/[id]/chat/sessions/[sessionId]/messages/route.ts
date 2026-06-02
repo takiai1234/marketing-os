@@ -198,16 +198,18 @@ async function handlePost(req: NextRequest, { params }: Ctx): Promise<NextRespon
   let assistantText = '';
   let tokensIn = 0;
   let tokensOut = 0;
+  let finishReason = 'stop';
 
   try {
     const result = await chatComplete({
       model: session.model,
       messages: messagesForLlm,
-      maxTokens: 8192,
+      maxTokens: 16000, // ↑ từ 8192 — tránh cắt response cho bài dài
     });
     assistantText = result.content;
     tokensIn = result.tokensIn;
     tokensOut = result.tokensOut;
+    finishReason = result.finishReason;
     if (!assistantText) {
       assistantText =
         '(Model không trả về nội dung — có thể bị filter hoặc skill cần tool execution chưa support.)';
@@ -259,5 +261,6 @@ async function handlePost(req: NextRequest, { params }: Ctx): Promise<NextRespon
     assistantMessage,
     usage: { tokensIn, tokensOut },
     warnings: attResult.warnings,
+    finishReason,
   });
 }

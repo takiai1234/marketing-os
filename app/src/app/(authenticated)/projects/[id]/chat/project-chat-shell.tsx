@@ -76,6 +76,9 @@ export function ProjectChatShell({
   );
   const [sending, setSending] = useState(false);
   const [creating, setCreating] = useState(false);
+  // 'length' = response bị cắt ở max_tokens → show nút "Viết tiếp".
+  // 'stop' = LLM tự kết thúc bình thường. Reset khi switch session.
+  const [lastFinishReason, setLastFinishReason] = useState<string>('stop');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -86,6 +89,8 @@ export function ProjectChatShell({
 
   useEffect(() => {
     setMessages(activeSession?.messages ?? []);
+    // Reset finishReason — không biết history có bị cắt không sau refresh
+    setLastFinishReason('stop');
   }, [activeSession]);
 
   async function handleNewChat() {
@@ -231,12 +236,14 @@ export function ProjectChatShell({
         userMessage: ProjectChatMessage;
         assistantMessage: ProjectChatMessage;
         warnings?: string[];
+        finishReason?: string;
       };
       setMessages((prev) => [
         ...prev.filter((m) => m.id !== tempUserMsg.id),
         respData.userMessage,
         respData.assistantMessage,
       ]);
+      setLastFinishReason(respData.finishReason ?? 'stop');
       if (respData.warnings && respData.warnings.length > 0) {
         for (const w of respData.warnings) toast.warning(w);
       }
@@ -377,6 +384,24 @@ export function ProjectChatShell({
             </div>
           )}
         </div>
+
+        {/* "Viết tiếp" — hiện khi reply trước bị cắt do max_tokens */}
+        {lastFinishReason === 'length' && !sending && activeSession && (
+          <div className="px-3 py-2 border-t border-zinc-100 bg-amber-50/40 flex items-center justify-between gap-2">
+            <span className="text-xs text-amber-800">
+              ⚠️ Phản hồi vừa bị cắt do quá dài.
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                handleSubmit({ content: 'Viết tiếp đi', files: [] })
+              }
+              className="text-xs font-medium text-blue-700 hover:text-blue-900 underline"
+            >
+              Viết tiếp →
+            </button>
+          </div>
+        )}
 
         <AttachmentInput
           placeholder={

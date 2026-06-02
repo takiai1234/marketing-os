@@ -78,6 +78,7 @@ export function ChatShell({
   );
   const [sending, setSending] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [lastFinishReason, setLastFinishReason] = useState<string>('stop');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom khi messages thay đổi
@@ -90,6 +91,7 @@ export function ChatShell({
   // Sync local messages state khi server re-renders với active session khác
   useEffect(() => {
     setMessages(activeSession?.messages ?? []);
+    setLastFinishReason('stop');
   }, [activeSession]);
 
   async function handleNewChat() {
@@ -231,12 +233,14 @@ export function ChatShell({
         userMessage: ChatMessage;
         assistantMessage: ChatMessage;
         warnings?: string[];
+        finishReason?: string;
       };
       setMessages((prev) => [
         ...prev.filter((m) => m.id !== tempUserMsg.id),
         data.userMessage,
         data.assistantMessage,
       ]);
+      setLastFinishReason(data.finishReason ?? 'stop');
       if (data.warnings && data.warnings.length > 0) {
         for (const w of data.warnings) toast.warning(w);
       }
@@ -385,6 +389,24 @@ export function ChatShell({
             </div>
           )}
         </div>
+
+        {/* "Viết tiếp" — hiện khi reply trước bị cắt do max_tokens */}
+        {lastFinishReason === 'length' && !sending && activeSession && (
+          <div className="px-3 py-2 border-t border-zinc-100 bg-amber-50/40 flex items-center justify-between gap-2">
+            <span className="text-xs text-amber-800">
+              ⚠️ Phản hồi vừa bị cắt do quá dài.
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                handleSubmit({ content: 'Viết tiếp đi', files: [] })
+              }
+              className="text-xs font-medium text-blue-700 hover:text-blue-900 underline"
+            >
+              Viết tiếp →
+            </button>
+          </div>
+        )}
 
         {/* Input */}
         <AttachmentInput
