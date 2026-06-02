@@ -17,7 +17,8 @@ export interface LibraryPost {
   accountName: string;
   platform: string;
   avgEr: number;
-  totalReach: number;
+  totalReach: number;        // = total views (sau migration 036)
+  totalImpressions: number;  // = total media views, 0 nếu text post
   totalReactions: number;
   totalComments: number;
   totalShares: number;
@@ -44,6 +45,7 @@ type LibraryRow = {
   platform: string;
   avg_er: string | number;
   total_reach: string | number;
+  total_impressions: string | number;
   total_reactions: string | number;
   total_comments: string | number;
   total_shares: string | number;
@@ -86,6 +88,7 @@ function mapRow(row: LibraryRow): LibraryPost {
     platform: row.platform,
     avgEr: Number(row.avg_er ?? 0),
     totalReach: Number(row.total_reach ?? 0),
+    totalImpressions: Number(row.total_impressions ?? 0),
     totalReactions: Number(row.total_reactions ?? 0),
     totalComments: Number(row.total_comments ?? 0),
     totalShares: Number(row.total_shares ?? 0),

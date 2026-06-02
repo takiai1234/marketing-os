@@ -2,10 +2,22 @@
 // Post type is inferred from attachments.media_type; insights are extracted inline.
 //
 // Insight metric mapping (curl spec → DB column):
-//   post_media_view              → impressions
-//   post_total_media_view_unique → reach
+//   post_media_view              → impressions + reach (PRIORITY for "total view")
+//   post_impressions_unique      → unique_reach (fallback nếu post_media_view = 0)
+//   post_total_media_view_unique → reach fallback (deprecated, dùng nếu modern null)
 //   post_clicks_by_type   (obj)  → clicks  (sum of values)
 //   post_reactions_by_type_total → reactions  (sum of values)
+//
+// SEMANTIC CHỌN: `reach` column = TỔNG VIEW (total impressions) chứ KHÔNG
+// phải unique users. Lý do: marketing operations team quan tâm số view
+// tổng (bao gồm repeat views) — đó là cách industry hiểu "reach" trong
+// ngữ cảnh content performance. FB technically định nghĩa "reach" = unique,
+// nhưng UI app này dùng "reach" = total view cho consistent với expect
+// của sếp.
+//
+// Cho TEXT POST (không media): FB v25 không có `post_impressions` total
+// metric, chỉ có `post_impressions_unique` (unique). Fallback về unique
+// và UI mark "(unique)" badge nhỏ để user biết.
 //
 // Object-shaped metrics (post_clicks_by_type may be `{}`, post_reactions_by_type_total
 // is `{like: N, love: N, ...}`) are summed across keys.
@@ -102,18 +114,22 @@ export function parsePost(
   post: FBPagePost,
   fallbackInsights: Record<string, number> = {}
 ): ParsedPost {
-  // impressions: chỉ có deprecated `post_media_view` (FB v25 không có
-  // `post_impressions` cho post-level — kiểm chứng trả #100 invalid metric).
-  // `post_impressions_unique` là REACH (unique viewers), không phải total
-  // impressions — không dùng cho impressions column.
+  // impressions: total media views (post_media_view). Cho text post FB v25
+  // không có total metric → giữ 0.
   const impressions =
     sumInsightValue(getInsight(post.insights, 'post_media_view')) ||
     fallbackInsights['post_media_view'] ||
     0;
 
-  // reach: ưu tiên modern `post_impressions_unique`, fallback deprecated
-  // `post_total_media_view_unique`.
+  // reach: TỔNG VIEW (industry meaning), KHÔNG phải unique users.
+  // Priority:
+  //   1. post_media_view (total media views) ← preferred cho media post
+  //   2. post_impressions_unique (unique viewers) ← fallback cho text post
+  //   3. post_total_media_view_unique (deprecated unique) ← legacy fallback
+  // UI check `impressions === 0 && reach > 0` → show "(unique)" badge.
   const reach =
+    sumInsightValue(getInsight(post.insights, 'post_media_view')) ||
+    fallbackInsights['post_media_view'] ||
     sumInsightValue(getInsight(post.insights, 'post_impressions_unique')) ||
     sumInsightValue(getInsight(post.insights, 'post_total_media_view_unique')) ||
     fallbackInsights['post_impressions_unique'] ||

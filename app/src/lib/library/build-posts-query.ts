@@ -12,7 +12,8 @@ const METRICS_LATERAL = `
   LEFT JOIN LATERAL (
     SELECT
       AVG(engagement_rate)::numeric(10,4) AS avg_er,
-      SUM(reach)::bigint                  AS total_reach,
+      SUM(reach)::bigint                  AS total_reach,         -- = total views sau migration 036
+      SUM(impressions)::bigint            AS total_impressions,   -- = total media views (0 cho text post)
       SUM(reactions)::bigint              AS total_reactions,
       SUM(comments)::bigint               AS total_comments,
       SUM(shares)::bigint                 AS total_shares,
@@ -112,6 +113,7 @@ SELECT
   sa.platform,
   COALESCE(metrics.avg_er, 0)             AS avg_er,
   COALESCE(metrics.total_reach, 0)        AS total_reach,
+  COALESCE(metrics.total_impressions, 0)  AS total_impressions,
   COALESCE(metrics.total_reactions, 0)    AS total_reactions,
   COALESCE(metrics.total_comments, 0)     AS total_comments,
   COALESCE(metrics.total_shares, 0)       AS total_shares,

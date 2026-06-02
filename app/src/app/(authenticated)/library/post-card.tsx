@@ -70,8 +70,14 @@ export function PostCard({ post }: PostCardProps) {
   const gradient = PLATFORM_GRADIENT[post.platform] ?? 'from-zinc-300 to-zinc-500';
   const href = post.permalink ?? '#';
 
-  // Views = video_views when present, otherwise reach (best proxy for "saw it")
+  // Views = total reach (đã là total view sau migration 036). Cho text post
+  // (totalImpressions = 0), reach fallback về unique users → badge "(unique)".
+  // Video-specific view_views ưu tiên nếu có (chính xác hơn cho video).
   const views = post.totalVideoViews > 0 ? post.totalVideoViews : post.totalReach;
+  const isUniqueViews =
+    post.totalVideoViews === 0 &&
+    post.totalImpressions === 0 &&
+    post.totalReach > 0;
 
   return (
     <a
@@ -117,9 +123,19 @@ export function PostCard({ post }: PostCardProps) {
 
         {/* Engagement row — view / like / comment / share */}
         <div className="flex items-center gap-3 text-[11px] text-zinc-600">
-          <span className="inline-flex items-center gap-1">
+          <span
+            className="inline-flex items-center gap-1"
+            title={
+              isUniqueViews
+                ? 'Text post: FB chỉ cho unique users, không có total views'
+                : 'Tổng lượt xem (impressions)'
+            }
+          >
             <Eye className="size-3" />
             {formatCompact(views)}
+            {isUniqueViews && (
+              <span className="text-[9px] text-zinc-400 italic">(unique)</span>
+            )}
           </span>
           <span className="inline-flex items-center gap-1">
             <Heart className="size-3" />
