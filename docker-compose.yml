@@ -44,6 +44,8 @@ services:
       # container restart hoặc deploy mới. Host path ./data/skills phải có
       # owner uid=1001 (Dockerfile create user nextjs:nodejs với UID 1001).
       - ./data/skills:/app/storage/skills
+      # Projects: PDF/DOCX/MD upload — tách riêng skill để dễ backup
+      - ./data/projects:/app/storage/projects
     networks:
       - internal
     logging:

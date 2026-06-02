@@ -82,3 +82,9 @@ plans/
 **/.claude/settings.local.json
 **/.claude/scheduled_tasks.lock
 .dlog.json
+
+# ============================================
+# CREDENTIALS / SECRETS — không commit token plaintext
+# ============================================
+coolify.md
+.secrets/
