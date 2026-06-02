@@ -17,62 +17,73 @@ import { getSettingOrEnv } from '@/lib/settings/api-keys';
 // Key trong app_setting table — admin paste qua UI ghi vào đây
 export const OPENROUTER_KEY_NAME = 'OPENROUTER_API_KEY';
 
-// Curated model list — cover top use cases. Slug khớp OpenRouter docs
-// (xem https://openrouter.ai/models). Pricing tham khảo USD/1M tokens.
+// Curated FLAGSHIP model list — top-tier mọi family (June 2026).
+// Slug đã verify qua https://openrouter.ai/api/v1/models. Pricing USD/1M tokens.
+// Đã loại model rẻ thấp (gpt-4o-mini, gemini-flash-lite, llama) — chỉ giữ
+// 1 budget option (Haiku) cho task đơn giản.
 export const AVAILABLE_MODELS = [
+  // ─── ANTHROPIC ─────────────────────────────────────────────────────────
   {
-    id: 'anthropic/claude-sonnet-4.5',
-    label: 'Claude Sonnet 4.5',
-    description: 'Anthropic · ~$3/$15. Cân bằng cost + quality. Default cho hầu hết skill.',
+    id: 'anthropic/claude-sonnet-latest',
+    label: 'Claude Sonnet (latest)',
+    description:
+      'Anthropic · ~$3/$15 · 1M context · Cân bằng cost+quality, default cho hầu hết task. Auto-update lên Sonnet mới nhất.',
     provider: 'anthropic',
   },
   {
-    id: 'anthropic/claude-opus-4.5',
-    label: 'Claude Opus 4.5',
-    description: 'Anthropic · ~$15/$75. Tốt nhất cho creative writing dài, phân tích sâu.',
+    id: 'anthropic/claude-opus-4.8',
+    label: 'Claude Opus 4.8',
+    description:
+      'Anthropic · ~$5/$25 · 1M context · Flagship reasoning + creative writing sâu nhất. Dùng cho task khó / long content.',
     provider: 'anthropic',
   },
   {
-    id: 'anthropic/claude-haiku-4.5',
-    label: 'Claude Haiku 4.5',
-    description: 'Anthropic · ~$1/$5. Nhanh + rẻ, đủ cho task đơn giản.',
+    id: 'anthropic/claude-opus-4.8-fast',
+    label: 'Claude Opus 4.8 (fast)',
+    description:
+      'Anthropic · ~$10/$50 · 1M context · Cùng quality Opus 4.8 nhưng latency thấp hơn (premium cho real-time).',
     provider: 'anthropic',
   },
   {
-    id: 'openai/gpt-4o',
-    label: 'GPT-4o',
-    description: 'OpenAI · ~$2.5/$10. Multimodal, structured output, function calling tốt.',
+    id: 'anthropic/claude-haiku-latest',
+    label: 'Claude Haiku (latest)',
+    description:
+      'Anthropic · ~$1/$5 · 200K context · Nhanh + rẻ, đủ cho task đơn giản hoặc high-volume.',
+    provider: 'anthropic',
+  },
+
+  // ─── OPENAI ────────────────────────────────────────────────────────────
+  {
+    id: 'openai/gpt-5.5',
+    label: 'GPT-5.5',
+    description:
+      'OpenAI · ~$5/$30 · 1.05M context · Flagship balanced, multimodal + structured output + function calling tốt.',
     provider: 'openai',
   },
   {
-    id: 'openai/gpt-4o-mini',
-    label: 'GPT-4o Mini',
-    description: 'OpenAI · ~$0.15/$0.6. Rẻ nhất, fast — cho high-volume hoặc test.',
+    id: 'openai/gpt-5.5-pro',
+    label: 'GPT-5.5 Pro',
+    description:
+      'OpenAI · ~$30/$180 · 1.05M context · Top reasoning. RẤT đắt — chỉ dùng cho task cần độ chính xác tối đa.',
     provider: 'openai',
   },
+
+  // ─── GOOGLE ────────────────────────────────────────────────────────────
   {
-    id: 'google/gemini-2.5-pro',
-    label: 'Gemini 2.5 Pro',
-    description: 'Google · ~$1.25/$5. Context window 2M tokens — analyze tài liệu dài.',
+    id: 'google/gemini-3.5-flash',
+    label: 'Gemini 3.5 Flash',
+    description:
+      'Google · ~$1.5/$9 · 1M context · Multimodal mạnh, vision + audio, latency thấp.',
     provider: 'google',
   },
+
+  // ─── XAI ───────────────────────────────────────────────────────────────
   {
-    id: 'google/gemini-2.5-flash',
-    label: 'Gemini 2.5 Flash',
-    description: 'Google · ~$0.075/$0.3. Cực rẻ, fast, multimodal.',
-    provider: 'google',
-  },
-  {
-    id: 'x-ai/grok-3',
-    label: 'Grok 3',
-    description: 'xAI · ~$3/$15. Real-time data từ X (Twitter).',
+    id: 'x-ai/grok-4.20',
+    label: 'Grok 4.20',
+    description:
+      'xAI · ~$1.25/$2.5 · 2M context · Context window LỚN NHẤT (2M tokens). Real-time data từ X (Twitter), rẻ bất ngờ.',
     provider: 'xai',
-  },
-  {
-    id: 'meta-llama/llama-3.3-70b-instruct',
-    label: 'Llama 3.3 70B',
-    description: 'Meta · ~$0.6/$0.6. Open-source, balanced cost.',
-    provider: 'meta',
   },
 ] as const;
 

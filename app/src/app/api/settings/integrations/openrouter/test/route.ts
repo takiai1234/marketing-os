@@ -25,11 +25,11 @@ export async function POST(): Promise<NextResponse> {
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 
-  // Pick model RẺ NHẤT trong list để test (gemini flash hoặc gpt-4o-mini)
-  // Hardcode 'google/gemini-2.5-flash' — ~$0.0001 / lần test 10 token.
+  // Pick model RẺ NHẤT trong list để test (~$0.0001 / lần test 10 token).
+  // Claude Haiku ~$1/$5 per 1M, ping 10 token costs gần như zero.
   // Fallback first model nếu list thay đổi.
   const testModel =
-    AVAILABLE_MODELS.find((m) => m.id === 'google/gemini-2.5-flash')?.id ??
+    AVAILABLE_MODELS.find((m) => m.id === 'anthropic/claude-haiku-latest')?.id ??
     AVAILABLE_MODELS[0].id;
 
   try {

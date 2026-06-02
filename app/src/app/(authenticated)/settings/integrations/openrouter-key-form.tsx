@@ -300,27 +300,31 @@ export function OpenRouterKeyForm({
         )}
       </form>
 
-      {/* Quick model reference */}
+      {/* Quick model reference — flagship tier (June 2026) */}
       <details className="mt-3">
         <summary className="text-xs text-zinc-500 cursor-pointer hover:text-zinc-700">
-          Xem 8 model available
+          Xem 8 flagship model available
         </summary>
         <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px]">
           {[
-            ['anthropic/claude-sonnet-4.5', 'Claude Sonnet 4.5 · $3/$15'],
-            ['anthropic/claude-opus-4.5', 'Claude Opus 4.5 · $15/$75'],
-            ['openai/gpt-4o', 'GPT-4o · $2.5/$10'],
-            ['openai/gpt-4o-mini', 'GPT-4o Mini · $0.15/$0.6'],
-            ['google/gemini-2.5-pro', 'Gemini 2.5 Pro · $1.25/$5'],
-            ['google/gemini-2.5-flash', 'Gemini 2.5 Flash · $0.075/$0.3'],
-            ['x-ai/grok-3', 'Grok 3 · $3/$15'],
-            ['meta-llama/llama-3.3-70b-instruct', 'Llama 3.3 70B · $0.6/$0.6'],
+            ['anthropic/claude-sonnet-latest', 'Claude Sonnet · $3/$15 · 1M ctx'],
+            ['anthropic/claude-opus-4.8', 'Claude Opus 4.8 · $5/$25 · 1M ctx'],
+            ['anthropic/claude-opus-4.8-fast', 'Claude Opus 4.8 fast · $10/$50'],
+            ['anthropic/claude-haiku-latest', 'Claude Haiku · $1/$5 · 200K ctx'],
+            ['openai/gpt-5.5', 'GPT-5.5 · $5/$30 · 1.05M ctx'],
+            ['openai/gpt-5.5-pro', 'GPT-5.5 Pro · $30/$180 (top reasoning)'],
+            ['google/gemini-3.5-flash', 'Gemini 3.5 Flash · $1.5/$9 · 1M ctx'],
+            ['x-ai/grok-4.20', 'Grok 4.20 · $1.25/$2.5 · 2M ctx (lớn nhất!)'],
           ].map(([id, label]) => (
-            <div key={id} className="text-zinc-600 truncate">
+            <div key={id} className="text-zinc-600 truncate" title={id}>
               {label}
             </div>
           ))}
         </div>
+        <p className="text-[10px] text-zinc-400 mt-2 italic">
+          Đã bỏ low-tier (gpt-4o-mini, gemini-flash-lite, llama). Default: Claude
+          Sonnet — balance quality/cost cho hầu hết task.
+        </p>
       </details>
     </section>
   );
