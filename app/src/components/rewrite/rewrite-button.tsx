@@ -45,8 +45,10 @@ export function RewriteButton({
     setOpen(true);
   }
 
-  // Skip render hoàn toàn nếu source content quá ngắn — không bài để rewrite
-  if (!sourceContent || sourceContent.trim().length < 20) {
+  // Skip render hoàn toàn nếu source content rỗng. Cho phép cả post caption
+  // ngắn (vd "Áo đẹp 199K") vì AI vẫn rewrite được khi có sourceContext +
+  // custom instructions từ user.
+  if (!sourceContent || sourceContent.trim().length < 5) {
     return null;
   }
 

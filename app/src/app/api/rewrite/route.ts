@@ -46,7 +46,7 @@ export const maxDuration = 120;
 
 const bodySchema = z.object({
   sourceType: z.enum(['library_post', 'news']),
-  sourceContent: z.string().trim().min(20, 'Source content quá ngắn').max(50_000, 'Source content quá dài'),
+  sourceContent: z.string().trim().min(5, 'Source content quá ngắn').max(50_000, 'Source content quá dài'),
   sourceContext: z.string().max(500).nullable().optional(),
   sourcePlatform: z.string().max(50).nullable().optional(),
   model: z

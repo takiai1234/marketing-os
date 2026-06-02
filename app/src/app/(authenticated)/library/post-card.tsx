@@ -139,23 +139,24 @@ export function PostCard({ post }: PostCardProps) {
           )}
         </div>
 
-        {/* Meta row — account name + relative time + AI rewrite */}
+        {/* Meta row — account name + relative time */}
         <div className="flex items-center justify-between gap-2 text-xs text-zinc-500 pt-2 border-t border-zinc-100">
           <span className="truncate">{post.accountName}</span>
-          <div className="flex items-center gap-2 shrink-0">
-            {post.content && (
-              <RewriteButton
-                sourceType="library_post"
-                sourceTitle={null}
-                sourceContent={post.content}
-                sourceContext={post.accountName}
-                sourcePlatform={post.platform}
-                variant="icon"
-              />
-            )}
-            <span>{formatRelativeDate(post.publishedAt)}</span>
-          </div>
+          <span className="shrink-0">{formatRelativeDate(post.publishedAt)}</span>
         </div>
+
+        {/* AI rewrite — full-width row dưới cùng, ai cũng thấy */}
+        {post.content && (
+          <RewriteButton
+            sourceType="library_post"
+            sourceTitle={null}
+            sourceContent={post.content}
+            sourceContext={post.accountName}
+            sourcePlatform={post.platform}
+            variant="inline"
+            className="w-full justify-center !py-1.5"
+          />
+        )}
       </div>
     </a>
   );

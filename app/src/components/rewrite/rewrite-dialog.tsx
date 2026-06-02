@@ -159,35 +159,41 @@ export function RewriteDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+      <DialogContent className="!max-w-[min(90vw,1100px)] max-h-[92vh] flex flex-col w-full sm:w-[min(90vw,1100px)]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <SparklesIcon className="size-5 text-violet-600" />
             Viết lại bài viết tương tự
           </DialogTitle>
           <DialogDescription>
-            AI sẽ giữ chủ đề + thông điệp, đổi cách diễn đạt theo tone + định
-            dạng bạn chọn. Bài gốc nằm trong context phía dưới.
+            AI giữ chủ đề + thông điệp, đổi cách diễn đạt theo tone + định
+            dạng bạn chọn.
           </DialogDescription>
         </DialogHeader>
 
-        {/* Body cuộn được */}
-        <div className="flex-1 overflow-y-auto -mx-6 px-6 space-y-4 min-h-0">
-          {/* Source preview */}
-          <div className="rounded-md border border-zinc-200 bg-zinc-50/60 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wide text-zinc-500 mb-1">
-              {sourceType === 'news' ? 'Tin tức gốc' : 'Bài đăng gốc'}
-              {sourceContext && <span className="normal-case"> · {sourceContext}</span>}
-            </div>
-            {sourceTitle && (
-              <p className="text-sm font-semibold text-zinc-900 mb-0.5">
-                {sourceTitle}
+        {/* Body — 2 col grid khi có result, else single col */}
+        <div className="flex-1 overflow-y-auto -mx-6 px-6 min-h-0">
+        <div className={cn(
+          'grid gap-5',
+          result ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'
+        )}>
+          {/* LEFT: Source + Form */}
+          <div className="flex flex-col gap-4 min-w-0">
+            {/* Source preview */}
+            <div className="rounded-md border border-zinc-200 bg-zinc-50/60 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wide text-zinc-500 mb-1">
+                {sourceType === 'news' ? 'Tin tức gốc' : 'Bài đăng gốc'}
+                {sourceContext && <span className="normal-case"> · {sourceContext}</span>}
+              </div>
+              {sourceTitle && (
+                <p className="text-sm font-semibold text-zinc-900 mb-0.5">
+                  {sourceTitle}
+                </p>
+              )}
+              <p className="text-xs text-zinc-700 line-clamp-6 leading-relaxed">
+                {sourceContent}
               </p>
-            )}
-            <p className="text-xs text-zinc-700 line-clamp-4 leading-relaxed">
-              {sourceContent}
-            </p>
-          </div>
+            </div>
 
           {/* Form */}
           <div className="grid grid-cols-2 gap-3">
@@ -292,25 +298,31 @@ export function RewriteDialog({
               />
             </div>
           </div>
+          </div>
+          {/* /LEFT */}
 
-          {/* Result */}
+          {/* RIGHT: Result */}
           {result && (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50/40 px-3 py-3 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] uppercase tracking-wide font-semibold text-emerald-700">
-                  ✨ Nội dung mới
-                </span>
-                {usage && (
-                  <span className="text-[10px] text-zinc-500 tabular-nums">
-                    {usage.tokensIn} in · {usage.tokensOut} out
+            <div className="flex flex-col gap-2 min-w-0">
+              <div className="rounded-md border border-emerald-200 bg-emerald-50/40 px-4 py-4 space-y-3 flex-1">
+                <div className="flex items-center justify-between gap-2 border-b border-emerald-200 pb-2">
+                  <span className="text-xs uppercase tracking-wide font-semibold text-emerald-700 flex items-center gap-1">
+                    <SparklesIcon className="size-3.5" />
+                    Nội dung mới
                   </span>
-                )}
+                  {usage && (
+                    <span className="text-[10px] text-zinc-500 tabular-nums">
+                      {usage.tokensIn} in · {usage.tokensOut} out
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-zinc-900 whitespace-pre-wrap leading-relaxed">
+                  {result}
+                </p>
               </div>
-              <p className="text-sm text-zinc-900 whitespace-pre-wrap leading-relaxed">
-                {result}
-              </p>
             </div>
           )}
+        </div>
         </div>
 
         <DialogFooter className="flex-row flex-wrap gap-2 sm:gap-3 items-center justify-end pt-3 border-t border-zinc-100">
