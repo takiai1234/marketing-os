@@ -6,7 +6,9 @@ import { getCurrentUser } from '@/lib/auth/get-session';
 import { getUserRole } from '@/lib/auth/get-role';
 import { listSettingsMetadata } from '@/lib/settings/api-keys';
 import { OPENROUTER_KEY_NAME } from '@/lib/llm/openrouter';
+import { KIE_AI_KEY_NAME } from '@/lib/llm/kie-ai';
 import { OpenRouterKeyForm } from './openrouter-key-form';
+import { KieAiKeyForm } from './kieai-key-form';
 
 export const metadata = {
   title: 'Tích hợp API — Marketing OS',
@@ -30,11 +32,20 @@ export default async function IntegrationsPage() {
     );
   }
 
-  const [orMeta] = await listSettingsMetadata([OPENROUTER_KEY_NAME]);
-  // listSettingsMetadata trả full array các keys requested → first phần tử
-  // luôn tồn tại. Local var để TS narrow type.
+  const [orMeta, kieMeta] = await listSettingsMetadata([
+    OPENROUTER_KEY_NAME,
+    KIE_AI_KEY_NAME,
+  ]);
+  // listSettingsMetadata trả full array các keys requested → các phần tử
+  // luôn tồn tại theo thứ tự. Local var để TS narrow type.
   const openrouter = orMeta ?? {
     key: OPENROUTER_KEY_NAME,
+    isSet: false,
+    updatedAt: null,
+    updatedByName: null,
+  };
+  const kieai = kieMeta ?? {
+    key: KIE_AI_KEY_NAME,
     isSet: false,
     updatedAt: null,
     updatedByName: null,
@@ -57,10 +68,16 @@ export default async function IntegrationsPage() {
         hasEnvFallback={Boolean(process.env[OPENROUTER_KEY_NAME])}
       />
 
-      {/* Future: Stability AI (image), Replicate (video), ... */}
+      <KieAiKeyForm
+        initialIsSet={kieai.isSet}
+        initialUpdatedAt={kieai.updatedAt}
+        initialUpdatedByName={kieai.updatedByName}
+        hasEnvFallback={Boolean(process.env[KIE_AI_KEY_NAME])}
+      />
+
       <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 px-5 py-4 text-xs text-zinc-500 italic">
-        Provider khác cho image (Stability / Imagen) + video (Veo / Runway)
-        sẽ thêm khi mở rộng Phase 2 + 3. OpenRouter chỉ cover LLM text.
+        OpenRouter cover LLM text · kie.ai cover image + video. Provider phụ
+        khác (Stability / Runway / Veo) sẽ thêm khi cần.
       </div>
     </div>
   );

@@ -2,7 +2,7 @@
 // Fetch metadata + parse zip tree song song, sau đó render header + tree viewer.
 
 import { notFound, redirect } from 'next/navigation';
-import { Download, ArrowLeft, MessageSquareIcon } from 'lucide-react';
+import { Download, ArrowLeft, MessageSquareIcon, SparklesIcon } from 'lucide-react';
 import Link from 'next/link';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { getUserRole } from '@/lib/auth/get-role';
@@ -12,6 +12,7 @@ import type { ZipEntryNode } from '@/lib/skill-lib/zip-reader';
 import { AlertTriangle } from 'lucide-react';
 import { resolveSkillPath } from '@/lib/skill-lib/storage';
 import { isOpenRouterConfigured } from '@/lib/llm/openrouter';
+import { isKieConfigured } from '@/lib/llm/kie-ai';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { FileTree } from './file-tree';
@@ -31,11 +32,12 @@ export default async function SkillDetailPage({ params }: PageProps) {
   if (!user) redirect('/login');
 
   const { id } = await params;
-  const [skill, storage, role, llmReady] = await Promise.all([
+  const [skill, storage, role, llmReady, kieReady] = await Promise.all([
     getSkillById(id),
     getSkillStoragePath(id),
     getUserRole(user.userId),
     isOpenRouterConfigured(),
+    isKieConfigured(),
   ]);
 
   if (!skill || !storage) notFound();
@@ -92,7 +94,7 @@ export default async function SkillDetailPage({ params }: PageProps) {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-          {/* Chat button — chỉ hiện nếu Anthropic API configured (graceful
+          {/* Chat button — chỉ hiện nếu OpenRouter configured (graceful
               degrade). Link sang chat page riêng. */}
           {llmReady && (
             <Link
@@ -101,10 +103,25 @@ export default async function SkillDetailPage({ params }: PageProps) {
                 buttonVariants({ variant: 'default' }),
                 'bg-blue-600 hover:bg-blue-700 text-white'
               )}
-              title="Mở chat với skill này qua Claude API"
+              title="Mở chat với skill này qua OpenRouter (Claude/GPT/Gemini/...)"
             >
               <MessageSquareIcon className="size-4" />
               Chat với skill
+            </Link>
+          )}
+
+          {/* Generate media button — chỉ hiện nếu kie.ai configured */}
+          {kieReady && (
+            <Link
+              href={`/skills/${skill.id}/generate`}
+              className={cn(
+                buttonVariants({ variant: 'default' }),
+                'bg-pink-600 hover:bg-pink-700 text-white'
+              )}
+              title="Tạo ảnh hoặc video qua kie.ai (GPT Image 2 / Grok Imagine / Flux / Veo)"
+            >
+              <SparklesIcon className="size-4" />
+              Tạo media
             </Link>
           )}
           <a href={`/api/skills/${skill.id}/download`} download>
