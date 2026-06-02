@@ -23,6 +23,7 @@ import type {
   TopConversionPost,
 } from '@/lib/queries/library-top-conversion';
 import { MousePointerClickIcon, AwardIcon, ExternalLinkIcon } from 'lucide-react';
+import { RewriteButton } from '@/components/rewrite/rewrite-button';
 
 // Inline const — không import value từ file `pg`-loaded (xem comment trong
 // top-reach-leaderboard.tsx về Turbopack pulling Node `dns` vào client bundle).
@@ -292,6 +293,17 @@ function LeaderboardRow({
               >
                 <ExternalLinkIcon className="size-3.5" />
               </a>
+            )}
+
+            {post.content && (
+              <RewriteButton
+                sourceType="library_post"
+                sourceTitle={null}
+                sourceContent={post.content}
+                sourceContext={`${post.accountName} · ${typeMeta.label} · ${post.clicks} clicks`}
+                sourcePlatform={post.platform}
+                variant="inline"
+              />
             )}
           </div>
         </div>

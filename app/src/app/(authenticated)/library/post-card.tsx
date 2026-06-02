@@ -1,10 +1,8 @@
 // Server component — renders a single post card linking to permalink.
-// Click toàn bộ card mở permalink trong tab mới. Có thêm 1 nút client
-// "Viết lại bài viết tương tự" stopPropagation để dùng AI rewrite.
+// No client-side interactivity; click opens permalink in new tab.
 
 import { Eye, Heart, MessageCircle, Share2 } from 'lucide-react';
 import type { LibraryPost } from '@/lib/queries/library-posts';
-import { RewriteButton } from '@/components/rewrite/rewrite-button';
 
 const PLATFORM_LABELS: Record<string, string> = {
   facebook: 'Facebook',
@@ -144,19 +142,6 @@ export function PostCard({ post }: PostCardProps) {
           <span className="truncate">{post.accountName}</span>
           <span className="shrink-0">{formatRelativeDate(post.publishedAt)}</span>
         </div>
-
-        {/* AI rewrite — full-width row dưới cùng, ai cũng thấy */}
-        {post.content && (
-          <RewriteButton
-            sourceType="library_post"
-            sourceTitle={null}
-            sourceContent={post.content}
-            sourceContext={post.accountName}
-            sourcePlatform={post.platform}
-            variant="inline"
-            className="w-full justify-center !py-1.5"
-          />
-        )}
       </div>
     </a>
   );
