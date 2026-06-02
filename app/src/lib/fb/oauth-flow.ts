@@ -21,10 +21,19 @@ function requireEnv(name: string): string {
  * shown in Graph Explorer's standard picker. `pages_read_engagement` covers
  * page_fans / page_impressions / post-level metrics for page admins, which is
  * the only persona we support.
+ *
+ * `ads_read` (Phase 1 Marketing Ads): read-only ad account insights — spend,
+ * impressions, clicks, CTR, CPM, ROAS. Required for /ads dashboard. Meta
+ * approval ~1-3 tuần qua App Review (cần submit screencast + use case).
+ * Sau khi user reconnect FB, app cùng lúc lấy:
+ *   - access token cho Pages (đã có)
+ *   - access token cho Ad accounts (qua /me/adaccounts với cùng user token)
+ * Cùng 1 OAuth flow, không phải reconnect 2 lần.
  */
 const OAUTH_SCOPES = [
   'pages_show_list',
   'pages_read_engagement',
+  'ads_read',
 ].join(',');
 
 /**

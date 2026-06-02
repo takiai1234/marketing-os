@@ -11,6 +11,10 @@ import {
   extendUserToken,
   listUserPages,
 } from '@/lib/fb/oauth-flow';
+import { fetchAdAccounts } from '@/lib/fb/ads-api-client';
+import { upsertAdAccount } from '@/lib/queries/ad-accounts';
+import { encryptToken } from '@/lib/fb/token-encryption';
+import { db } from '@/lib/db';
 import type { FBPage } from '@/lib/fb/types';
 
 export const runtime = 'nodejs';
@@ -71,6 +75,44 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     };
 
     await session.save();
+
+    // ─── Ad accounts: discover qua /me/adaccounts (cần scope ads_read) ──
+    // Best-effort: nếu user chưa approve ads_read scope, fetchAdAccounts
+    // throw FB error #100/200 — catch + skip (Pages flow vẫn tiếp tục).
+    // Token được encrypt + lưu vào ad_account.encrypted_token để cron sau
+    // dùng cho /act_<id>/insights call. User token có lifespan ~60 days
+    // sau extendUserToken — đủ cho daily sync.
+    try {
+      const adAccounts = await fetchAdAccounts(userToken);
+      if (adAccounts.length > 0) {
+        const encryptedToken = await encryptToken(userToken);
+        for (const acc of adAccounts) {
+          const dbAccount = await upsertAdAccount({
+            ownerId: user.userId,
+            platform: 'facebook',
+            externalId: acc.id, // 'act_<numeric>'
+            name: acc.name,
+            currency: acc.currency,
+            timezone: acc.timezone_name ?? null,
+          });
+          // Cập nhật token cho row vừa upsert (separate query vì
+          // upsertAdAccount không nhận token — token là cấp user, dùng chung)
+          await db.query(
+            `UPDATE ad_account SET encrypted_token = $2 WHERE id = $1`,
+            [dbAccount.id, encryptedToken]
+          );
+        }
+        console.log(
+          `[fb/callback] Discovered ${adAccounts.length} ad accounts for user ${user.userId}`
+        );
+      }
+    } catch (err) {
+      // Không kill Pages flow — chỉ log
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(
+        `[fb/callback] Ad accounts discovery skipped (likely ads_read scope missing): ${msg.slice(0, 200)}`
+      );
+    }
 
     const redirectUrl = new URL('/channels/new/facebook', req.nextUrl.origin);
     redirectUrl.searchParams.set('step', 'pick');

@@ -11,6 +11,7 @@ import { runNewsIngestionJob } from '@/lib/cron/job-news-ingestion';
 import { runBundleImportJob } from '@/lib/cron/job-bundle-import';
 import { runBundleImportPollerJob } from '@/lib/cron/job-bundle-import-poller';
 import { runBundleConnectPollerJob } from '@/lib/cron/job-bundle-connect-poller';
+import { runAdsIngestionJob } from '@/lib/cron/job-ads-ingestion';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -98,6 +99,19 @@ export function initCrons(): void {
     );
   });
 
+  // Job I: FB Ads insights — daily 04:30 VN (= 21:30 UTC previous day).
+  // Pull last 30 days insights cho mọi ad_account active. Cron run after
+  // FB stabilizes day-ago data (~3-4h sau UTC midnight).
+  cron.schedule(
+    '30 4 * * *',
+    () => {
+      runAdsIngestionJob().catch((err) =>
+        console.error('[cron] job-ads-ingestion uncaught error:', err)
+      );
+    },
+    { timezone: 'Asia/Ho_Chi_Minh' }
+  );
+
   // Job H: Bundle CONNECT poller — every 2 minutes.
   // Cross-device safety net. After "Tạo link" the user may complete OAuth
   // on a different device; the redirect lands there, not on our app. The
@@ -113,7 +127,7 @@ export function initCrons(): void {
 
   const now = new Date();
   console.log(
-    `[cron] 8 jobs scheduled at ${now.toISOString()} ` +
+    `[cron] 9 jobs scheduled at ${now.toISOString()} ` +
       `(container TZ offset=${-now.getTimezoneOffset() / 60}h, ` +
       `process.env.TZ=${process.env.TZ ?? 'unset'})`
   );
@@ -138,6 +152,7 @@ export function initCrons(): void {
   console.log('  - bundle_import:    0 0 * * *         (Asia/Ho_Chi_Minh, midnight VN)');
   console.log('  - bundle_poller:    */5 * * * *       (UTC, every 5 min)');
   console.log('  - connect_poller:   */2 * * * *       (UTC, every 2 min)');
+  console.log('  - ads_ingestion:    30 4 * * *         (Asia/Ho_Chi_Minh, daily 04:30 VN)');
 
   // Boot-time heartbeat: log every 60s for the first 5 minutes so an
   // operator looking at `docker logs` after deploy can confirm the Node

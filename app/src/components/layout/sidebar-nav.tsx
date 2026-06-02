@@ -14,6 +14,7 @@ import {
   Package,
   Newspaper,
   FolderKanban,
+  Zap,
 } from 'lucide-react';
 import type { SessionData } from '@/lib/auth/session-config';
 import { UserMenu } from './user-menu';
@@ -22,6 +23,7 @@ const BASE_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/briefs', label: 'Xưởng nội dung', icon: Inbox },
   { href: '/channels', label: 'Kênh', icon: Radio },
+  { href: '/ads', label: 'Quảng cáo', icon: Zap },
   { href: '/library', label: 'Thư viện', icon: BookOpen },
   { href: '/skills', label: 'Thư viện Skill', icon: Package },
   { href: '/projects', label: 'Projects', icon: FolderKanban },
