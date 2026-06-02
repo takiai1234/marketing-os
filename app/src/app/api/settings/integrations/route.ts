@@ -6,12 +6,13 @@ import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { getUserRole } from '@/lib/auth/get-role';
 import { listSettingsMetadata } from '@/lib/settings/api-keys';
+import { OPENROUTER_KEY_NAME } from '@/lib/llm/openrouter';
 import { KIE_AI_KEY_NAME } from '@/lib/llm/kie-ai';
 
 export const runtime = 'nodejs';
 
 // List các key managed qua UI — extend khi add provider mới
-const MANAGED_KEYS = [KIE_AI_KEY_NAME] as const;
+const MANAGED_KEYS = [OPENROUTER_KEY_NAME, KIE_AI_KEY_NAME] as const;
 
 export async function GET(): Promise<NextResponse> {
   const user = await getCurrentUser();

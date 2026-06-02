@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { FolderPlusIcon, FilesIcon, MessageSquareIcon } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { listProjectsForUser } from '@/lib/queries/projects';
-import { isKieConfigured } from '@/lib/llm/kie-ai';
+import { isOpenRouterConfigured } from '@/lib/llm/openrouter';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -34,9 +34,9 @@ export default async function ProjectsPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
-  const [projects, kieReady] = await Promise.all([
+  const [projects, llmReady] = await Promise.all([
     listProjectsForUser(user.userId),
-    isKieConfigured(),
+    isOpenRouterConfigured(),
   ]);
 
   return (
@@ -57,10 +57,10 @@ export default async function ProjectsPage() {
         </Link>
       </div>
 
-      {!kieReady && (
+      {!llmReady && (
         <div className="rounded-xl bg-amber-50 ring-1 ring-amber-200 px-4 py-3 text-sm text-amber-900">
           <strong>Chú ý:</strong> Chat trong project cần{' '}
-          <code className="bg-white px-1 rounded">KIE_AI_API_KEY</code>.
+          <code className="bg-white px-1 rounded">OPENROUTER_API_KEY</code>.
           Admin set tại{' '}
           <Link href="/settings/integrations" className="underline font-semibold">
             /settings/integrations

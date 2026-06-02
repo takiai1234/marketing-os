@@ -15,7 +15,7 @@ import {
   writeAttachment,
   type MessageAttachment,
 } from '@/lib/chat-attachments/storage';
-import type { ChatContentBlock } from '@/lib/llm/kie-ai';
+import type { ChatContentBlock } from '@/lib/llm/openrouter';
 
 /** Cap per-message: tổng số attachment + size đảm bảo prompt không nổ */
 export const MAX_ATTACHMENTS_PER_MESSAGE = 8;

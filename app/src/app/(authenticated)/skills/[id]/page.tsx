@@ -12,6 +12,7 @@ import type { ZipEntryNode } from '@/lib/skill-lib/zip-reader';
 import { AlertTriangle } from 'lucide-react';
 import { resolveSkillPath } from '@/lib/skill-lib/storage';
 import { isKieConfigured } from '@/lib/llm/kie-ai';
+import { isOpenRouterConfigured } from '@/lib/llm/openrouter';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { FileTree } from './file-tree';
@@ -31,14 +32,13 @@ export default async function SkillDetailPage({ params }: PageProps) {
   if (!user) redirect('/login');
 
   const { id } = await params;
-  const [skill, storage, role, kieReady] = await Promise.all([
+  const [skill, storage, role, llmReady, kieReady] = await Promise.all([
     getSkillById(id),
     getSkillStoragePath(id),
     getUserRole(user.userId),
-    isKieConfigured(),
+    isOpenRouterConfigured(), // Chat
+    isKieConfigured(),         // Media
   ]);
-  // kie.ai key bật cả 2 feature: chat + tạo media (1 key duy nhất)
-  const llmReady = kieReady;
 
   if (!skill || !storage) notFound();
 
@@ -94,7 +94,7 @@ export default async function SkillDetailPage({ params }: PageProps) {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-          {/* Chat button — chỉ hiện nếu kie.ai configured (graceful degrade). */}
+          {/* Chat button — chỉ hiện nếu OpenRouter configured (graceful degrade). */}
           {llmReady && (
             <Link
               href={`/skills/${skill.id}/chat`}
@@ -102,7 +102,7 @@ export default async function SkillDetailPage({ params }: PageProps) {
                 buttonVariants({ variant: 'default' }),
                 'bg-blue-600 hover:bg-blue-700 text-white'
               )}
-              title="Mở chat với skill này qua kie.ai (Claude/GPT-5/Gemini)"
+              title="Mở chat với skill này qua OpenRouter (Claude/GPT/Gemini/...)"
             >
               <MessageSquareIcon className="size-4" />
               Chat với skill

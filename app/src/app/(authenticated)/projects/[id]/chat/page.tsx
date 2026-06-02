@@ -10,7 +10,7 @@ import {
   listProjectSessions,
   getProjectSessionForUser,
 } from '@/lib/queries/projects';
-import { CHAT_MODELS, isKieConfigured } from '@/lib/llm/kie-ai';
+import { AVAILABLE_MODELS, isOpenRouterConfigured } from '@/lib/llm/openrouter';
 import { ProjectChatShell } from './project-chat-shell';
 
 interface PageProps {
@@ -26,7 +26,7 @@ export default async function ProjectChatPage({ params, searchParams }: PageProp
   const sp = await searchParams;
   const sessionParam = typeof sp.session === 'string' ? sp.session : null;
 
-  if (!(await isKieConfigured())) {
+  if (!(await isOpenRouterConfigured())) {
     return (
       <div className="flex flex-col gap-6 max-w-2xl">
         <Link
@@ -41,7 +41,7 @@ export default async function ProjectChatPage({ params, searchParams }: PageProp
             Feature Chat chưa được bật
           </h2>
           <p className="text-sm text-amber-800">
-            Admin cần set <code className="bg-white px-1 rounded">KIE_AI_API_KEY</code>{' '}
+            Admin cần set <code className="bg-white px-1 rounded">OPENROUTER_API_KEY</code>{' '}
             tại{' '}
             <Link href="/settings/integrations" className="underline font-semibold">
               /settings/integrations
@@ -86,7 +86,7 @@ export default async function ProjectChatPage({ params, searchParams }: PageProp
         projectName={project.name}
         initialSessions={sessions}
         activeSession={activeSession}
-        availableModels={CHAT_MODELS.map((m) => ({
+        availableModels={AVAILABLE_MODELS.map((m) => ({
           id: m.id,
           label: m.label,
           description: m.description,

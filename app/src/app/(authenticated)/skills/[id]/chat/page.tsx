@@ -9,7 +9,7 @@ import { ArrowLeft, MessageSquareIcon } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { getSkillById } from '@/lib/queries/skill-lib';
 import { listSessions, getSessionForUser } from '@/lib/queries/skill-chat';
-import { CHAT_MODELS, isKieConfigured } from '@/lib/llm/kie-ai';
+import { AVAILABLE_MODELS, isOpenRouterConfigured } from '@/lib/llm/openrouter';
 import { ChatShell } from './chat-shell';
 
 interface PageProps {
@@ -28,7 +28,7 @@ export default async function SkillChatPage({
   const sp = await searchParams;
   const sessionParam = typeof sp.session === 'string' ? sp.session : null;
 
-  if (!(await isKieConfigured())) {
+  if (!(await isOpenRouterConfigured())) {
     return (
       <div className="flex flex-col gap-6 max-w-2xl">
         <Link
@@ -43,7 +43,7 @@ export default async function SkillChatPage({
             Feature Chat chưa được bật
           </h2>
           <p className="text-sm text-amber-800">
-            Admin cần set <code className="bg-white px-1 rounded">KIE_AI_API_KEY</code>{' '}
+            Admin cần set <code className="bg-white px-1 rounded">OPENROUTER_API_KEY</code>{' '}
             tại{' '}
             <Link
               href="/settings/integrations"
@@ -53,14 +53,14 @@ export default async function SkillChatPage({
             </Link>
             . Lấy key tại{' '}
             <a
-              href="https://kie.ai"
+              href="https://openrouter.ai/keys"
               target="_blank"
               rel="noopener noreferrer"
               className="underline font-semibold"
             >
-              kie.ai
-            </a>{' '}
-            (1 key dùng cho chat + tạo ảnh + tạo video).
+              openrouter.ai/keys
+            </a>
+            .
           </p>
         </div>
       </div>
@@ -104,7 +104,7 @@ export default async function SkillChatPage({
         skillName={skill.name}
         initialSessions={sessions}
         activeSession={activeSession}
-        availableModels={CHAT_MODELS.map((m) => ({
+        availableModels={AVAILABLE_MODELS.map((m) => ({
           id: m.id,
           label: m.label,
           description: m.description,

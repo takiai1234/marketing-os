@@ -5,7 +5,9 @@ import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { getUserRole } from '@/lib/auth/get-role';
 import { listSettingsMetadata } from '@/lib/settings/api-keys';
+import { OPENROUTER_KEY_NAME } from '@/lib/llm/openrouter';
 import { KIE_AI_KEY_NAME } from '@/lib/llm/kie-ai';
+import { OpenRouterKeyForm } from './openrouter-key-form';
 import { KieAiKeyForm } from './kieai-key-form';
 
 export const metadata = {
@@ -30,7 +32,16 @@ export default async function IntegrationsPage() {
     );
   }
 
-  const [kieMeta] = await listSettingsMetadata([KIE_AI_KEY_NAME]);
+  const [orMeta, kieMeta] = await listSettingsMetadata([
+    OPENROUTER_KEY_NAME,
+    KIE_AI_KEY_NAME,
+  ]);
+  const openrouter = orMeta ?? {
+    key: OPENROUTER_KEY_NAME,
+    isSet: false,
+    updatedAt: null,
+    updatedByName: null,
+  };
   const kieai = kieMeta ?? {
     key: KIE_AI_KEY_NAME,
     isSet: false,
@@ -48,6 +59,13 @@ export default async function IntegrationsPage() {
         </p>
       </div>
 
+      <OpenRouterKeyForm
+        initialIsSet={openrouter.isSet}
+        initialUpdatedAt={openrouter.updatedAt}
+        initialUpdatedByName={openrouter.updatedByName}
+        hasEnvFallback={Boolean(process.env[OPENROUTER_KEY_NAME])}
+      />
+
       <KieAiKeyForm
         initialIsSet={kieai.isSet}
         initialUpdatedAt={kieai.updatedAt}
@@ -56,9 +74,9 @@ export default async function IntegrationsPage() {
       />
 
       <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 px-5 py-4 text-xs text-zinc-500 italic">
-        kie.ai là provider duy nhất: 1 key bật cả 3 feature (Chat với skill,
-        Tạo ảnh, Tạo video). Provider phụ (Stability / Runway / etc.) sẽ thêm
-        sau nếu cần fallback.
+        <strong>OpenRouter</strong> cho Chat LLM (Claude/GPT/Gemini/Grok/Llama) ·{' '}
+        <strong>kie.ai</strong> cho Tạo ảnh + Tạo video. Mỗi feature dùng 1 key
+        riêng — fail provider này không ảnh hưởng provider kia.
       </div>
     </div>
   );

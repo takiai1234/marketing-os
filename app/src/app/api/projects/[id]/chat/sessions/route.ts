@@ -9,7 +9,7 @@ import {
   createProjectSession,
   getProjectForUser,
 } from '@/lib/queries/projects';
-import { isValidChatModelId, CHAT_MODELS } from '@/lib/llm/kie-ai';
+import { isValidModelId, AVAILABLE_MODELS } from '@/lib/llm/openrouter';
 
 export const runtime = 'nodejs';
 
@@ -37,8 +37,8 @@ export async function GET(_req: NextRequest, { params }: Ctx): Promise<NextRespo
 }
 
 const createSchema = z.object({
-  model: z.string().refine(isValidChatModelId, {
-    message: `model must be one of: ${CHAT_MODELS.map((m) => m.id).join(', ')}`,
+  model: z.string().refine(isValidModelId, {
+    message: `model must be one of: ${AVAILABLE_MODELS.map((m) => m.id).join(', ')}`,
   }),
   title: z.string().min(1).max(200).optional(),
 });

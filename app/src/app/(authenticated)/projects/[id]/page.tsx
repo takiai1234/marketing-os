@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, MessageSquareIcon } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { getProjectForUser, listFilesForProject } from '@/lib/queries/projects';
-import { isKieConfigured } from '@/lib/llm/kie-ai';
+import { isOpenRouterConfigured } from '@/lib/llm/openrouter';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ProjectDetailShell } from './project-detail-shell';
@@ -19,9 +19,9 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   if (!user) redirect('/login');
 
   const { id } = await params;
-  const [project, kieReady] = await Promise.all([
+  const [project, llmReady] = await Promise.all([
     getProjectForUser(id, user.userId),
-    isKieConfigured(),
+    isOpenRouterConfigured(),
   ]);
   if (!project) notFound();
 
@@ -66,7 +66,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           </div>
         </div>
 
-        {kieReady && (
+        {llmReady && (
           <Link
             href={`/projects/${project.id}/chat`}
             className={cn(

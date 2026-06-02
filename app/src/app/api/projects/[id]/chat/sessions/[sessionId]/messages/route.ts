@@ -24,11 +24,11 @@ import {
 } from '@/lib/queries/projects';
 import {
   chatComplete,
-  isKieConfigured,
-  isValidChatModelId,
+  isOpenRouterConfigured,
+  isValidModelId,
   type ChatMessageInput,
   type ChatContentBlock,
-} from '@/lib/llm/kie-ai';
+} from '@/lib/llm/openrouter';
 import { processAttachments } from '@/lib/chat-attachments/process';
 import type { MessageAttachment } from '@/lib/chat-attachments/storage';
 
@@ -136,9 +136,9 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
 }
 
 async function handlePost(req: NextRequest, { params }: Ctx): Promise<NextResponse> {
-  if (!(await isKieConfigured())) {
+  if (!(await isOpenRouterConfigured())) {
     return NextResponse.json(
-      { error: 'KIE_AI_API_KEY chưa cấu hình. Admin vào /settings/integrations để set.' },
+      { error: 'OPENROUTER_API_KEY chưa cấu hình. Admin vào /settings/integrations để set.' },
       { status: 503 }
     );
   }
@@ -184,7 +184,7 @@ async function handlePost(req: NextRequest, { params }: Ctx): Promise<NextRespon
   if (session.projectId !== projectId) {
     return NextResponse.json({ error: 'Session does not belong to this project' }, { status: 400 });
   }
-  if (!isValidChatModelId(session.model)) {
+  if (!isValidModelId(session.model)) {
     return NextResponse.json(
       { error: `Model "${session.model}" không còn hỗ trợ — tạo cuộc trò chuyện mới.` },
       { status: 400 }
