@@ -1,7 +1,7 @@
 // POST /api/skills/[id]/chat/sessions/[sessionId]/messages
 //
-// Send user message, call OpenRouter (with whatever model session uses),
-// save assistant response, return both.
+// Send user message → call kie.ai chat (model picked at session creation) →
+// save assistant response → return both.
 //
 // Non-streaming initially — UX hơi chậm cho long response nhưng đơn giản
 // hơn streaming SSE. Add streaming sau nếu cần.
@@ -9,9 +9,9 @@
 // Flow:
 //   1. Load session (verify ownership)
 //   2. Load skill content → build system prompt
-//   3. Load message history → format cho OpenAI SDK
+//   3. Load message history → format cho chatComplete()
 //   4. Append new user message vào DB
-//   5. Call OpenRouter (model picked at session creation)
+//   5. Call kie.ai chatComplete (dispatch theo family Anthropic/Codex/Gemini)
 //   6. Append assistant message với tokens_in/out
 //   7. Return both messages cho UI
 
@@ -28,10 +28,14 @@ import {
   loadSkillContent,
   buildSystemPrompt,
 } from '@/lib/skill-lib/load-skill-content';
-import { getOpenRouter, isOpenRouterConfigured } from '@/lib/llm/openrouter';
+import {
+  chatComplete,
+  isKieConfigured,
+  isValidChatModelId,
+} from '@/lib/llm/kie-ai';
 
 export const runtime = 'nodejs';
-// Long-running LLM call — cho phép tới 5 phút (Opus / GPT-5 cho hard topics)
+// Long-running LLM call — cho phép tới 5 phút (Opus 4.8 / GPT-5.5 với thinking)
 export const maxDuration = 300;
 
 const UUID_RE =
@@ -49,11 +53,11 @@ export async function POST(
   req: NextRequest,
   { params }: RouteContext
 ): Promise<NextResponse> {
-  if (!(await isOpenRouterConfigured())) {
+  if (!(await isKieConfigured())) {
     return NextResponse.json(
       {
         error:
-          'OPENROUTER_API_KEY chưa được cấu hình. Admin vào /settings/integrations để set.',
+          'KIE_AI_API_KEY chưa được cấu hình. Admin vào /settings/integrations để set.',
       },
       { status: 503 }
     );
@@ -89,6 +93,16 @@ export async function POST(
     return NextResponse.json({ error: 'Session does not belong to this skill' }, { status: 400 });
   }
 
+  // Old sessions có thể còn model slug cũ từ OpenRouter — guard early
+  if (!isValidChatModelId(session.model)) {
+    return NextResponse.json(
+      {
+        error: `Model "${session.model}" không còn được hỗ trợ (đã chuyển sang kie.ai). Tạo cuộc trò chuyện mới với model hiện có.`,
+      },
+      { status: 400 }
+    );
+  }
+
   // 2. Load skill content
   const [skill, storage] = await Promise.all([
     getSkillById(skillId),
@@ -110,44 +124,42 @@ export async function POST(
     );
   }
 
-  // 3. Format messages history cho OpenAI SDK
-  //    OpenAI/OpenRouter expect alternating user/assistant. System message
-  //    đặt RIÊNG trong messages array (khác với Anthropic SDK dùng `system` param).
+  // 3. Format messages history. chatComplete() handle riêng từng family — Anthropic
+  //    sẽ tự tách system khỏi messages[]; OpenAI-format giữ nguyên trong array.
   const historyMessages = session.messages.map((m) => ({
     role: m.role,
     content: m.content,
   }));
 
-  // 4. Persist user message TRƯỚC khi call LLM (preserve input if API fails)
+  // 4. Persist user message TRƯỚC khi call LLM (preserve input nếu API fail)
   const userMessage = await appendMessage(sessionId, 'user', userText, 0, 0);
 
-  // 5. Call OpenRouter
-  const client = await getOpenRouter();
+  // 5. Call kie.ai
   let assistantText = '';
   let tokensIn = 0;
   let tokensOut = 0;
 
   try {
-    const response = await client.chat.completions.create({
+    const result = await chatComplete({
       model: session.model,
-      max_tokens: 8192,
       messages: [
         { role: 'system', content: systemPrompt },
         ...historyMessages,
         { role: 'user', content: userText },
       ],
+      maxTokens: 8192,
     });
 
-    const choice = response.choices[0];
-    assistantText = choice?.message?.content ?? '';
-    tokensIn = response.usage?.prompt_tokens ?? 0;
-    tokensOut = response.usage?.completion_tokens ?? 0;
+    assistantText = result.content;
+    tokensIn = result.tokensIn;
+    tokensOut = result.tokensOut;
 
     if (!assistantText) {
-      assistantText = '(Model không trả về nội dung — có thể bị filter hoặc skill cần tool execution chưa support.)';
+      assistantText =
+        '(Model không trả về nội dung — có thể bị filter hoặc skill cần tool execution chưa support.)';
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'OpenRouter API error';
+    const msg = err instanceof Error ? err.message : 'kie.ai API error';
     // Lưu error vào DB như assistant message để user thấy + retry
     await appendMessage(
       sessionId,

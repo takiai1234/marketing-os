@@ -74,7 +74,7 @@ export function ChatShell({
   );
   const [input, setInput] = useState('');
   const [selectedModel, setSelectedModel] = useState(
-    availableModels[0]?.id ?? 'claude-sonnet-4-5'
+    availableModels[0]?.id ?? 'claude-sonnet-4-6'
   );
   const [sending, setSending] = useState(false);
   const [creating, setCreating] = useState(false);

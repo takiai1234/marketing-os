@@ -2,8 +2,11 @@
 
 // Form input cho kie.ai API key — admin only.
 // 3 actions: Lưu (PUT), Test (POST /test), Xoá (DELETE).
-// kie.ai = unified image+video gateway: 1 key → GPT Image 2, Nano Banana 2,
-// Flux 2, Grok Imagine (T2I/T2V/I2V), Gemini Omni Video.
+//
+// kie.ai = unified provider duy nhất: 1 key bật cả 3 feature:
+//   - Chat LLM: Claude (Sonnet/Opus/Haiku 4.5–4.8), GPT-5.5, Gemini 3.1 Pro
+//   - Tạo ảnh: GPT Image 2, Nano Banana 2, Flux 2, Grok Imagine T2I
+//   - Tạo video: Grok Imagine T2V/I2V, Gemini Omni Video
 
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
@@ -155,12 +158,14 @@ export function KieAiKeyForm({
         </div>
         <div className="min-w-0 flex-1">
           <h4 className="text-sm font-semibold text-zinc-900">
-            kie.ai (Image + Video Generation Gateway)
+            kie.ai (Unified LLM + Media Gateway)
           </h4>
           <p className="text-xs text-zinc-500 mt-0.5">
-            1 API key cho mọi model media — GPT Image 2, Nano Banana 2, Flux 2,
-            Grok Imagine (text→image / text→video / image→video), Gemini Omni
-            Video. Bật feature "Tạo ảnh / Tạo video" trong Skill. Lấy key tại{' '}
+            1 API key bật toàn bộ feature AI: <strong>Chat với skill</strong>{' '}
+            (Claude Sonnet/Opus/Haiku 4.5–4.8, GPT-5.5, Gemini 3.1 Pro) +{' '}
+            <strong>Tạo ảnh</strong> (GPT Image 2, Nano Banana 2, Flux 2, Grok
+            Imagine) + <strong>Tạo video</strong> (Grok Imagine T2V/I2V, Gemini
+            Omni Video). Lấy key tại{' '}
             <a
               href="https://kie.ai"
               target="_blank"
@@ -297,6 +302,17 @@ export function KieAiKeyForm({
           Xem model + cost reference
         </summary>
         <div className="mt-2 space-y-2 text-[11px]">
+          <div>
+            <div className="font-semibold text-zinc-700 mb-1">Chat LLM (per request, theo credits kie.ai):</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-zinc-600">
+              <div>· Claude Sonnet 4.6 — cân bằng, default</div>
+              <div>· Claude Opus 4.8 — mạnh nhất, creative</div>
+              <div>· Claude Opus 4.7 / 4.6 — fallback</div>
+              <div>· Claude Haiku 4.5 — rẻ, fast</div>
+              <div>· GPT-5.5 (OpenAI) — multimodal + web search</div>
+              <div>· Gemini 3.1 Pro — long context, Google Search</div>
+            </div>
+          </div>
           <div>
             <div className="font-semibold text-zinc-700 mb-1">Image (~$0.01–0.05/ảnh):</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-zinc-600">
