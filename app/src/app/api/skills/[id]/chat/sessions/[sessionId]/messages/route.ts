@@ -48,9 +48,12 @@ export async function POST(
   req: NextRequest,
   { params }: RouteContext
 ): Promise<NextResponse> {
-  if (!isAnthropicConfigured()) {
+  if (!(await isAnthropicConfigured())) {
     return NextResponse.json(
-      { error: 'ANTHROPIC_API_KEY chưa được cấu hình trên server. Liên hệ admin.' },
+      {
+        error:
+          'ANTHROPIC_API_KEY chưa được cấu hình. Admin vào /settings/integrations để set.',
+      },
       { status: 503 }
     );
   }
@@ -119,7 +122,7 @@ export async function POST(
   const userMessage = await appendMessage(sessionId, 'user', userText, 0, 0);
 
   // 5. Call Claude
-  const anthropic = getAnthropic();
+  const anthropic = await getAnthropic();
   let assistantText = '';
   let tokensIn = 0;
   let tokensOut = 0;

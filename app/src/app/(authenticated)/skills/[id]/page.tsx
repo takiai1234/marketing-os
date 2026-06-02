@@ -31,10 +31,11 @@ export default async function SkillDetailPage({ params }: PageProps) {
   if (!user) redirect('/login');
 
   const { id } = await params;
-  const [skill, storage, role] = await Promise.all([
+  const [skill, storage, role, anthropicReady] = await Promise.all([
     getSkillById(id),
     getSkillStoragePath(id),
     getUserRole(user.userId),
+    isAnthropicConfigured(),
   ]);
 
   if (!skill || !storage) notFound();
@@ -93,7 +94,7 @@ export default async function SkillDetailPage({ params }: PageProps) {
         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
           {/* Chat button — chỉ hiện nếu Anthropic API configured (graceful
               degrade). Link sang chat page riêng. */}
-          {isAnthropicConfigured() && (
+          {anthropicReady && (
             <Link
               href={`/skills/${skill.id}/chat`}
               className={cn(

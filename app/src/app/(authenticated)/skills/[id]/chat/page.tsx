@@ -31,7 +31,7 @@ export default async function SkillChatPage({
   const sp = await searchParams;
   const sessionParam = typeof sp.session === 'string' ? sp.session : null;
 
-  if (!isAnthropicConfigured()) {
+  if (!(await isAnthropicConfigured())) {
     return (
       <div className="flex flex-col gap-6 max-w-2xl">
         <Link
@@ -46,9 +46,15 @@ export default async function SkillChatPage({
             Feature Chat chưa được bật
           </h2>
           <p className="text-sm text-amber-800">
-            Server chưa có <code className="bg-white px-1 rounded">ANTHROPIC_API_KEY</code>.
-            Admin cần set trong <code className="bg-white px-1 rounded">.env.production</code>{' '}
-            rồi redeploy. Lấy key tại{' '}
+            Admin cần set <code className="bg-white px-1 rounded">ANTHROPIC_API_KEY</code>{' '}
+            tại{' '}
+            <Link
+              href="/settings/integrations"
+              className="underline font-semibold"
+            >
+              /settings/integrations
+            </Link>
+            . Lấy key tại{' '}
             <a
               href="https://console.anthropic.com/settings/keys"
               target="_blank"
