@@ -42,7 +42,10 @@ interface Ctx {
   params: Promise<{ id: string; sessionId: string }>;
 }
 
-const MAX_KNOWLEDGE_CHARS = 400_000;
+// Cap knowledge text trong system prompt — 200K chars ≈ 50K tokens, để dành
+// ~150K tokens cho history + user message + assistant output. Claude/GPT-5/
+// Gemini context window 200K-1M tùy model, nhưng kie.ai có thể reject sớm.
+const MAX_KNOWLEDGE_CHARS = 200_000;
 
 function buildSystemPrompt(
   projectName: string,
@@ -116,7 +119,23 @@ function rebuildHistoryContent(
   return parts.join('\n\n');
 }
 
-export async function POST(req: NextRequest, { params }: Ctx): Promise<NextResponse> {
+export async function POST(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
+  try {
+    return await handlePost(req, ctx);
+  } catch (err) {
+    // Catch-all — log full stack ra container stdout để Coolify logs bắt được,
+    // trả về 500 với message rõ ràng thay vì để Next.js raw 500 HTML.
+    const msg = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : '';
+    console.error(`[POST /projects/chat/messages] UNHANDLED:`, msg, '\n', stack);
+    return NextResponse.json(
+      { error: `Lỗi server: ${msg}` },
+      { status: 500 }
+    );
+  }
+}
+
+async function handlePost(req: NextRequest, { params }: Ctx): Promise<NextResponse> {
   if (!(await isKieConfigured())) {
     return NextResponse.json(
       { error: 'KIE_AI_API_KEY chưa cấu hình. Admin vào /settings/integrations để set.' },
@@ -232,6 +251,13 @@ export async function POST(req: NextRequest, { params }: Ctx): Promise<NextRespo
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'kie.ai API error';
+    const stack = err instanceof Error ? err.stack : '';
+    console.error(
+      `[POST /projects/chat/messages] kie.ai ERROR model=${session.model} sessionId=${sessionId}:`,
+      msg,
+      '\n',
+      stack
+    );
     await appendProjectMessage(
       sessionId,
       'assistant',

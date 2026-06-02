@@ -211,8 +211,18 @@ export function ProjectChatShell({
       );
 
       if (!res.ok) {
-        const respData = (await res.json().catch(() => ({}))) as { error?: string };
-        toast.error(respData.error ?? 'Gửi thất bại');
+        // Body có thể là JSON (route trả về) hoặc HTML (proxy timeout) hoặc empty
+        const text = await res.text();
+        let errMsg = '';
+        try {
+          const data = JSON.parse(text) as { error?: string };
+          if (data.error) errMsg = data.error;
+        } catch {
+          // Không phải JSON — preview text
+          errMsg = text.slice(0, 200).replace(/<[^>]+>/g, '').trim();
+        }
+        if (!errMsg) errMsg = `HTTP ${res.status} ${res.statusText || ''}`.trim();
+        toast.error(`Gửi thất bại — ${errMsg}`);
         setMessages((prev) => prev.filter((m) => m.id !== tempUserMsg.id));
         return;
       }
@@ -232,7 +242,10 @@ export function ProjectChatShell({
       }
       router.refresh();
     } catch (err) {
-      toast.error((err as Error).message);
+      const errName = (err as Error).name ?? 'Error';
+      const errMsg = (err as Error).message ?? String(err);
+      // AbortError, TypeError 'Failed to fetch', etc.
+      toast.error(`Lỗi kết nối: ${errName}: ${errMsg}`);
       setMessages((prev) => prev.filter((m) => m.id !== tempUserMsg.id));
     } finally {
       setSending(false);

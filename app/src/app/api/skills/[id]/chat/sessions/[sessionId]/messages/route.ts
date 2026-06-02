@@ -72,7 +72,21 @@ function rebuildHistoryContent(
   return parts.join('\n\n');
 }
 
-export async function POST(req: NextRequest, { params }: Ctx): Promise<NextResponse> {
+export async function POST(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
+  try {
+    return await handlePost(req, ctx);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : '';
+    console.error(`[POST /skills/chat/messages] UNHANDLED:`, msg, '\n', stack);
+    return NextResponse.json(
+      { error: `Lỗi server: ${msg}` },
+      { status: 500 }
+    );
+  }
+}
+
+async function handlePost(req: NextRequest, { params }: Ctx): Promise<NextResponse> {
   if (!(await isKieConfigured())) {
     return NextResponse.json(
       { error: 'KIE_AI_API_KEY chưa cấu hình. Admin vào /settings/integrations để set.' },
@@ -200,6 +214,13 @@ export async function POST(req: NextRequest, { params }: Ctx): Promise<NextRespo
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'kie.ai API error';
+    const stack = err instanceof Error ? err.stack : '';
+    console.error(
+      `[POST /skills/chat/messages] kie.ai ERROR model=${session.model} sessionId=${sessionId}:`,
+      msg,
+      '\n',
+      stack
+    );
     await appendMessage(
       sessionId,
       'assistant',

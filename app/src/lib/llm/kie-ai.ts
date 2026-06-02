@@ -696,6 +696,7 @@ async function chatViaAnthropic(
   if (systemParts.length > 0) body.system = systemParts.join('\n\n');
   if (thinking && model.supportsThinking) body.thinkingFlag = true;
 
+  const reqStart = Date.now();
   const res = await fetch(`${ROOT_URL}/claude/v1/messages`, {
     method: 'POST',
     headers: {
@@ -705,13 +706,25 @@ async function chatViaAnthropic(
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(300_000),
   });
+  const elapsedMs = Date.now() - reqStart;
 
-  const raw = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  // Read body as text first (fallback nếu không phải JSON)
+  const rawText = await res.text();
+  let raw: Record<string, unknown> = {};
+  try {
+    raw = JSON.parse(rawText) as Record<string, unknown>;
+  } catch {
+    // Body không phải JSON — vd HTML error page từ nginx/CDN
+  }
+
   if (!res.ok) {
     const msg = (raw.error as { message?: string } | undefined)?.message
       ?? (raw.msg as string | undefined)
       ?? (raw.message as string | undefined)
-      ?? `HTTP ${res.status}`;
+      ?? `HTTP ${res.status}: ${rawText.slice(0, 200)}`;
+    console.error(
+      `[kie-ai/anthropic] FAIL model=${model.id} status=${res.status} elapsed=${elapsedMs}ms body=${rawText.slice(0, 500)}`
+    );
     throw new Error(`kie.ai (Anthropic) failed: ${msg}`);
   }
 
@@ -725,10 +738,25 @@ async function chatViaAnthropic(
   const content = textParts.join('\n').trim();
 
   const usage = (raw.usage as Record<string, unknown> | undefined) ?? {};
+  const tokensIn = Number(usage.input_tokens ?? 0);
+  const tokensOut = Number(usage.output_tokens ?? 0);
+
+  if (!content) {
+    console.error(
+      `[kie-ai/anthropic] EMPTY-CONTENT model=${model.id} status=${res.status} elapsed=${elapsedMs}ms ` +
+        `tokensIn=${tokensIn} tokensOut=${tokensOut} stop_reason=${raw.stop_reason ?? '?'} ` +
+        `rawKeys=${Object.keys(raw).join(',')} contentSample=${JSON.stringify(raw.content).slice(0, 300)}`
+    );
+  } else {
+    console.log(
+      `[kie-ai/anthropic] OK model=${model.id} elapsed=${elapsedMs}ms tokens=${tokensIn}/${tokensOut}`
+    );
+  }
+
   return {
     content,
-    tokensIn: Number(usage.input_tokens ?? 0),
-    tokensOut: Number(usage.output_tokens ?? 0),
+    tokensIn,
+    tokensOut,
     model: (raw.model as string | undefined) ?? model.id,
     creditsConsumed:
       typeof raw.credits_consumed === 'number' ? raw.credits_consumed : null,
@@ -769,6 +797,7 @@ async function chatViaCodex(
     body.reasoning = { effort: 'high' };
   }
 
+  const reqStart = Date.now();
   const res = await fetch(`${ROOT_URL}/codex/v1/responses`, {
     method: 'POST',
     headers: {
@@ -778,13 +807,23 @@ async function chatViaCodex(
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(300_000),
   });
+  const elapsedMs = Date.now() - reqStart;
 
-  const raw = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  const rawText = await res.text();
+  let raw: Record<string, unknown> = {};
+  try {
+    raw = JSON.parse(rawText) as Record<string, unknown>;
+  } catch {
+    /* body không phải JSON */
+  }
   if (!res.ok) {
     const msg = (raw.error as { message?: string } | undefined)?.message
       ?? (raw.msg as string | undefined)
       ?? (raw.message as string | undefined)
-      ?? `HTTP ${res.status}`;
+      ?? `HTTP ${res.status}: ${rawText.slice(0, 200)}`;
+    console.error(
+      `[kie-ai/codex] FAIL model=${model.id} status=${res.status} elapsed=${elapsedMs}ms body=${rawText.slice(0, 500)}`
+    );
     throw new Error(`kie.ai (Codex) failed: ${msg}`);
   }
 
@@ -845,6 +884,7 @@ async function chatViaGemini(
     body.reasoning_effort = 'high';
   }
 
+  const reqStart = Date.now();
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -854,13 +894,23 @@ async function chatViaGemini(
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(300_000),
   });
+  const elapsedMs = Date.now() - reqStart;
 
-  const raw = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  const rawText = await res.text();
+  let raw: Record<string, unknown> = {};
+  try {
+    raw = JSON.parse(rawText) as Record<string, unknown>;
+  } catch {
+    /* body không phải JSON */
+  }
   if (!res.ok) {
     const msg = (raw.error as { message?: string } | undefined)?.message
       ?? (raw.msg as string | undefined)
       ?? (raw.message as string | undefined)
-      ?? `HTTP ${res.status}`;
+      ?? `HTTP ${res.status}: ${rawText.slice(0, 200)}`;
+    console.error(
+      `[kie-ai/gemini] FAIL model=${model.id} status=${res.status} elapsed=${elapsedMs}ms body=${rawText.slice(0, 500)}`
+    );
     throw new Error(`kie.ai (Gemini) failed: ${msg}`);
   }
 

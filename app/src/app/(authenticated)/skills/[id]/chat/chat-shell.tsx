@@ -213,8 +213,16 @@ export function ChatShell({
       );
 
       if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        toast.error(data.error ?? 'Gửi thất bại');
+        const text = await res.text();
+        let errMsg = '';
+        try {
+          const data = JSON.parse(text) as { error?: string };
+          if (data.error) errMsg = data.error;
+        } catch {
+          errMsg = text.slice(0, 200).replace(/<[^>]+>/g, '').trim();
+        }
+        if (!errMsg) errMsg = `HTTP ${res.status} ${res.statusText || ''}`.trim();
+        toast.error(`Gửi thất bại — ${errMsg}`);
         setMessages((prev) => prev.filter((m) => m.id !== tempUserMsg.id));
         return;
       }
@@ -234,7 +242,9 @@ export function ChatShell({
       }
       router.refresh();
     } catch (err) {
-      toast.error((err as Error).message);
+      const errName = (err as Error).name ?? 'Error';
+      const errMsg = (err as Error).message ?? String(err);
+      toast.error(`Lỗi kết nối: ${errName}: ${errMsg}`);
       setMessages((prev) => prev.filter((m) => m.id !== tempUserMsg.id));
     } finally {
       setSending(false);
