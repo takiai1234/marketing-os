@@ -72,7 +72,7 @@ export function ProjectChatShell({
     activeSession?.messages ?? []
   );
   const [selectedModel, setSelectedModel] = useState(
-    availableModels[0]?.id ?? 'anthropic/claude-sonnet-latest'
+    availableModels[0]?.id ?? '~anthropic/claude-sonnet-latest'
   );
   const [sending, setSending] = useState(false);
   const [creating, setCreating] = useState(false);

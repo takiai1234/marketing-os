@@ -5,10 +5,15 @@
 // openrouter.ts re-export từ đây để server code dùng cùng nguồn.
 // Khi update model list, sửa Ở ĐÂY và migration db.
 
+// OpenRouter slug convention:
+//   - Specific version (vd anthropic/claude-opus-4.8) → KHÔNG tilde
+//   - "latest" alias auto-router → CẦN tilde prefix `~`
+// Verify qua https://openrouter.ai/api/v1/models — check `id` field gốc
+// có tilde không. Nếu sai tilde → API trả 400 "is not a valid model ID".
 export const AVAILABLE_MODELS = [
   // ─── ANTHROPIC ─────────────────────────────────────────────────────────
   {
-    id: 'anthropic/claude-sonnet-latest',
+    id: '~anthropic/claude-sonnet-latest',
     label: 'Claude Sonnet (latest)',
     description:
       'Anthropic · ~$3/$15 · 1M context · Cân bằng cost+quality, default cho hầu hết task. Auto-update lên Sonnet mới nhất.',
@@ -29,7 +34,7 @@ export const AVAILABLE_MODELS = [
     provider: 'anthropic',
   },
   {
-    id: 'anthropic/claude-haiku-latest',
+    id: '~anthropic/claude-haiku-latest',
     label: 'Claude Haiku (latest)',
     description:
       'Anthropic · ~$1/$5 · 200K context · Nhanh + rẻ, đủ cho task đơn giản hoặc high-volume.',
