@@ -3,20 +3,19 @@
 // Hỗ trợ:
 //   - Plain text: txt, md, mdx, json, csv, yaml/yml, html, xml, log, py, js,
 //     ts, tsx, jsx, java, go, rs, sh, ... (đọc as UTF-8)
-//   - PDF: dùng pdf-parse → extract concatenated text mọi trang
-//   - DOCX: dùng mammoth → extract raw text (bỏ format)
+//   - PDF: dùng pdf-parse (lazy import) → extract concatenated text mọi trang
+//   - DOCX: dùng mammoth (lazy import) → extract raw text (bỏ format)
 //
-// Reject:
-//   - Image, video, audio binary (PNG/JPG/MP4/MP3): không có text → vô nghĩa
-//     trong system prompt. Caller có thể vẫn lưu file disk nhưng KHÔNG vào
-//     content_text — UI mark "no preview".
-//   - Executable binary (exe, dmg, zip, ...): tương tự
-//   - File > MAX_FILE_BYTES: throw để API trả 413
+// LAZY IMPORT WHY:
+//   pdf-parse → pdfjs-dist → reference DOMMatrix/ImageData/Path2D globals
+//   (browser-only). Node.js crash ngay khi module evaluation (ReferenceError).
+//   → eager import làm BẤT KỲ route nào import file này (vd chat route)
+//     đều crash khi load module → 500 "Internal Server Error" mặc dù user
+//     không upload PDF nào.
+//   Fix: dynamic import bên trong parsePdf() + polyfill DOM globals NGAY
+//   trước import. Text-only chat không touch pdfjs.
 //
 // Output content_text được clamp ở MAX_TEXT_CHARS để tránh nổ prompt.
-
-import { PDFParse } from 'pdf-parse';
-import mammoth from 'mammoth';
 
 /** Cap upload size — 20 MB là quá đủ cho PDF/DOCX bình thường */
 export const MAX_FILE_BYTES = 20 * 1024 * 1024;
@@ -163,7 +162,38 @@ export async function parseFile(
 
 // ─── PDF ─────────────────────────────────────────────────────────────────
 
+/**
+ * Polyfill DOM globals dùng bởi pdfjs-dist. pdfjs cố render hình vẽ ra
+ * canvas/path → cần DOMMatrix/ImageData/Path2D. Ta CHỈ cần text extract
+ * nên stub bằng noop class — pdfjs sẽ throw chỗ rendering mà ta không
+ * gọi tới (parser.getText chỉ text).
+ *
+ * Idempotent: gọi nhiều lần OK, kiểm tra trước khi set.
+ */
+function ensurePdfDomPolyfills(): void {
+  const g = globalThis as unknown as Record<string, unknown>;
+  if (typeof g.DOMMatrix === 'undefined') {
+    // Stub class — pdfjs chỉ "instantiates" nó cho image rendering path
+    g.DOMMatrix = class DOMMatrixStub {
+      constructor(_init?: unknown) { /* noop */ }
+    } as unknown as object;
+  }
+  if (typeof g.ImageData === 'undefined') {
+    g.ImageData = class ImageDataStub {
+      constructor(_w?: unknown, _h?: unknown) { /* noop */ }
+    } as unknown as object;
+  }
+  if (typeof g.Path2D === 'undefined') {
+    g.Path2D = class Path2DStub {
+      constructor(_init?: unknown) { /* noop */ }
+    } as unknown as object;
+  }
+}
+
 async function parsePdf(buffer: Buffer): Promise<ParseResult> {
+  ensurePdfDomPolyfills();
+  // Dynamic import — pdfjs reference DOM globals ở module evaluation
+  const { PDFParse } = await import('pdf-parse');
   const parser = new PDFParse({ data: new Uint8Array(buffer) });
   try {
     const result = await parser.getText();
@@ -183,7 +213,9 @@ async function parsePdf(buffer: Buffer): Promise<ParseResult> {
 // ─── DOCX ────────────────────────────────────────────────────────────────
 
 async function parseDocx(buffer: Buffer): Promise<ParseResult> {
-  // mammoth extractRawText không cần option — trả plain text
+  // Lazy import — defensive (mammoth không có known DOM issue nhưng vẫn
+  // nên consistent với pdf-parse để app khởi động nhanh hơn)
+  const mammoth = (await import('mammoth')).default;
   const result = await mammoth.extractRawText({ buffer });
   const { text, truncated } = clamp(result.value);
   return { text, isBinaryUnsupported: false, truncated };
