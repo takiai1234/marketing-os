@@ -29,7 +29,7 @@ export async function POST(): Promise<NextResponse> {
   // Claude Haiku ~$1/$5 per 1M, ping 10 token costs gần như zero.
   // Fallback first model nếu list thay đổi.
   const testModel =
-    AVAILABLE_MODELS.find((m) => m.id === '~anthropic/claude-haiku-latest')?.id ??
+    AVAILABLE_MODELS.find((m) => m.id === 'anthropic/claude-haiku-4.5')?.id ??
     AVAILABLE_MODELS[0].id;
 
   try {

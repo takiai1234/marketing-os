@@ -47,7 +47,7 @@ interface Props {
   sourcePlatform: string | null;
 }
 
-const DEFAULT_MODEL = '~anthropic/claude-sonnet-latest';
+const DEFAULT_MODEL = 'anthropic/claude-sonnet-4.6';
 
 function smartDefaultPlatform(
   sourceType: RewriteSourceType,

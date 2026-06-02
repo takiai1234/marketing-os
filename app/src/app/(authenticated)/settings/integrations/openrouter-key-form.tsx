@@ -307,10 +307,10 @@ export function OpenRouterKeyForm({
         </summary>
         <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px]">
           {[
-            ['~anthropic/claude-sonnet-latest', 'Claude Sonnet · $3/$15 · 1M ctx'],
+            ['anthropic/claude-sonnet-4.6', 'Claude Sonnet 4.6 · $3/$15 · 1M ctx'],
             ['anthropic/claude-opus-4.8', 'Claude Opus 4.8 · $5/$25 · 1M ctx'],
             ['anthropic/claude-opus-4.8-fast', 'Claude Opus 4.8 fast · $10/$50'],
-            ['~anthropic/claude-haiku-latest', 'Claude Haiku · $1/$5 · 200K ctx'],
+            ['anthropic/claude-haiku-4.5', 'Claude Haiku 4.5 · $1/$5 · 200K ctx'],
             ['openai/gpt-5.5', 'GPT-5.5 · $5/$30 · 1.05M ctx'],
             ['openai/gpt-5.5-pro', 'GPT-5.5 Pro · $30/$180 (top reasoning)'],
             ['google/gemini-3.5-flash', 'Gemini 3.5 Flash · $1.5/$9 · 1M ctx'],
