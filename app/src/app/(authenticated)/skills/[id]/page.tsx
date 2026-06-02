@@ -2,7 +2,7 @@
 // Fetch metadata + parse zip tree song song, sau đó render header + tree viewer.
 
 import { notFound, redirect } from 'next/navigation';
-import { Download, ArrowLeft } from 'lucide-react';
+import { Download, ArrowLeft, MessageSquareIcon } from 'lucide-react';
 import Link from 'next/link';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { getUserRole } from '@/lib/auth/get-role';
@@ -11,7 +11,9 @@ import { readZipTree, SkillFileMissingError } from '@/lib/skill-lib/zip-reader';
 import type { ZipEntryNode } from '@/lib/skill-lib/zip-reader';
 import { AlertTriangle } from 'lucide-react';
 import { resolveSkillPath } from '@/lib/skill-lib/storage';
-import { Button } from '@/components/ui/button';
+import { isAnthropicConfigured } from '@/lib/anthropic/client';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { FileTree } from './file-tree';
 import { DeleteButton } from './delete-button';
 
@@ -88,7 +90,22 @@ export default async function SkillDetailPage({ params }: PageProps) {
             <span className="font-mono">sha256: {skill.sha256.slice(0, 12)}...</span>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+          {/* Chat button — chỉ hiện nếu Anthropic API configured (graceful
+              degrade). Link sang chat page riêng. */}
+          {isAnthropicConfigured() && (
+            <Link
+              href={`/skills/${skill.id}/chat`}
+              className={cn(
+                buttonVariants({ variant: 'default' }),
+                'bg-blue-600 hover:bg-blue-700 text-white'
+              )}
+              title="Mở chat với skill này qua Claude API"
+            >
+              <MessageSquareIcon className="size-4" />
+              Chat với skill
+            </Link>
+          )}
           <a href={`/api/skills/${skill.id}/download`} download>
             <Button variant="outline">
               <Download className="size-4" />
