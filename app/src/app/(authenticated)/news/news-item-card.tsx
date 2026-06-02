@@ -6,6 +6,7 @@
 import { ExternalLink } from 'lucide-react';
 import { getSourceById } from '@/lib/news/sources';
 import type { StoredNewsItem } from '@/lib/news/news-db';
+import { RewriteButton } from '@/components/rewrite/rewrite-button';
 
 /** Format "Xh trước" / "Xd trước" / "DD/MM" — pattern giống library/post-card. */
 function formatRelativeDate(isoStr: string | null): string {
@@ -35,6 +36,11 @@ export function NewsItemCard({ item }: NewsItemCardProps) {
   const source = getSourceById(item.source);
   const sourceName = source?.name ?? item.source;
   const gradient = source?.gradient ?? FALLBACK_GRADIENT;
+
+  // Build source content cho AI rewrite — title + excerpt (nếu có)
+  const aiSourceContent = item.excerpt
+    ? `${item.title}\n\n${item.excerpt}`
+    : item.title;
 
   return (
     <a
@@ -84,12 +90,20 @@ export function NewsItemCard({ item }: NewsItemCardProps) {
           </p>
         )}
 
-        <div className="text-[11px] text-zinc-500 mt-auto pt-2 border-t border-zinc-100">
+        <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-500 mt-auto pt-2 border-t border-zinc-100">
           {item.pubDate ? (
             <time dateTime={item.pubDate}>{formatRelativeDate(item.pubDate)}</time>
           ) : (
             <span>Mới ingest</span>
           )}
+          <RewriteButton
+            sourceType="news"
+            sourceTitle={item.title}
+            sourceContent={aiSourceContent}
+            sourceContext={sourceName}
+            sourcePlatform={null}
+            variant="inline"
+          />
         </div>
       </div>
     </a>
