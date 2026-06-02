@@ -2,7 +2,7 @@
 
 // Project chat shell — mirror skill chat shell, hit project endpoints.
 
-import { useState, useRef, useEffect, FormEvent } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -16,7 +16,6 @@ import {
 } from '@/components/ui/select';
 import {
   PlusIcon,
-  SendIcon,
   Trash2Icon,
   Loader2Icon,
   MessageSquareIcon,
@@ -25,6 +24,8 @@ import type {
   ProjectChatSession,
   ProjectChatMessage,
 } from '@/lib/queries/projects';
+import { AttachmentInput, type AttachmentInputSubmit } from '@/components/chat/attachment-input';
+import { MessageAttachments } from '@/components/chat/message-attachments';
 
 interface ModelOption {
   id: string;
@@ -70,7 +71,6 @@ export function ProjectChatShell({
   const [messages, setMessages] = useState<ProjectChatMessage[]>(
     activeSession?.messages ?? []
   );
-  const [input, setInput] = useState('');
   const [selectedModel, setSelectedModel] = useState(
     availableModels[0]?.id ?? 'claude-sonnet-4-6'
   );
@@ -142,9 +142,8 @@ export function ProjectChatShell({
     }
   }
 
-  async function handleSend(e: FormEvent) {
-    e.preventDefault();
-    if (!input.trim()) return;
+  async function handleSubmit(data: AttachmentInputSubmit) {
+    if (!data.content && data.files.length === 0) return;
 
     if (!activeSession) {
       setCreating(true);
@@ -158,13 +157,11 @@ export function ProjectChatShell({
           toast.error('Tạo session thất bại');
           return;
         }
-        const data = (await res.json()) as { session: ProjectChatSession };
-        const userText = input;
-        setInput('');
-        await submitMessage(data.session.id, userText);
-        setSessions((prev) => [data.session, ...prev]);
+        const respData = (await res.json()) as { session: ProjectChatSession };
+        await submitMessage(respData.session.id, data.content, data.files);
+        setSessions((prev) => [respData.session, ...prev]);
         const params = new URLSearchParams(searchParams.toString());
-        params.set('session', data.session.id);
+        params.set('session', respData.session.id);
         router.push(`?${params.toString()}`);
       } catch (err) {
         toast.error((err as Error).message);
@@ -174,50 +171,65 @@ export function ProjectChatShell({
       return;
     }
 
-    const userText = input;
-    setInput('');
-    await submitMessage(activeSession.id, userText);
+    await submitMessage(activeSession.id, data.content, data.files);
   }
 
-  async function submitMessage(sessionId: string, userText: string) {
+  async function submitMessage(
+    sessionId: string,
+    userText: string,
+    files: File[]
+  ) {
+    // Optimistic temp user message — KHÔNG render attachments tạm thời vì
+    // chưa có server-generated message ID để build attachment URL.
     const tempUserMsg: ProjectChatMessage = {
       id: 'temp-user-' + Date.now(),
       sessionId,
       role: 'user',
-      content: userText,
+      content:
+        userText ||
+        (files.length > 0
+          ? `(đang gửi ${files.length} file đính kèm...)`
+          : ''),
       tokensIn: 0,
       tokensOut: 0,
       createdAt: new Date().toISOString(),
+      attachments: [],
     };
     setMessages((prev) => [...prev, tempUserMsg]);
     setSending(true);
 
     try {
+      // multipart FormData — files + text
+      const fd = new FormData();
+      fd.append('content', userText);
+      for (const f of files) {
+        fd.append('files', f);
+      }
       const res = await fetch(
         `/api/projects/${projectId}/chat/sessions/${sessionId}/messages`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: userText }),
-        }
+        { method: 'POST', body: fd }
       );
 
       if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        toast.error(data.error ?? 'Gửi thất bại');
+        const respData = (await res.json().catch(() => ({}))) as { error?: string };
+        toast.error(respData.error ?? 'Gửi thất bại');
         setMessages((prev) => prev.filter((m) => m.id !== tempUserMsg.id));
         return;
       }
 
-      const data = (await res.json()) as {
+      const respData = (await res.json()) as {
         userMessage: ProjectChatMessage;
         assistantMessage: ProjectChatMessage;
+        warnings?: string[];
       };
       setMessages((prev) => [
         ...prev.filter((m) => m.id !== tempUserMsg.id),
-        data.userMessage,
-        data.assistantMessage,
+        respData.userMessage,
+        respData.assistantMessage,
       ]);
+      if (respData.warnings && respData.warnings.length > 0) {
+        for (const w of respData.warnings) toast.warning(w);
+      }
       router.refresh();
     } catch (err) {
       toast.error((err as Error).message);
@@ -353,37 +365,15 @@ export function ProjectChatShell({
           )}
         </div>
 
-        <form
-          onSubmit={handleSend}
-          className="p-3 border-t border-zinc-100 flex items-end gap-2"
-        >
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend(e as unknown as FormEvent);
-              }
-            }}
-            placeholder={
-              activeSession
-                ? `Hỏi project "${projectName}"...   (Enter=gửi, Shift+Enter=xuống dòng)`
-                : `Bắt đầu cuộc trò chuyện với project "${projectName}"...`
-            }
-            rows={3}
-            disabled={sending || creating}
-            className="flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 min-h-[60px] max-h-[200px]"
-          />
-          <Button
-            type="submit"
-            disabled={!input.trim() || sending || creating}
-            className="self-end"
-          >
-            <SendIcon className="size-4" />
-            Gửi
-          </Button>
-        </form>
+        <AttachmentInput
+          placeholder={
+            activeSession
+              ? `Hỏi project "${projectName}"... (kéo file/ảnh vào đây để đính kèm)`
+              : `Bắt đầu cuộc trò chuyện với project "${projectName}"...`
+          }
+          disabled={sending || creating}
+          onSubmit={handleSubmit}
+        />
       </main>
     </div>
   );
@@ -418,9 +408,18 @@ function MessageBubble({ message }: { message: ProjectChatMessage }) {
             : 'bg-zinc-100 text-zinc-900 ring-1 ring-zinc-200'
         )}
       >
-        <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
-          {message.content}
-        </p>
+        {message.content && (
+          <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+            {message.content}
+          </p>
+        )}
+        {message.attachments && message.attachments.length > 0 && (
+          <MessageAttachments
+            messageId={message.id}
+            attachments={message.attachments}
+            invertColors={isUser}
+          />
+        )}
         {!isUser && (message.tokensIn > 0 || message.tokensOut > 0) && (
           <p className="text-[10px] text-zinc-500 mt-1.5 tabular-nums">
             {NUMBER_FMT.format(message.tokensIn)} in ·{' '}

@@ -46,6 +46,9 @@ services:
       - ./data/skills:/app/storage/skills
       # Projects: PDF/DOCX/MD upload — tách riêng skill để dễ backup
       - ./data/projects:/app/storage/projects
+      # Chat attachments: file/image đính kèm trong 1 message (ad-hoc,
+      # không phải knowledge persistent)
+      - ./data/chat-attachments:/app/storage/chat-attachments
     networks:
       - internal
     logging:

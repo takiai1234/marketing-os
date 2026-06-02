@@ -1,22 +1,19 @@
 // POST /api/projects/[id]/chat/sessions/[sessionId]/messages
 //
-// Send user message → call kie.ai chat với system prompt build từ
-// (instructions + concat all file content_text) → save assistant reply →
-// trả về.
+// Send user message (text + optional file/image attachments) → kie.ai chat
+// → save assistant reply.
 //
-// System prompt format:
-//   {project.instructions}
+// Body: multipart/form-data
+//   - field "content"  : string (text user gõ)
+//   - field "files"    : 0..N File (attachments, max 8 files / 60 MB tổng)
 //
-//   --- KNOWLEDGE FILES ---
-//   ## <filename1>
-//   {content_text 1}
+// File text-extractable (PDF/DOCX/MD) → inject text vào prompt
+// Image → gửi qua content block "image" (vision-capable model)
 //
-//   ## <filename2>
-//   {content_text 2}
-//   ...
+// System prompt = project.instructions + concat all project_file content
+// (knowledge persistent) — KHÁC với attachments (per-message, ad-hoc).
 
 import { type NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import {
   getProjectForUser,
@@ -29,7 +26,11 @@ import {
   chatComplete,
   isKieConfigured,
   isValidChatModelId,
+  type ChatMessageInput,
+  type ChatContentBlock,
 } from '@/lib/llm/kie-ai';
+import { processAttachments } from '@/lib/chat-attachments/process';
+import type { MessageAttachment } from '@/lib/chat-attachments/storage';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -37,16 +38,10 @@ export const maxDuration = 300;
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const bodySchema = z.object({
-  content: z.string().trim().min(1).max(50_000),
-});
-
 interface Ctx {
   params: Promise<{ id: string; sessionId: string }>;
 }
 
-/** Cap tổng knowledge text trong prompt — tránh nổ context window
- *  (Claude/GPT-5 max ~200K tokens ≈ ~600K chars). 400K an toàn. */
 const MAX_KNOWLEDGE_CHARS = 400_000;
 
 function buildSystemPrompt(
@@ -55,17 +50,13 @@ function buildSystemPrompt(
   files: Array<{ filename: string; contentText: string }>
 ): string {
   const parts: string[] = [];
-
   parts.push(`Bạn là AI assistant trong project "${projectName}".`);
-
   if (instructions.trim()) {
     parts.push(`\n## HƯỚNG DẪN (custom instructions)\n\n${instructions.trim()}`);
   }
-
   const filesWithContent = files.filter((f) => f.contentText.trim().length > 0);
   if (filesWithContent.length > 0) {
     parts.push(`\n## KNOWLEDGE FILES\n\nProject này có ${filesWithContent.length} file knowledge — tham khảo khi trả lời:`);
-
     let totalChars = 0;
     for (const f of filesWithContent) {
       const remaining = MAX_KNOWLEDGE_CHARS - totalChars;
@@ -81,8 +72,48 @@ function buildSystemPrompt(
       totalChars += body.length;
     }
   }
-
   return parts.join('\n');
+}
+
+/** Build user message content khi có cả text + attachments. */
+function buildUserContent(
+  userText: string,
+  extraBlocks: ChatContentBlock[]
+): string | ChatContentBlock[] {
+  if (extraBlocks.length === 0) return userText;
+  // Text user gõ luôn đặt đầu, attachments theo sau
+  const blocks: ChatContentBlock[] = [];
+  if (userText.trim()) blocks.push({ type: 'text', text: userText });
+  blocks.push(...extraBlocks);
+  return blocks;
+}
+
+/** Re-build user message content cho history (assistant cũ vẫn cần "thấy"
+ *  ảnh đính kèm để follow-up). Convert từ DB attachments[] → blocks.
+ *  Note: image blocks dùng URL serve qua /api/chat-attachments/[messageId]/[attId]
+ *  thay vì re-encode base64 — tiết kiệm RAM + transfer. Codex/Gemini accept URL;
+ *  Anthropic CẦN base64 nên buộc read disk + encode lại. Tạm thời bỏ qua image
+ *  trong history (Anthropic, Codex, Gemini đều có short-term memory hỗ trợ),
+ *  chỉ ghi placeholder text — user thường follow-up bằng text nên không cần
+ *  re-send full image. Production có thể optimize sau.
+ */
+function rebuildHistoryContent(
+  content: string,
+  attachments: MessageAttachment[]
+): string {
+  if (attachments.length === 0) return content;
+  const parts: string[] = [];
+  if (content.trim()) parts.push(content);
+  for (const a of attachments) {
+    if (a.kind === 'image') {
+      parts.push(`[Ảnh đính kèm: ${a.filename}]`);
+    } else if (a.contentText) {
+      parts.push(`[File ${a.filename}]\n${a.contentText}\n[/${a.filename}]`);
+    } else {
+      parts.push(`[File ${a.filename} — không có text]`);
+    }
+  }
+  return parts.join('\n\n');
 }
 
 export async function POST(req: NextRequest, { params }: Ctx): Promise<NextResponse> {
@@ -101,52 +132,88 @@ export async function POST(req: NextRequest, { params }: Ctx): Promise<NextRespo
     return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
   }
 
-  let body: unknown;
+  // Parse multipart
+  let formData: FormData;
   try {
-    body = await req.json();
+    formData = await req.formData();
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
-  }
-  const parsed = bodySchema.safeParse(body);
-  if (!parsed.success) {
     return NextResponse.json(
-      { error: 'Validation failed', details: parsed.error.format() },
+      { error: 'Body phải là multipart/form-data với field "content" + "files"' },
       { status: 400 }
     );
   }
-  const userText = parsed.data.content;
 
-  // 1. Load session + verify ownership + cross-check project
+  const userText = (formData.get('content') as string | null)?.trim() ?? '';
+  const files: File[] = [];
+  for (const v of formData.getAll('files')) {
+    if (v instanceof File) files.push(v);
+  }
+
+  if (!userText && files.length === 0) {
+    return NextResponse.json(
+      { error: 'Message phải có text hoặc ít nhất 1 attachment' },
+      { status: 400 }
+    );
+  }
+  if (userText.length > 50_000) {
+    return NextResponse.json({ error: 'Text quá dài (>50K chars)' }, { status: 400 });
+  }
+
+  // Verify session ownership
   const session = await getProjectSessionForUser(sessionId, user.userId);
   if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
   if (session.projectId !== projectId) {
     return NextResponse.json({ error: 'Session does not belong to this project' }, { status: 400 });
   }
-
   if (!isValidChatModelId(session.model)) {
     return NextResponse.json(
-      {
-        error: `Model "${session.model}" không còn hỗ trợ — tạo cuộc trò chuyện mới.`,
-      },
+      { error: `Model "${session.model}" không còn hỗ trợ — tạo cuộc trò chuyện mới.` },
       { status: 400 }
     );
   }
 
-  // 2. Load project metadata + files để build system prompt
+  // Process attachments (save disk + extract text + build LLM blocks)
+  let attResult;
+  try {
+    attResult = await processAttachments(sessionId, files);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Process attachments failed';
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
+
+  // Project context
   const project = await getProjectForUser(projectId, user.userId);
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
 
-  const files = await listFilesForProject(projectId);
+  const projectFiles = await listFilesForProject(projectId);
   const systemPrompt = buildSystemPrompt(
     project.name,
     project.instructions,
-    files.map((f) => ({ filename: f.filename, contentText: f.contentText }))
+    projectFiles.map((f) => ({ filename: f.filename, contentText: f.contentText }))
   );
 
-  // 3. Persist user message TRƯỚC khi call LLM
-  const userMessage = await appendProjectMessage(sessionId, 'user', userText, 0, 0);
+  // Persist user message TRƯỚC khi call LLM
+  const userMessage = await appendProjectMessage(
+    sessionId,
+    'user',
+    userText,
+    0,
+    0,
+    attResult.attachments
+  );
 
-  // 4. Call kie.ai
+  // Build messages array cho kie.ai
+  const historyMessages: ChatMessageInput[] = session.messages.map((m) => ({
+    role: m.role,
+    content: rebuildHistoryContent(m.content, m.attachments),
+  }));
+  const messagesForLlm: ChatMessageInput[] = [
+    { role: 'system', content: systemPrompt },
+    ...historyMessages,
+    { role: 'user', content: buildUserContent(userText, attResult.llmBlocks) },
+  ];
+
+  // Call kie.ai
   let assistantText = '';
   let tokensIn = 0;
   let tokensOut = 0;
@@ -154,21 +221,14 @@ export async function POST(req: NextRequest, { params }: Ctx): Promise<NextRespo
   try {
     const result = await chatComplete({
       model: session.model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...session.messages.map((m) => ({ role: m.role, content: m.content })),
-        { role: 'user', content: userText },
-      ],
+      messages: messagesForLlm,
       maxTokens: 8192,
     });
-
     assistantText = result.content;
     tokensIn = result.tokensIn;
     tokensOut = result.tokensOut;
-
     if (!assistantText) {
-      assistantText =
-        '(Model không trả về nội dung — có thể bị filter hoặc context quá dài.)';
+      assistantText = '(Model không trả về nội dung — có thể bị filter hoặc context quá dài.)';
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'kie.ai API error';
@@ -177,24 +237,27 @@ export async function POST(req: NextRequest, { params }: Ctx): Promise<NextRespo
       'assistant',
       `❌ Lỗi gọi LLM: ${msg}\n\nThử lại bằng nút send hoặc đổi model khác.`,
       0,
-      0
+      0,
+      []
     );
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 
-  // 5. Persist assistant message
   const assistantMessage = await appendProjectMessage(
     sessionId,
     'assistant',
     assistantText,
     tokensIn,
-    tokensOut
+    tokensOut,
+    []
   );
 
-  // 6. Auto-set session title từ first user message
+  // Auto-set session title
   if (session.title === 'Cuộc trò chuyện mới' && session.messages.length === 0) {
-    const newTitle =
-      userText.length > 60 ? userText.slice(0, 57) + '...' : userText;
+    const firstFile = files[0];
+    const titleSource =
+      userText.trim() || (firstFile ? `Hỏi về ${firstFile.name}` : 'Cuộc trò chuyện mới');
+    const newTitle = titleSource.length > 60 ? titleSource.slice(0, 57) + '...' : titleSource;
     await updateProjectSessionTitle(sessionId, user.userId, newTitle);
   }
 
@@ -202,5 +265,6 @@ export async function POST(req: NextRequest, { params }: Ctx): Promise<NextRespo
     userMessage,
     assistantMessage,
     usage: { tokensIn, tokensOut },
+    warnings: attResult.warnings,
   });
 }

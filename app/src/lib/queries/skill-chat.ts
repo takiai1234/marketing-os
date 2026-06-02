@@ -2,6 +2,7 @@
 // Ownership semantics: mọi query take userId — chỉ trả/sửa rows của user đó.
 
 import { db } from '@/lib/db';
+import type { MessageAttachment } from '@/lib/chat-attachments/storage';
 
 export type ChatMessageRole = 'user' | 'assistant';
 
@@ -27,6 +28,7 @@ export interface ChatMessage {
   tokensIn: number;
   tokensOut: number;
   createdAt: string;
+  attachments: MessageAttachment[];
 }
 
 /** List sessions của user X cho skill Y, mới nhất trước. */
@@ -136,8 +138,10 @@ export async function getSessionForUser(
     tokens_in: number;
     tokens_out: number;
     created_at: string;
+    attachments: MessageAttachment[] | null;
   }>(
-    `SELECT id, session_id, role, content, tokens_in, tokens_out, created_at::TEXT
+    `SELECT id, session_id, role, content, tokens_in, tokens_out,
+            created_at::TEXT, attachments
        FROM skill_chat_message
       WHERE session_id = $1
       ORDER BY created_at ASC, id ASC`,
@@ -152,6 +156,7 @@ export async function getSessionForUser(
     tokensIn: Number(r.tokens_in),
     tokensOut: Number(r.tokens_out),
     createdAt: r.created_at,
+    attachments: Array.isArray(r.attachments) ? r.attachments : [],
   }));
 
   const totalTokensIn = messages.reduce((s, m) => s + m.tokensIn, 0);
@@ -177,13 +182,15 @@ export async function appendMessage(
   role: ChatMessageRole,
   content: string,
   tokensIn: number = 0,
-  tokensOut: number = 0
+  tokensOut: number = 0,
+  attachments: MessageAttachment[] = []
 ): Promise<ChatMessage> {
   const res = await db.query<{ id: string; created_at: string }>(
-    `INSERT INTO skill_chat_message (session_id, role, content, tokens_in, tokens_out)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO skill_chat_message
+       (session_id, role, content, tokens_in, tokens_out, attachments)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb)
      RETURNING id, created_at::TEXT`,
-    [sessionId, role, content, tokensIn, tokensOut]
+    [sessionId, role, content, tokensIn, tokensOut, JSON.stringify(attachments)]
   );
   const row = res.rows[0];
   if (!row) throw new Error('Failed to append message');
@@ -201,6 +208,7 @@ export async function appendMessage(
     tokensIn,
     tokensOut,
     createdAt: row.created_at,
+    attachments,
   };
 }
 

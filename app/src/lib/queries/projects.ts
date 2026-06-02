@@ -2,6 +2,7 @@
 // project_chat_message. Privacy: tất cả filter theo owner_id (user_id).
 
 import { db } from '@/lib/db';
+import type { MessageAttachment } from '@/lib/chat-attachments/storage';
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -53,6 +54,7 @@ export interface ProjectChatMessage {
   tokensIn: number;
   tokensOut: number;
   createdAt: string;
+  attachments: MessageAttachment[];
 }
 
 // ─── Project CRUD ───────────────────────────────────────────────────────
@@ -400,8 +402,10 @@ export async function getProjectSessionForUser(
     tokens_in: number;
     tokens_out: number;
     created_at: string;
+    attachments: MessageAttachment[] | null;
   }>(
-    `SELECT id, session_id, role, content, tokens_in, tokens_out, created_at::TEXT
+    `SELECT id, session_id, role, content, tokens_in, tokens_out,
+            created_at::TEXT, attachments
        FROM project_chat_message
       WHERE session_id = $1
       ORDER BY created_at ASC, id ASC`,
@@ -416,6 +420,7 @@ export async function getProjectSessionForUser(
     tokensIn: r.tokens_in,
     tokensOut: r.tokens_out,
     createdAt: r.created_at,
+    attachments: Array.isArray(r.attachments) ? r.attachments : [],
   }));
 
   return {
@@ -438,7 +443,8 @@ export async function appendProjectMessage(
   role: ProjectChatRole,
   content: string,
   tokensIn: number,
-  tokensOut: number
+  tokensOut: number,
+  attachments: MessageAttachment[] = []
 ): Promise<ProjectChatMessage> {
   const res = await db.query<{
     id: string;
@@ -448,12 +454,14 @@ export async function appendProjectMessage(
     tokens_in: number;
     tokens_out: number;
     created_at: string;
+    attachments: MessageAttachment[] | null;
   }>(
     `INSERT INTO project_chat_message
-       (session_id, role, content, tokens_in, tokens_out)
-     VALUES ($1, $2, $3, $4, $5)
-     RETURNING id, session_id, role, content, tokens_in, tokens_out, created_at::TEXT`,
-    [sessionId, role, content, tokensIn, tokensOut]
+       (session_id, role, content, tokens_in, tokens_out, attachments)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+     RETURNING id, session_id, role, content, tokens_in, tokens_out,
+               created_at::TEXT, attachments`,
+    [sessionId, role, content, tokensIn, tokensOut, JSON.stringify(attachments)]
   );
   const row = res.rows[0];
   if (!row) throw new Error('Failed to append message');
@@ -471,6 +479,7 @@ export async function appendProjectMessage(
     tokensIn: row.tokens_in,
     tokensOut: row.tokens_out,
     createdAt: row.created_at,
+    attachments: Array.isArray(row.attachments) ? row.attachments : [],
   };
 }
 

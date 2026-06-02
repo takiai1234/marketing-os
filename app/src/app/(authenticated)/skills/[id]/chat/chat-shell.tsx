@@ -7,11 +7,11 @@
 //   - Send message (POST /messages → optimistic UI update)
 //   - Delete session (DELETE → refresh list)
 
-import { useState, useRef, useEffect, FormEvent } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -21,12 +21,13 @@ import {
 } from '@/components/ui/select';
 import {
   PlusIcon,
-  SendIcon,
   Trash2Icon,
   Loader2Icon,
   MessageSquareIcon,
 } from 'lucide-react';
 import type { ChatSession, ChatMessage } from '@/lib/queries/skill-chat';
+import { AttachmentInput, type AttachmentInputSubmit } from '@/components/chat/attachment-input';
+import { MessageAttachments } from '@/components/chat/message-attachments';
 
 interface ModelOption {
   id: string;
@@ -72,7 +73,6 @@ export function ChatShell({
   const [messages, setMessages] = useState<ChatMessage[]>(
     activeSession?.messages ?? []
   );
-  const [input, setInput] = useState('');
   const [selectedModel, setSelectedModel] = useState(
     availableModels[0]?.id ?? 'claude-sonnet-4-6'
   );
@@ -148,11 +148,9 @@ export function ChatShell({
     }
   }
 
-  async function handleSend(e: FormEvent) {
-    e.preventDefault();
-    if (!input.trim()) return;
+  async function handleSubmit(data: AttachmentInputSubmit) {
+    if (!data.content && data.files.length === 0) return;
 
-    // Nếu chưa có active session — auto-create + send sau
     if (!activeSession) {
       setCreating(true);
       try {
@@ -165,17 +163,11 @@ export function ChatShell({
           toast.error('Tạo session thất bại');
           return;
         }
-        const data = (await res.json()) as { session: ChatSession };
-        // Đẩy session mới + navigate. handleSend sẽ fire lại sau khi
-        // activeSession update qua server-render (useEffect sync messages).
-        // Tạm thời pop user message vào local state để user thấy luôn:
-        const userText = input;
-        setInput('');
-        // Submit message ngay với session ID mới (không đợi router.push)
-        await submitMessage(data.session.id, userText);
-        setSessions((prev) => [data.session, ...prev]);
+        const respData = (await res.json()) as { session: ChatSession };
+        await submitMessage(respData.session.id, data.content, data.files);
+        setSessions((prev) => [respData.session, ...prev]);
         const params = new URLSearchParams(searchParams.toString());
-        params.set('session', data.session.id);
+        params.set('session', respData.session.id);
         router.push(`?${params.toString()}`);
       } catch (err) {
         toast.error((err as Error).message);
@@ -185,39 +177,44 @@ export function ChatShell({
       return;
     }
 
-    const userText = input;
-    setInput('');
-    await submitMessage(activeSession.id, userText);
+    await submitMessage(activeSession.id, data.content, data.files);
   }
 
-  async function submitMessage(sessionId: string, userText: string) {
-    // Optimistic: hiện user message ngay + loading bubble cho assistant
+  async function submitMessage(
+    sessionId: string,
+    userText: string,
+    files: File[]
+  ) {
     const tempUserMsg: ChatMessage = {
       id: 'temp-user-' + Date.now(),
       sessionId,
       role: 'user',
-      content: userText,
+      content:
+        userText ||
+        (files.length > 0
+          ? `(đang gửi ${files.length} file đính kèm...)`
+          : ''),
       tokensIn: 0,
       tokensOut: 0,
       createdAt: new Date().toISOString(),
+      attachments: [],
     };
     setMessages((prev) => [...prev, tempUserMsg]);
     setSending(true);
 
     try {
+      const fd = new FormData();
+      fd.append('content', userText);
+      for (const f of files) fd.append('files', f);
+
       const res = await fetch(
         `/api/skills/${skillId}/chat/sessions/${sessionId}/messages`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: userText }),
-        }
+        { method: 'POST', body: fd }
       );
 
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         toast.error(data.error ?? 'Gửi thất bại');
-        // Rollback: remove temp user msg
         setMessages((prev) => prev.filter((m) => m.id !== tempUserMsg.id));
         return;
       }
@@ -225,14 +222,16 @@ export function ChatShell({
       const data = (await res.json()) as {
         userMessage: ChatMessage;
         assistantMessage: ChatMessage;
+        warnings?: string[];
       };
-      // Replace temp user msg + append assistant
       setMessages((prev) => [
         ...prev.filter((m) => m.id !== tempUserMsg.id),
         data.userMessage,
         data.assistantMessage,
       ]);
-      // Refresh router để session list re-sort + token count update
+      if (data.warnings && data.warnings.length > 0) {
+        for (const w of data.warnings) toast.warning(w);
+      }
       router.refresh();
     } catch (err) {
       toast.error((err as Error).message);
@@ -378,37 +377,15 @@ export function ChatShell({
         </div>
 
         {/* Input */}
-        <form
-          onSubmit={handleSend}
-          className="p-3 border-t border-zinc-100 flex items-end gap-2"
-        >
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend(e as unknown as FormEvent);
-              }
-            }}
-            placeholder={
-              activeSession
-                ? `Hỏi skill "${skillName}"...   (Enter=gửi, Shift+Enter=xuống dòng)`
-                : `Bắt đầu cuộc trò chuyện với skill "${skillName}"...`
-            }
-            rows={3}
-            disabled={sending || creating}
-            className="flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 min-h-[60px] max-h-[200px]"
-          />
-          <Button
-            type="submit"
-            disabled={!input.trim() || sending || creating}
-            className="self-end"
-          >
-            <SendIcon className="size-4" />
-            Gửi
-          </Button>
-        </form>
+        <AttachmentInput
+          placeholder={
+            activeSession
+              ? `Hỏi skill "${skillName}"... (kéo file/ảnh để đính kèm)`
+              : `Bắt đầu cuộc trò chuyện với skill "${skillName}"...`
+          }
+          disabled={sending || creating}
+          onSubmit={handleSubmit}
+        />
       </main>
     </div>
   );
@@ -443,9 +420,18 @@ function MessageBubble({ message }: { message: ChatMessage }) {
             : 'bg-zinc-100 text-zinc-900 ring-1 ring-zinc-200'
         )}
       >
-        <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
-          {message.content}
-        </p>
+        {message.content && (
+          <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+            {message.content}
+          </p>
+        )}
+        {message.attachments && message.attachments.length > 0 && (
+          <MessageAttachments
+            messageId={message.id}
+            attachments={message.attachments}
+            invertColors={isUser}
+          />
+        )}
         {!isUser && (message.tokensIn > 0 || message.tokensOut > 0) && (
           <p className="text-[10px] text-zinc-500 mt-1.5 tabular-nums">
             {NUMBER_FMT.format(message.tokensIn)} in ·{' '}

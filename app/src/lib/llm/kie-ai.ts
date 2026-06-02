@@ -476,9 +476,59 @@ export function getChatModel(id: string): ChatModelOption | undefined {
 
 export type ChatRole = 'system' | 'user' | 'assistant';
 
+/** Text block — luôn support ở mọi family */
+export interface ChatTextBlock {
+  type: 'text';
+  text: string;
+}
+
+/**
+ * Image block — content phải là data URL (data:image/...;base64,...) để
+ * client lấy chuẩn cho mọi 3 dialect. URL public cũng OK với Codex/Gemini
+ * nhưng Anthropic Messages API cần base64 nên backend luôn convert sang data URL.
+ */
+export interface ChatImageBlock {
+  type: 'image';
+  /** data:image/jpeg;base64,... hoặc https://... (chỉ Codex/Gemini) */
+  dataUrl: string;
+  /** Optional MIME — nếu không có, parse từ data URL prefix */
+  mediaType?: string;
+}
+
+export type ChatContentBlock = ChatTextBlock | ChatImageBlock;
+
 export interface ChatMessageInput {
   role: ChatRole;
-  content: string;
+  /**
+   * Plain string giữ backward-compat. Array of blocks cho multi-modal
+   * (vd ảnh đính kèm). Mỗi dispatcher translate sang shape native của
+   * family.
+   */
+  content: string | ChatContentBlock[];
+}
+
+// ─── Helper: parse data URL ─────────────────────────────────────────────
+
+function parseDataUrl(
+  dataUrl: string
+): { mediaType: string; base64: string } | null {
+  const m = /^data:([^;,]+)(?:;([^,]*))?,(.+)$/.exec(dataUrl);
+  if (!m) return null;
+  const mediaType = m[1] ?? '';
+  const encoding = m[2] ?? '';
+  const data = m[3] ?? '';
+  if (!mediaType || !data) return null;
+  if (encoding !== 'base64') return null;
+  return { mediaType, base64: data };
+}
+
+/** Concat tất cả text block thành 1 string (dùng cho fallback / debug) */
+function flattenText(content: string | ChatContentBlock[]): string {
+  if (typeof content === 'string') return content;
+  return content
+    .filter((b): b is ChatTextBlock => b.type === 'text')
+    .map((b) => b.text)
+    .join('\n');
 }
 
 export interface ChatCompleteParams {
@@ -534,14 +584,86 @@ export async function chatComplete(
   }
 }
 
+// ─── Content block translators (multi-modal) ────────────────────────────
+//
+// Mỗi family có shape khác nhau cho image block. 3 helper convert
+// ChatContentBlock[] → native format. String content → 1 text block.
+
+/**
+ * Anthropic Messages API content blocks:
+ *   text  → {type:'text', text:'...'}
+ *   image → {type:'image', source:{type:'base64', media_type:'image/jpeg', data:'<base64>'}}
+ * Returns string nếu chỉ có 1 text block (Anthropic accept cả 2 form).
+ */
+function anthropicContent(
+  content: string | ChatContentBlock[]
+): string | Array<Record<string, unknown>> {
+  if (typeof content === 'string') return content;
+  const first = content[0];
+  if (content.length === 1 && first && first.type === 'text') return first.text;
+  return content
+    .map((b): Record<string, unknown> | null => {
+      if (b.type === 'text') return { type: 'text', text: b.text };
+      if (b.type === 'image') {
+        const parsed = parseDataUrl(b.dataUrl);
+        if (!parsed) return null;
+        return {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: b.mediaType ?? parsed.mediaType,
+            data: parsed.base64,
+          },
+        };
+      }
+      return null;
+    })
+    .filter((b): b is Record<string, unknown> => b !== null);
+}
+
+/**
+ * OpenAI Responses API (Codex/GPT-5) content blocks:
+ *   text  → {type:'input_text', text:'...'}
+ *   image → {type:'input_image', image_url:'<url or data url>'}
+ */
+function codexContent(
+  content: string | ChatContentBlock[]
+): Array<Record<string, unknown>> {
+  const arr = typeof content === 'string' ? [{ type: 'text' as const, text: content }] : content;
+  return arr.map((b): Record<string, unknown> => {
+    if (b.type === 'image') {
+      return { type: 'input_image', image_url: b.dataUrl };
+    }
+    return { type: 'input_text', text: b.text };
+  });
+}
+
+/**
+ * OpenAI Chat Completions (Gemini) content blocks:
+ *   text  → {type:'text', text:'...'}
+ *   image → {type:'image_url', image_url:{url:'<url or data url>'}}
+ * Nếu chỉ có 1 text block, return string thẳng để body gọn.
+ */
+function geminiContent(
+  content: string | ChatContentBlock[]
+): string | Array<Record<string, unknown>> {
+  if (typeof content === 'string') return content;
+  const first = content[0];
+  if (content.length === 1 && first && first.type === 'text') return first.text;
+  return content.map((b): Record<string, unknown> => {
+    if (b.type === 'image') {
+      return { type: 'image_url', image_url: { url: b.dataUrl } };
+    }
+    return { type: 'text', text: b.text };
+  });
+}
+
 // ─── Anthropic Messages API (Claude family) ──────────────────────────────
 //
 // POST {ROOT}/claude/v1/messages
-//   { model, messages: [{role:'user'|'assistant', content:string}],
-//     system?: string, max_tokens, thinkingFlag?, stream:false }
-//
-// Anthropic format khác OpenAI: system message KHÔNG nằm trong messages[],
-// mà ở field `system` riêng. Nếu caller gửi role='system', extract ra.
+//   { model, messages: [{role:'user'|'assistant', content}], system?,
+//     max_tokens, thinkingFlag?, stream:false }
+// content có thể là string hoặc array of {type:'text'|'image', ...}
 
 async function chatViaAnthropic(
   key: string,
@@ -550,11 +672,20 @@ async function chatViaAnthropic(
   maxTokens: number,
   thinking?: boolean
 ): Promise<ChatCompleteResult> {
-  // Tách system ra khỏi message array
-  const systemParts = messages.filter((m) => m.role === 'system').map((m) => m.content);
+  // Tách system ra khỏi message array. Anthropic format: system message
+  // KHÔNG nằm trong messages[], mà ở field `system` riêng. System chỉ là
+  // text — không có image, nên collapse thành string.
+  const systemParts = messages
+    .filter((m) => m.role === 'system')
+    .map((m) => flattenText(m.content));
+
+  // Convert non-system messages — content array → Anthropic content blocks
   const convoMessages = messages
     .filter((m) => m.role !== 'system')
-    .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+    .map((m) => ({
+      role: m.role as 'user' | 'assistant',
+      content: anthropicContent(m.content),
+    }));
 
   const body: Record<string, unknown> = {
     model: model.id,
@@ -625,7 +756,7 @@ async function chatViaCodex(
   // 1 turn riêng (Responses API support nhiều role).
   const input = messages.map((m) => ({
     role: m.role,
-    content: [{ type: 'input_text', text: m.content }],
+    content: codexContent(m.content),
   }));
 
   const body: Record<string, unknown> = {
@@ -705,7 +836,7 @@ async function chatViaGemini(
 
   const body: Record<string, unknown> = {
     model: model.id,
-    messages: messages.map((m) => ({ role: m.role, content: m.content })),
+    messages: messages.map((m) => ({ role: m.role, content: geminiContent(m.content) })),
     max_tokens: maxTokens,
     stream: false,
   };

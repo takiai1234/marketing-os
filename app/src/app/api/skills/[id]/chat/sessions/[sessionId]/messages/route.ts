@@ -1,22 +1,16 @@
 // POST /api/skills/[id]/chat/sessions/[sessionId]/messages
 //
-// Send user message → call kie.ai chat (model picked at session creation) →
-// save assistant response → return both.
+// Send user message (text + optional file/image attachments) → kie.ai chat
+// → save assistant reply.
 //
-// Non-streaming initially — UX hơi chậm cho long response nhưng đơn giản
-// hơn streaming SSE. Add streaming sau nếu cần.
+// Body: multipart/form-data
+//   - field "content" : string (text user gõ)
+//   - field "files"   : 0..N File (attachments)
 //
-// Flow:
-//   1. Load session (verify ownership)
-//   2. Load skill content → build system prompt
-//   3. Load message history → format cho chatComplete()
-//   4. Append new user message vào DB
-//   5. Call kie.ai chatComplete (dispatch theo family Anthropic/Codex/Gemini)
-//   6. Append assistant message với tokens_in/out
-//   7. Return both messages cho UI
+// Flow giống project chat — chỉ khác system prompt build từ skill bundle
+// (loadSkillContent) thay vì project.instructions + project_file.
 
-import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import {
   getSessionForUser,
@@ -32,33 +26,56 @@ import {
   chatComplete,
   isKieConfigured,
   isValidChatModelId,
+  type ChatMessageInput,
+  type ChatContentBlock,
 } from '@/lib/llm/kie-ai';
+import { processAttachments } from '@/lib/chat-attachments/process';
+import type { MessageAttachment } from '@/lib/chat-attachments/storage';
 
 export const runtime = 'nodejs';
-// Long-running LLM call — cho phép tới 5 phút (Opus 4.8 / GPT-5.5 với thinking)
 export const maxDuration = 300;
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const bodySchema = z.object({
-  content: z.string().trim().min(1, 'Message rỗng').max(50_000, 'Message quá dài (>50K chars)'),
-});
-
-interface RouteContext {
+interface Ctx {
   params: Promise<{ id: string; sessionId: string }>;
 }
 
-export async function POST(
-  req: NextRequest,
-  { params }: RouteContext
-): Promise<NextResponse> {
+function buildUserContent(
+  userText: string,
+  extraBlocks: ChatContentBlock[]
+): string | ChatContentBlock[] {
+  if (extraBlocks.length === 0) return userText;
+  const blocks: ChatContentBlock[] = [];
+  if (userText.trim()) blocks.push({ type: 'text', text: userText });
+  blocks.push(...extraBlocks);
+  return blocks;
+}
+
+function rebuildHistoryContent(
+  content: string,
+  attachments: MessageAttachment[]
+): string {
+  if (attachments.length === 0) return content;
+  const parts: string[] = [];
+  if (content.trim()) parts.push(content);
+  for (const a of attachments) {
+    if (a.kind === 'image') {
+      parts.push(`[Ảnh đính kèm: ${a.filename}]`);
+    } else if (a.contentText) {
+      parts.push(`[File ${a.filename}]\n${a.contentText}\n[/${a.filename}]`);
+    } else {
+      parts.push(`[File ${a.filename} — không có text]`);
+    }
+  }
+  return parts.join('\n\n');
+}
+
+export async function POST(req: NextRequest, { params }: Ctx): Promise<NextResponse> {
   if (!(await isKieConfigured())) {
     return NextResponse.json(
-      {
-        error:
-          'KIE_AI_API_KEY chưa được cấu hình. Admin vào /settings/integrations để set.',
-      },
+      { error: 'KIE_AI_API_KEY chưa cấu hình. Admin vào /settings/integrations để set.' },
       { status: 503 }
     );
   }
@@ -71,33 +88,42 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
   }
 
-  let body: unknown;
+  let formData: FormData;
   try {
-    body = await req.json();
+    formData = await req.formData();
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
-  }
-  const parsed = bodySchema.safeParse(body);
-  if (!parsed.success) {
     return NextResponse.json(
-      { error: 'Validation failed', details: parsed.error.format() },
+      { error: 'Body phải là multipart/form-data với field "content" + "files"' },
       { status: 400 }
     );
   }
-  const userText = parsed.data.content;
 
-  // 1. Load session + history
+  const userText = (formData.get('content') as string | null)?.trim() ?? '';
+  const files: File[] = [];
+  for (const v of formData.getAll('files')) {
+    if (v instanceof File) files.push(v);
+  }
+
+  if (!userText && files.length === 0) {
+    return NextResponse.json(
+      { error: 'Message phải có text hoặc ít nhất 1 attachment' },
+      { status: 400 }
+    );
+  }
+  if (userText.length > 50_000) {
+    return NextResponse.json({ error: 'Text quá dài (>50K chars)' }, { status: 400 });
+  }
+
+  // 1. Load session + verify
   const session = await getSessionForUser(sessionId, user.userId);
   if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
   if (session.skillId !== skillId) {
     return NextResponse.json({ error: 'Session does not belong to this skill' }, { status: 400 });
   }
-
-  // Old sessions có thể còn model slug cũ từ OpenRouter — guard early
   if (!isValidChatModelId(session.model)) {
     return NextResponse.json(
       {
-        error: `Model "${session.model}" không còn được hỗ trợ (đã chuyển sang kie.ai). Tạo cuộc trò chuyện mới với model hiện có.`,
+        error: `Model "${session.model}" không còn được hỗ trợ. Tạo cuộc trò chuyện mới.`,
       },
       { status: 400 }
     );
@@ -124,17 +150,37 @@ export async function POST(
     );
   }
 
-  // 3. Format messages history. chatComplete() handle riêng từng family — Anthropic
-  //    sẽ tự tách system khỏi messages[]; OpenAI-format giữ nguyên trong array.
-  const historyMessages = session.messages.map((m) => ({
+  // 3. Process attachments
+  let attResult;
+  try {
+    attResult = await processAttachments(sessionId, files);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Process attachments failed';
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
+
+  // 4. Persist user message
+  const userMessage = await appendMessage(
+    sessionId,
+    'user',
+    userText,
+    0,
+    0,
+    attResult.attachments
+  );
+
+  // 5. Build LLM message array
+  const historyMessages: ChatMessageInput[] = session.messages.map((m) => ({
     role: m.role,
-    content: m.content,
+    content: rebuildHistoryContent(m.content, m.attachments),
   }));
+  const messagesForLlm: ChatMessageInput[] = [
+    { role: 'system', content: systemPrompt },
+    ...historyMessages,
+    { role: 'user', content: buildUserContent(userText, attResult.llmBlocks) },
+  ];
 
-  // 4. Persist user message TRƯỚC khi call LLM (preserve input nếu API fail)
-  const userMessage = await appendMessage(sessionId, 'user', userText, 0, 0);
-
-  // 5. Call kie.ai
+  // 6. Call kie.ai
   let assistantText = '';
   let tokensIn = 0;
   let tokensOut = 0;
@@ -142,52 +188,48 @@ export async function POST(
   try {
     const result = await chatComplete({
       model: session.model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...historyMessages,
-        { role: 'user', content: userText },
-      ],
+      messages: messagesForLlm,
       maxTokens: 8192,
     });
-
     assistantText = result.content;
     tokensIn = result.tokensIn;
     tokensOut = result.tokensOut;
-
     if (!assistantText) {
       assistantText =
         '(Model không trả về nội dung — có thể bị filter hoặc skill cần tool execution chưa support.)';
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'kie.ai API error';
-    // Lưu error vào DB như assistant message để user thấy + retry
     await appendMessage(
       sessionId,
       'assistant',
       `❌ Lỗi gọi LLM: ${msg}\n\nThử lại bằng nút send hoặc đổi model khác.`,
       0,
-      0
+      0,
+      []
     );
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 
-  // 6. Persist assistant message với tokens
+  // 7. Persist assistant message
   const assistantMessage = await appendMessage(
     sessionId,
     'assistant',
     assistantText,
     tokensIn,
-    tokensOut
+    tokensOut,
+    []
   );
 
-  // 7. Auto-set session title từ first user message (truncate 60 chars)
+  // 8. Auto-set session title
   if (
     session.title === 'Cuộc trò chuyện mới' &&
     session.messages.length === 0
   ) {
-    const newTitle = userText.length > 60
-      ? userText.slice(0, 57) + '...'
-      : userText;
+    const firstFile = files[0];
+    const titleSource =
+      userText.trim() || (firstFile ? `Hỏi về ${firstFile.name}` : 'Cuộc trò chuyện mới');
+    const newTitle = titleSource.length > 60 ? titleSource.slice(0, 57) + '...' : titleSource;
     await updateSessionTitle(sessionId, user.userId, newTitle);
   }
 
@@ -195,5 +237,6 @@ export async function POST(
     userMessage,
     assistantMessage,
     usage: { tokensIn, tokensOut },
+    warnings: attResult.warnings,
   });
 }
