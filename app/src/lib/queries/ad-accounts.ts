@@ -359,6 +359,9 @@ export interface UpsertMetricInput {
   reach: number;
   clicks: number;
   conversions: number;
+  /** Inbox attribution — FB messaging_conversation_started_7d. Default 0
+   *  cho backward compat khi caller cũ chưa pass field. */
+  inboxMessages?: number;
   cpmMicros: number | null;
   cpcMicros: number | null;
   ctr: number | null;
@@ -370,15 +373,16 @@ export async function upsertMetric(input: UpsertMetricInput): Promise<void> {
   await db.query(
     `INSERT INTO ad_metric_daily
        (ad_account_id, campaign_id, ad_external_id, date,
-        spend_micros, impressions, reach, clicks, conversions,
+        spend_micros, impressions, reach, clicks, conversions, inbox_messages,
         cpm_micros, cpc_micros, ctr, roas, extra_metrics)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb)
      ON CONFLICT (ad_account_id, campaign_id, ad_external_id, date) DO UPDATE
        SET spend_micros = EXCLUDED.spend_micros,
            impressions = EXCLUDED.impressions,
            reach = EXCLUDED.reach,
            clicks = EXCLUDED.clicks,
            conversions = EXCLUDED.conversions,
+           inbox_messages = EXCLUDED.inbox_messages,
            cpm_micros = EXCLUDED.cpm_micros,
            cpc_micros = EXCLUDED.cpc_micros,
            ctr = EXCLUDED.ctr,
@@ -394,6 +398,7 @@ export async function upsertMetric(input: UpsertMetricInput): Promise<void> {
       input.reach,
       input.clicks,
       input.conversions,
+      input.inboxMessages ?? 0,
       input.cpmMicros,
       input.cpcMicros,
       input.ctr,

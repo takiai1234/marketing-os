@@ -63,20 +63,38 @@ export async function fetchKpiData(days: number): Promise<KpiData> {
     `,
       [days]
     ),
-    // Conversions (= leads) — SUM(conversion_count) from landing_page_conversion.
-    // INCLUDES today: cron pulls today's data at 23:30 VN, no extra sync delay.
+    // Lead (định nghĩa của sếp): landing data + inbox FB Ads attributed.
+    //   - landing = SUM(landing_page_conversion.conversion_count) per page+day
+    //     (cron 23:30 VN pull từ n8n webhook → Ladipage submissions).
+    //   - inbox = SUM(ad_metric_daily.inbox_messages) WHERE campaign_id IS NULL
+    //     (account-level totals từ FB action 'messaging_conversation_started_7d'.
+    //      Filter campaign_id IS NULL để tránh double-count với campaign rows
+    //      cùng date — cả 2 đều được cron ingest mỗi ngày).
+    // INCLUDES today: cron pulls today's data nightly, no extra sync delay.
+    // UNION ALL trong 1 subquery để mỗi nguồn FILTER theo window riêng nhưng
+    // cùng SUM ra current vs prev — đơn giản hơn JOIN.
     db.query<{ conv: string; conv_prev: string }>(
       `
+      WITH lead_sources AS (
+        SELECT lpc.occurred_date AS d, lpc.conversion_count AS n
+        FROM landing_page_conversion lpc
+        INNER JOIN social_account sa ON sa.id = lpc.account_id
+        WHERE sa.status != 'disconnected'
+        UNION ALL
+        SELECT amd.date AS d, amd.inbox_messages AS n
+        FROM ad_metric_daily amd
+        INNER JOIN ad_account aa ON aa.id = amd.ad_account_id
+        WHERE aa.status != 'disconnected'
+          AND amd.campaign_id IS NULL
+      )
       SELECT
-        COALESCE(SUM(lpc.conversion_count) FILTER (
-          WHERE lpc.occurred_date >= CURRENT_DATE - $1::int AND lpc.occurred_date <= CURRENT_DATE
+        COALESCE(SUM(n) FILTER (
+          WHERE d >= CURRENT_DATE - $1::int AND d <= CURRENT_DATE
         ), 0) AS conv,
-        COALESCE(SUM(lpc.conversion_count) FILTER (
-          WHERE lpc.occurred_date >= CURRENT_DATE - ($1::int * 2) AND lpc.occurred_date < CURRENT_DATE - $1::int
+        COALESCE(SUM(n) FILTER (
+          WHERE d >= CURRENT_DATE - ($1::int * 2) AND d < CURRENT_DATE - $1::int
         ), 0) AS conv_prev
-      FROM landing_page_conversion lpc
-      INNER JOIN social_account sa ON sa.id = lpc.account_id
-      WHERE sa.status != 'disconnected'
+      FROM lead_sources
     `,
       [days]
     ),

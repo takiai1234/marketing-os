@@ -26,6 +26,7 @@ import {
   fetchAdInsights,
   spendStringToMicros,
   sumConversions,
+  sumMessagingConversations,
   sumActionValues,
   mapObjectiveToEnum,
   type FBAdInsight,
@@ -199,6 +200,7 @@ async function upsertOneInsight(
   const cpmCents = ins.cpm ? parseFloat(ins.cpm) : null;
   const cpcCents = ins.cpc ? parseFloat(ins.cpc) : null;
   const conversions = sumConversions(ins.actions);
+  const inboxMessages = sumMessagingConversations(ins.actions);
   const revenue = sumActionValues(ins.action_values);
   const roas = spendCents > 0 ? revenue / spendCents : null;
 
@@ -225,6 +227,7 @@ async function upsertOneInsight(
     reach,
     clicks,
     conversions,
+    inboxMessages,
     cpmMicros,
     cpcMicros,
     ctr,

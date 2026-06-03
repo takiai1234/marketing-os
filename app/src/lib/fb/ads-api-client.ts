@@ -224,6 +224,34 @@ export function sumConversions(actions: FBInsightAction[] | undefined): number {
   return sum;
 }
 
+/** Số inbox (Messenger conversations) khởi tạo từ ad — dùng cho định nghĩa
+ *  "lead = landing + inbox" của sếp.
+ *
+ *  FB action_type chính xác:
+ *    - 'onsite_conversion.messaging_conversation_started_7d'
+ *      → user click ad → mở conversation trong 7 ngày sau click.
+ *  KHÔNG cộng 'messaging_first_reply' (double-count cùng conversation) hoặc
+ *  'messaging_blocked' (không phải lead).
+ *
+ *  Note: chỉ tính inbox attributed về ad. Inbox organic (user tự nhắn page)
+ *  KHÔNG được FB Ads API tracking — phải dùng Page Insights riêng. Boss
+ *  định nghĩa lead = landing + inbox ad-attributed → metric này đúng scope. */
+export function sumMessagingConversations(
+  actions: FBInsightAction[] | undefined
+): number {
+  if (!actions) return 0;
+  const MESSAGING_TYPES = [
+    'onsite_conversion.messaging_conversation_started_7d',
+  ];
+  let sum = 0;
+  for (const a of actions) {
+    if (MESSAGING_TYPES.includes(a.action_type)) {
+      sum += parseFloat(a.value) || 0;
+    }
+  }
+  return sum;
+}
+
 /** Sum action_values for ROAS calculation — revenue total. */
 export function sumActionValues(values: FBInsightAction[] | undefined): number {
   if (!values) return 0;
