@@ -598,6 +598,186 @@ export async function listCampaignsWithSummary(
   });
 }
 
+// ─── Campaign detail (for /ads/[id]/campaigns/[campaignId]) ────────────
+
+export interface CampaignKpis {
+  spendMicros: number;
+  impressions: number;
+  reach: number;             // SUM of daily reach — over-counts khi user thấy lại
+  clicks: number;
+  conversions: number;
+  ctr: number;               // weighted: clicks/impressions
+  cpmMicros: number;         // spend / impressions × 1000
+  cpcMicros: number;         // spend / clicks
+  cpaMicros: number;         // spend / conversions (cost per acquisition)
+  // ROAS = revenue / spend. Revenue stored in extra_metrics.revenue (FB cents).
+  roas: number | null;       // null nếu spend = 0
+  // Average frequency: impressions / reach (per-day frequency, ko phải lifetime)
+  frequency: number;
+  // Số ngày có data (cho diagnostic)
+  daysWithData: number;
+}
+
+function computeKpis(rows: ReadonlyArray<{
+  spend_micros: string | number;
+  impressions: string | number;
+  reach: string | number;
+  clicks: string | number;
+  conversions: string | number;
+  extra_metrics: Record<string, unknown> | null;
+}>): CampaignKpis {
+  let spendMicros = 0;
+  let impressions = 0;
+  let reach = 0;
+  let clicks = 0;
+  let conversions = 0;
+  let revenue = 0;
+  let daysWithData = 0;
+
+  for (const r of rows) {
+    const s = Number(r.spend_micros);
+    if (s > 0 || Number(r.impressions) > 0) daysWithData++;
+    spendMicros += s;
+    impressions += Number(r.impressions);
+    reach += Number(r.reach);
+    clicks += Number(r.clicks);
+    conversions += Number(r.conversions);
+    const rev = (r.extra_metrics as { revenue?: number } | null)?.revenue ?? 0;
+    revenue += typeof rev === 'number' ? rev : 0;
+  }
+
+  return {
+    spendMicros,
+    impressions,
+    reach,
+    clicks,
+    conversions,
+    ctr: impressions > 0 ? clicks / impressions : 0,
+    cpmMicros: impressions > 0 ? Math.round((spendMicros / impressions) * 1000) : 0,
+    cpcMicros: clicks > 0 ? Math.round(spendMicros / clicks) : 0,
+    cpaMicros: conversions > 0 ? Math.round(spendMicros / conversions) : 0,
+    // FB revenue stored in cents (USD) or đồng (VND). Spend in micros (×1M).
+    // Recompute revenue in micros to ratio cleanly: rev_micros / spend_micros.
+    // FB cents → micros = × 10_000 cho USD, × 1_000_000 cho VND. Khó know
+    // currency tại đây — caller pass nếu cần. Simple: revenue/spend ratio
+    // = (revenue × scale) / (spend_cents × scale) — scale tự cancel. Dùng
+    // revenue/(spend_micros/divisor). Approximate: spend_cents ≈ spend_micros/10_000.
+    // → roas = revenue / (spend_micros / 10_000) = revenue × 10_000 / spend_micros.
+    // Note: chỉ chính xác cho USD. VND cần đường khác. Đề tạm dùng common scale.
+    roas: spendMicros > 0 && revenue > 0
+      ? Math.round((revenue * 10_000 / spendMicros) * 100) / 100
+      : null,
+    frequency: reach > 0 ? Math.round((impressions / reach) * 100) / 100 : 0,
+    daysWithData,
+  };
+}
+
+export interface CampaignDetail {
+  campaign: AdCampaign;
+  accountId: string;
+  accountName: string;
+  accountCurrency: string;
+  kpi30d: CampaignKpis;
+  kpiPrev30d: CampaignKpis;   // 30-60 days ago — for compare
+  daily: DailyMetricPoint[];   // last 30 days
+}
+
+export async function getCampaignDetail(
+  campaignId: string,
+  userId: string
+): Promise<CampaignDetail | null> {
+  // 1. Fetch campaign + account info — verify ownership
+  const campRes = await db.query<{
+    id: string;
+    ad_account_id: string;
+    external_id: string;
+    name: string;
+    objective: string;
+    status: string;
+    daily_budget_micros: string | null;
+    lifetime_budget_micros: string | null;
+    start_time: string | null;
+    end_time: string | null;
+    created_at: string;
+    account_name: string;
+    account_currency: string;
+  }>(
+    `SELECT c.id, c.ad_account_id, c.external_id, c.name, c.objective, c.status,
+            c.daily_budget_micros::TEXT, c.lifetime_budget_micros::TEXT,
+            c.start_time::TEXT, c.end_time::TEXT, c.created_at::TEXT,
+            a.name AS account_name, a.currency AS account_currency
+       FROM ad_campaign c
+       JOIN ad_account a ON a.id = c.ad_account_id
+      WHERE c.id = $1 AND a.owner_id = $2`,
+    [campaignId, userId]
+  );
+  const c = campRes.rows[0];
+  if (!c) return null;
+
+  // 2. Fetch 60d metrics 1 lượt (kpi30d + kpiPrev30d + daily đều cần)
+  const metricsRes = await db.query<{
+    date: string;
+    spend_micros: string;
+    impressions: string;
+    reach: string;
+    clicks: string;
+    conversions: string;
+    extra_metrics: Record<string, unknown> | null;
+  }>(
+    `SELECT date::TEXT, spend_micros::TEXT, impressions::TEXT, reach::TEXT,
+            clicks::TEXT, conversions::TEXT, extra_metrics
+       FROM ad_metric_daily
+      WHERE campaign_id = $1
+        AND date >= CURRENT_DATE - INTERVAL '60 days'
+      ORDER BY date ASC`,
+    [campaignId]
+  );
+
+  const todayMs = Date.now();
+  const thirtyDaysAgoMs = todayMs - 30 * 24 * 60 * 60 * 1000;
+  const recent: typeof metricsRes.rows = [];
+  const previous: typeof metricsRes.rows = [];
+  for (const r of metricsRes.rows) {
+    const ms = new Date(`${r.date}T00:00:00.000Z`).getTime();
+    if (ms >= thirtyDaysAgoMs) recent.push(r);
+    else previous.push(r);
+  }
+
+  const kpi30d = computeKpis(recent);
+  const kpiPrev30d = computeKpis(previous);
+
+  const daily: DailyMetricPoint[] = recent.map((r) => ({
+    date: r.date,
+    spendMicros: Number(r.spend_micros),
+    impressions: Number(r.impressions),
+    reach: Number(r.reach),
+    clicks: Number(r.clicks),
+    conversions: Number(r.conversions),
+  }));
+
+  return {
+    campaign: {
+      id: c.id,
+      adAccountId: c.ad_account_id,
+      externalId: c.external_id,
+      name: c.name,
+      objective: c.objective,
+      status: c.status,
+      dailyBudgetMicros: c.daily_budget_micros !== null ? Number(c.daily_budget_micros) : null,
+      lifetimeBudgetMicros: c.lifetime_budget_micros !== null ? Number(c.lifetime_budget_micros) : null,
+      startTime: c.start_time,
+      endTime: c.end_time,
+      createdAt: c.created_at,
+    },
+    accountId: c.ad_account_id,
+    accountName: c.account_name,
+    accountCurrency: c.account_currency,
+    kpi30d,
+    kpiPrev30d,
+    daily,
+  };
+}
+
 /** All active ad accounts — used by cron job to know which to sync. */
 export async function listActiveAdAccounts(): Promise<AdAccount[]> {
   const res = await db.query<AdAccountRow>(

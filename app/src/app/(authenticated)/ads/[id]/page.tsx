@@ -208,9 +208,13 @@ export default async function AdAccountDetailPage({ params }: PageProps) {
                 {campaigns.map((c) => (
                   <tr key={c.id} className="hover:bg-zinc-50/50">
                     <td className="px-3 py-2">
-                      <p className="font-medium text-zinc-900 truncate max-w-[260px]" title={c.name}>
-                        {c.name}
-                      </p>
+                      <Link
+                        href={`/ads/${id}/campaigns/${c.id}`}
+                        className="font-medium text-zinc-900 hover:text-blue-700 truncate max-w-[260px] block"
+                        title={c.name}
+                      >
+                        {c.name} →
+                      </Link>
                       <p className="text-[10px] text-zinc-400 font-mono mt-0.5">
                         ID: {c.externalId}
                       </p>
