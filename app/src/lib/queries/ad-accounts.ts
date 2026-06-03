@@ -20,6 +20,9 @@ export interface AdAccount {
   lastSyncedAt: string | null;
   lastError: string | null;
   createdAt: string;
+  /** Business Manager metadata — null cho personal ad account */
+  businessManagerId: string | null;
+  businessManagerName: string | null;
 }
 
 interface AdAccountRow {
@@ -36,6 +39,8 @@ interface AdAccountRow {
   last_synced_at: string | null;
   last_error: string | null;
   created_at: string;
+  business_manager_id: string | null;
+  business_manager_name: string | null;
 }
 
 function mapAdAccount(row: AdAccountRow): AdAccount {
@@ -53,6 +58,8 @@ function mapAdAccount(row: AdAccountRow): AdAccount {
     lastSyncedAt: row.last_synced_at,
     lastError: row.last_error,
     createdAt: row.created_at,
+    businessManagerId: row.business_manager_id,
+    businessManagerName: row.business_manager_name,
   };
 }
 
@@ -62,7 +69,8 @@ export async function listAdAccountsForUser(userId: string): Promise<AdAccount[]
   const res = await db.query<AdAccountRow>(
     `SELECT id, owner_id, platform, external_id, name, currency, timezone,
             status, connected_at::TEXT, disconnected_at::TEXT,
-            last_synced_at::TEXT, last_error, created_at::TEXT
+            last_synced_at::TEXT, last_error, created_at::TEXT,
+            business_manager_id, business_manager_name
        FROM ad_account
       WHERE owner_id = $1
       ORDER BY CASE status
@@ -84,7 +92,8 @@ export async function getAdAccountForUser(
   const res = await db.query<AdAccountRow>(
     `SELECT id, owner_id, platform, external_id, name, currency, timezone,
             status, connected_at::TEXT, disconnected_at::TEXT,
-            last_synced_at::TEXT, last_error, created_at::TEXT
+            last_synced_at::TEXT, last_error, created_at::TEXT,
+            business_manager_id, business_manager_name
        FROM ad_account
       WHERE id = $1 AND owner_id = $2`,
     [id, userId]
@@ -103,20 +112,28 @@ export interface UpsertAdAccountInput {
   name: string;
   currency: string;
   timezone: string | null;
+  businessManagerId?: string | null;
+  businessManagerName?: string | null;
 }
 
 export async function upsertAdAccount(input: UpsertAdAccountInput): Promise<AdAccount> {
   const res = await db.query<AdAccountRow>(
-    `INSERT INTO ad_account (owner_id, platform, external_id, name, currency, timezone)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO ad_account
+       (owner_id, platform, external_id, name, currency, timezone,
+        business_manager_id, business_manager_name)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      ON CONFLICT (owner_id, platform, external_id) DO UPDATE
        SET name = EXCLUDED.name,
            currency = EXCLUDED.currency,
            timezone = EXCLUDED.timezone,
+           -- Update BM info nếu input có (không clobber bằng null nếu input null)
+           business_manager_id = COALESCE(EXCLUDED.business_manager_id, ad_account.business_manager_id),
+           business_manager_name = COALESCE(EXCLUDED.business_manager_name, ad_account.business_manager_name),
            updated_at = NOW()
      RETURNING id, owner_id, platform, external_id, name, currency, timezone,
                status, connected_at::TEXT, disconnected_at::TEXT,
-               last_synced_at::TEXT, last_error, created_at::TEXT`,
+               last_synced_at::TEXT, last_error, created_at::TEXT,
+               business_manager_id, business_manager_name`,
     [
       input.ownerId,
       input.platform,
@@ -124,6 +141,8 @@ export async function upsertAdAccount(input: UpsertAdAccountInput): Promise<AdAc
       input.name,
       input.currency,
       input.timezone,
+      input.businessManagerId ?? null,
+      input.businessManagerName ?? null,
     ]
   );
   const row = res.rows[0];
@@ -398,7 +417,8 @@ export async function listActiveAdAccounts(): Promise<AdAccount[]> {
   const res = await db.query<AdAccountRow>(
     `SELECT id, owner_id, platform, external_id, name, currency, timezone,
             status, connected_at::TEXT, disconnected_at::TEXT,
-            last_synced_at::TEXT, last_error, created_at::TEXT
+            last_synced_at::TEXT, last_error, created_at::TEXT,
+            business_manager_id, business_manager_name
        FROM ad_account
       WHERE status = 'active'
       ORDER BY owner_id, platform, name`

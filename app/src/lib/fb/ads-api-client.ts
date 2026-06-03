@@ -24,13 +24,21 @@ export interface FBAdAccount {
   timezone_name: string;       // 'Asia/Ho_Chi_Minh'
   account_status: number;      // 1=active, 2=disabled, 3=unsettled, ...
   amount_spent?: string;       // total lifetime spend (cents string)
+  /** Business Manager metadata — null nếu ad account personal */
+  business?: {
+    id: string;
+    name: string;
+  };
 }
 
 export async function fetchAdAccounts(token: string): Promise<FBAdAccount[]> {
   const res = await fb<FBPaginatedResponse<FBAdAccount>>(
     '/me/adaccounts',
     {
-      fields: 'id,account_id,name,currency,timezone_name,account_status,amount_spent',
+      // business{id,name} field expansion → trả thêm BM info nếu account
+      // thuộc 1 BM. Personal account → field absent.
+      fields:
+        'id,account_id,name,currency,timezone_name,account_status,amount_spent,business{id,name}',
       limit: '100',
     },
     token

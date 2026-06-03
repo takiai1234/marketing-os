@@ -94,6 +94,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
             name: acc.name,
             currency: acc.currency,
             timezone: acc.timezone_name ?? null,
+            businessManagerId: acc.business?.id ?? null,
+            businessManagerName: acc.business?.name ?? null,
           });
           // Cập nhật token cho row vừa upsert (separate query vì
           // upsertAdAccount không nhận token — token là cấp user, dùng chung)

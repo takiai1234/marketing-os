@@ -84,20 +84,53 @@ export default async function AdsPage() {
           {/* Top KPI cards — tổng across active accounts */}
           {activeCount > 0 && <TopKpiSummary accounts={accounts} summaries={summaries} />}
 
-          {/* Account list */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {accounts.map((a) => (
-              <AccountCard
-                key={a.id}
-                account={a}
-                summary={summaries[a.id] ?? null}
-              />
-            ))}
-          </div>
+          {/* Account list — group by Business Manager */}
+          {groupByBusinessManager(accounts).map(([bmName, accs]) => (
+            <section key={bmName} className="flex flex-col gap-3">
+              <div className="flex items-baseline justify-between gap-3 border-b border-zinc-200 pb-1">
+                <h3 className="text-sm font-semibold text-zinc-800">
+                  {bmName}
+                </h3>
+                <span className="text-[11px] text-zinc-500">
+                  {accs.length} ad account
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {accs.map((a) => (
+                  <AccountCard
+                    key={a.id}
+                    account={a}
+                    summary={summaries[a.id] ?? null}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
         </>
       )}
     </div>
   );
+}
+
+/** Group accounts by Business Manager name, returns [bmName, accounts][] sorted
+ *  alphabetically. Personal accounts (no BM) đặt cuối với label "Cá nhân". */
+function groupByBusinessManager(accounts: AdAccount[]): [string, AdAccount[]][] {
+  const groups = new Map<string, AdAccount[]>();
+  for (const acc of accounts) {
+    const key = acc.businessManagerName ?? '__personal__';
+    const list = groups.get(key) ?? [];
+    list.push(acc);
+    groups.set(key, list);
+  }
+  const result: [string, AdAccount[]][] = [];
+  for (const [key, list] of groups.entries()) {
+    if (key !== '__personal__') result.push([key, list]);
+  }
+  result.sort((a, b) => a[0].localeCompare(b[0], 'vi'));
+  if (groups.has('__personal__')) {
+    result.push(['Tài khoản cá nhân', groups.get('__personal__')!]);
+  }
+  return result;
 }
 
 // ─── Subcomponents ────────────────────────────────────────────────────────
