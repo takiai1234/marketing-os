@@ -14,6 +14,7 @@ import {
   MinusIcon,
   CalendarIcon,
   TargetIcon,
+  DownloadIcon,
 } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { getCampaignDetail } from '@/lib/queries/ad-accounts';
@@ -22,11 +23,18 @@ import {
   computePacing,
   computeDelta,
 } from '@/lib/ads/health-warnings';
+import {
+  parseRangeFromSearchParams,
+  previousPeriodOf,
+  rangeToQueryString,
+} from '@/lib/ads/date-ranges';
+import { DateRangePicker } from '@/components/ads/date-range-picker';
 import { cn } from '@/lib/utils';
 import { CampaignTrendChart } from './campaign-trend-chart';
 
 interface PageProps {
   params: Promise<{ id: string; campaignId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 const NUMBER_FMT = new Intl.NumberFormat('vi-VN');
@@ -71,46 +79,55 @@ function formatDateOnly(iso: string | null): string {
   }
 }
 
-export default async function CampaignDetailPage({ params }: PageProps) {
+export default async function CampaignDetailPage({ params, searchParams }: PageProps) {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
   const { id: adAccountId, campaignId } = await params;
-  const detail = await getCampaignDetail(campaignId, user.userId);
+  const sp = await searchParams;
+  const range = parseRangeFromSearchParams(sp);
+  const prev = previousPeriodOf(range);
+
+  const detail = await getCampaignDetail(campaignId, user.userId, {
+    sinceDate: range.from,
+    untilDate: range.to,
+    prevSinceDate: prev.from,
+    prevUntilDate: prev.to,
+  });
   if (!detail) notFound();
 
-  const { campaign, accountName, accountCurrency, kpi30d, kpiPrev30d, daily } = detail;
+  const { campaign, accountName, accountCurrency, kpiCurrent, kpiPrevious, daily } = detail;
   const currency = accountCurrency;
 
   // Health warnings
   const warnings = computeHealthWarnings({
-    spendMicros: kpi30d.spendMicros,
-    impressions: kpi30d.impressions,
-    reach: kpi30d.reach,
-    clicks: kpi30d.clicks,
-    conversions: kpi30d.conversions,
-    ctr: kpi30d.ctr,
-    frequency: kpi30d.frequency,
-    cpmMicros: kpi30d.cpmMicros,
-    daysWithData: kpi30d.daysWithData,
+    spendMicros: kpiCurrent.spendMicros,
+    impressions: kpiCurrent.impressions,
+    reach: kpiCurrent.reach,
+    clicks: kpiCurrent.clicks,
+    conversions: kpiCurrent.conversions,
+    ctr: kpiCurrent.ctr,
+    frequency: kpiCurrent.frequency,
+    cpmMicros: kpiCurrent.cpmMicros,
+    daysWithData: kpiCurrent.daysWithData,
   });
 
   // Pacing
   const pacing = computePacing({
-    spendMicros: kpi30d.spendMicros,
+    spendMicros: kpiCurrent.spendMicros,
     dailyBudgetMicros: campaign.dailyBudgetMicros,
     lifetimeBudgetMicros: campaign.lifetimeBudgetMicros,
     startTime: campaign.startTime,
     endTime: campaign.endTime,
   });
 
-  // Deltas vs previous 30d
-  const dSpend = computeDelta(kpi30d.spendMicros, kpiPrev30d.spendMicros);
-  const dImpressions = computeDelta(kpi30d.impressions, kpiPrev30d.impressions);
-  const dClicks = computeDelta(kpi30d.clicks, kpiPrev30d.clicks);
-  const dConversions = computeDelta(kpi30d.conversions, kpiPrev30d.conversions);
-  const dCtr = computeDelta(kpi30d.ctr * 100, kpiPrev30d.ctr * 100); // % point delta
-  const dCpm = computeDelta(kpi30d.cpmMicros, kpiPrev30d.cpmMicros);
+  // Deltas vs previous period
+  const dSpend = computeDelta(kpiCurrent.spendMicros, kpiPrevious.spendMicros);
+  const dImpressions = computeDelta(kpiCurrent.impressions, kpiPrevious.impressions);
+  const dClicks = computeDelta(kpiCurrent.clicks, kpiPrevious.clicks);
+  const dConversions = computeDelta(kpiCurrent.conversions, kpiPrevious.conversions);
+  const dCtr = computeDelta(kpiCurrent.ctr * 100, kpiPrevious.ctr * 100); // % point delta
+  const dCpm = computeDelta(kpiCurrent.cpmMicros, kpiPrevious.cpmMicros);
 
   return (
     <div className="flex flex-col gap-5">
@@ -154,6 +171,23 @@ export default async function CampaignDetailPage({ params }: PageProps) {
           </p>
           <p>Đã chạy {pacing.daysRun} ngày {pacing.daysRemaining !== null && `· còn ${pacing.daysRemaining}d`}</p>
         </div>
+      </div>
+
+      {/* Date range picker + Export */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <DateRangePicker
+          currentPreset={range.preset}
+          currentFrom={range.from}
+          currentTo={range.to}
+        />
+        <a
+          href={`/api/ads/accounts/${adAccountId}/campaigns/${campaignId}/export?${rangeToQueryString(range)}`}
+          download
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-white ring-1 ring-zinc-200 text-zinc-700 hover:bg-zinc-50"
+        >
+          <DownloadIcon className="size-3.5" />
+          Export CSV
+        </a>
       </div>
 
       {/* Health warnings */}
@@ -227,17 +261,17 @@ export default async function CampaignDetailPage({ params }: PageProps) {
 
       {/* KPI grid — 11 metrics với compare 30d */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        <KpiCard label="Spend 30d" value={microsToDisplay(kpi30d.spendMicros, currency)} delta={dSpend} unit="currency" currency={currency} />
-        <KpiCard label="Impressions" value={NUMBER_FMT.format(kpi30d.impressions)} delta={dImpressions} unit="count" />
-        <KpiCard label="Reach (sum)" value={NUMBER_FMT.format(kpi30d.reach)} delta={null} unit="count" hint="Sum daily reach" />
-        <KpiCard label="Frequency" value={kpi30d.frequency.toFixed(2)} delta={null} unit="number" hint="Impressions/Reach" />
-        <KpiCard label="Clicks" value={NUMBER_FMT.format(kpi30d.clicks)} delta={dClicks} unit="count" />
-        <KpiCard label="CTR" value={`${(kpi30d.ctr * 100).toFixed(2)}%`} delta={dCtr} unit="percent" />
-        <KpiCard label="CPM" value={microsToDisplay(kpi30d.cpmMicros, currency)} delta={dCpm} unit="currency" currency={currency} invertTrend />
-        <KpiCard label="CPC" value={microsToDisplay(kpi30d.cpcMicros, currency)} delta={null} unit="currency" currency={currency} invertTrend />
-        <KpiCard label="Conversions" value={NUMBER_FMT.format(kpi30d.conversions)} delta={dConversions} unit="count" />
-        <KpiCard label="CPA" value={kpi30d.cpaMicros > 0 ? microsToDisplay(kpi30d.cpaMicros, currency) : '—'} delta={null} unit="currency" currency={currency} invertTrend hint="Cost per acquisition" />
-        <KpiCard label="ROAS" value={kpi30d.roas !== null ? `${kpi30d.roas.toFixed(2)}×` : '—'} delta={null} unit="number" hint="Revenue/Spend" />
+        <KpiCard label={`Spend ${range.days}d`} value={microsToDisplay(kpiCurrent.spendMicros, currency)} delta={dSpend} unit="currency" currency={currency} />
+        <KpiCard label="Impressions" value={NUMBER_FMT.format(kpiCurrent.impressions)} delta={dImpressions} unit="count" />
+        <KpiCard label="Reach (sum)" value={NUMBER_FMT.format(kpiCurrent.reach)} delta={null} unit="count" hint="Sum daily reach" />
+        <KpiCard label="Frequency" value={kpiCurrent.frequency.toFixed(2)} delta={null} unit="number" hint="Impressions/Reach" />
+        <KpiCard label="Clicks" value={NUMBER_FMT.format(kpiCurrent.clicks)} delta={dClicks} unit="count" />
+        <KpiCard label="CTR" value={`${(kpiCurrent.ctr * 100).toFixed(2)}%`} delta={dCtr} unit="percent" />
+        <KpiCard label="CPM" value={microsToDisplay(kpiCurrent.cpmMicros, currency)} delta={dCpm} unit="currency" currency={currency} invertTrend />
+        <KpiCard label="CPC" value={microsToDisplay(kpiCurrent.cpcMicros, currency)} delta={null} unit="currency" currency={currency} invertTrend />
+        <KpiCard label="Conversions" value={NUMBER_FMT.format(kpiCurrent.conversions)} delta={dConversions} unit="count" />
+        <KpiCard label="CPA" value={kpiCurrent.cpaMicros > 0 ? microsToDisplay(kpiCurrent.cpaMicros, currency) : '—'} delta={null} unit="currency" currency={currency} invertTrend hint="Cost per acquisition" />
+        <KpiCard label="ROAS" value={kpiCurrent.roas !== null ? `${kpiCurrent.roas.toFixed(2)}×` : '—'} delta={null} unit="number" hint="Revenue/Spend" />
       </div>
 
       {/* Trend chart 30d */}
@@ -363,7 +397,7 @@ function DeltaBadge({
         {delta.deltaPct >= 0 ? '+' : ''}
         {delta.deltaPct.toFixed(1)}%
       </span>
-      <span className="text-zinc-400">vs 30d trước</span>
+      <span className="text-zinc-400">vs trước</span>
     </div>
   );
 }

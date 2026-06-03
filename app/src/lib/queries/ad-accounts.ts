@@ -417,7 +417,7 @@ export interface AccountSummary {
 
 export async function getAccountSummaries(
   userId: string,
-  days = 30
+  options: { sinceDate: string; untilDate: string }
 ): Promise<Record<string, AccountSummary>> {
   const res = await db.query<{
     ad_account_id: string;
@@ -442,9 +442,10 @@ export async function getAccountSummaries(
       JOIN ad_account a ON a.id = m.ad_account_id
      WHERE a.owner_id = $1
        AND m.campaign_id IS NULL  -- account-level rows only
-       AND m.date >= CURRENT_DATE - INTERVAL '${days} days'
+       AND m.date >= $2::DATE
+       AND m.date <= $3::DATE
      GROUP BY m.ad_account_id`,
-    [userId]
+    [userId, options.sinceDate, options.untilDate]
   );
 
   const map: Record<string, AccountSummary> = {};
@@ -474,12 +475,12 @@ export interface DailyMetricPoint {
   conversions: number;
 }
 
-/** 30-day daily metrics — account-level only (campaign_id IS NULL).
- *  Used for trend chart trên /ads/[id]. */
+/** Daily metrics — account-level only (campaign_id IS NULL).
+ *  Used for trend chart trên /ads/[id]. Nhận since/until ISO dates. */
 export async function getAccountMetricsDaily(
   adAccountId: string,
   userId: string,
-  days = 30
+  options: { sinceDate: string; untilDate: string }
 ): Promise<DailyMetricPoint[]> {
   const res = await db.query<{
     date: string;
@@ -501,9 +502,10 @@ export async function getAccountMetricsDaily(
      WHERE m.ad_account_id = $1
        AND a.owner_id = $2
        AND m.campaign_id IS NULL
-       AND m.date >= CURRENT_DATE - INTERVAL '${days} days'
+       AND m.date >= $3::DATE
+       AND m.date <= $4::DATE
      ORDER BY m.date ASC`,
-    [adAccountId, userId]
+    [adAccountId, userId, options.sinceDate, options.untilDate]
   );
   return res.rows.map((r) => ({
     date: r.date,
@@ -525,11 +527,11 @@ export interface CampaignWithSummary extends AdCampaign {
   } | null;
 }
 
-/** Campaign list + 30d totals — table /ads/[id]. */
+/** Campaign list + totals trong date range — table /ads/[id]. */
 export async function listCampaignsWithSummary(
   adAccountId: string,
   userId: string,
-  days = 30
+  options: { sinceDate: string; untilDate: string }
 ): Promise<CampaignWithSummary[]> {
   const res = await db.query<{
     id: string;
@@ -560,11 +562,12 @@ export async function listCampaignsWithSummary(
       JOIN ad_account a ON a.id = c.ad_account_id
       LEFT JOIN ad_metric_daily m
         ON m.campaign_id = c.id
-       AND m.date >= CURRENT_DATE - INTERVAL '${days} days'
+       AND m.date >= $3::DATE
+       AND m.date <= $4::DATE
      WHERE c.ad_account_id = $1 AND a.owner_id = $2
      GROUP BY c.id
      ORDER BY COALESCE(SUM(m.spend_micros), 0) DESC, c.created_at DESC`,
-    [adAccountId, userId]
+    [adAccountId, userId, options.sinceDate, options.untilDate]
   );
 
   return res.rows.map((r) => {
@@ -677,14 +680,18 @@ export interface CampaignDetail {
   accountId: string;
   accountName: string;
   accountCurrency: string;
-  kpi30d: CampaignKpis;
-  kpiPrev30d: CampaignKpis;   // 30-60 days ago — for compare
-  daily: DailyMetricPoint[];   // last 30 days
+  /** KPI cho range hiện tại */
+  kpiCurrent: CampaignKpis;
+  /** KPI cho range trước đó cùng độ dài — for Δ% compare */
+  kpiPrevious: CampaignKpis;
+  /** Daily breakdown của range hiện tại */
+  daily: DailyMetricPoint[];
 }
 
 export async function getCampaignDetail(
   campaignId: string,
-  userId: string
+  userId: string,
+  options: { sinceDate: string; untilDate: string; prevSinceDate: string; prevUntilDate: string }
 ): Promise<CampaignDetail | null> {
   // 1. Fetch campaign + account info — verify ownership
   const campRes = await db.query<{
@@ -714,7 +721,7 @@ export async function getCampaignDetail(
   const c = campRes.rows[0];
   if (!c) return null;
 
-  // 2. Fetch 60d metrics 1 lượt (kpi30d + kpiPrev30d + daily đều cần)
+  // 2. Fetch 2 ranges (current + previous) 1 lượt
   const metricsRes = await db.query<{
     date: string;
     spend_micros: string;
@@ -728,23 +735,23 @@ export async function getCampaignDetail(
             clicks::TEXT, conversions::TEXT, extra_metrics
        FROM ad_metric_daily
       WHERE campaign_id = $1
-        AND date >= CURRENT_DATE - INTERVAL '60 days'
+        AND date >= $2::DATE
+        AND date <= $3::DATE
       ORDER BY date ASC`,
-    [campaignId]
+    [campaignId, options.prevSinceDate, options.untilDate]
   );
 
-  const todayMs = Date.now();
-  const thirtyDaysAgoMs = todayMs - 30 * 24 * 60 * 60 * 1000;
+  const sinceMs = new Date(`${options.sinceDate}T00:00:00.000Z`).getTime();
   const recent: typeof metricsRes.rows = [];
   const previous: typeof metricsRes.rows = [];
   for (const r of metricsRes.rows) {
     const ms = new Date(`${r.date}T00:00:00.000Z`).getTime();
-    if (ms >= thirtyDaysAgoMs) recent.push(r);
+    if (ms >= sinceMs) recent.push(r);
     else previous.push(r);
   }
 
-  const kpi30d = computeKpis(recent);
-  const kpiPrev30d = computeKpis(previous);
+  const kpiCurrent = computeKpis(recent);
+  const kpiPrevious = computeKpis(previous);
 
   const daily: DailyMetricPoint[] = recent.map((r) => ({
     date: r.date,
@@ -772,8 +779,8 @@ export async function getCampaignDetail(
     accountId: c.ad_account_id,
     accountName: c.account_name,
     accountCurrency: c.account_currency,
-    kpi30d,
-    kpiPrev30d,
+    kpiCurrent,
+    kpiPrevious,
     daily,
   };
 }

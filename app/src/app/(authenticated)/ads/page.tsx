@@ -19,6 +19,8 @@ import {
   type AdAccountStatus,
 } from '@/lib/queries/ad-accounts';
 import { microsToDisplay } from '@/lib/fb/ads-api-client';
+import { parseRangeFromSearchParams } from '@/lib/ads/date-ranges';
+import { DateRangePicker } from '@/components/ads/date-range-picker';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { AdsAccountActions } from './ads-account-actions';
@@ -40,13 +42,20 @@ const PLATFORM_META: Record<string, { label: string; cls: string }> = {
   tiktok:   { label: 'TikTok Ads',   cls: 'bg-zinc-900 text-white' },
 };
 
-export default async function AdsPage() {
+interface AdsPageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export default async function AdsPage({ searchParams }: AdsPageProps) {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
+  const sp = await searchParams;
+  const range = parseRangeFromSearchParams(sp);
+
   const [accounts, summaries] = await Promise.all([
     listAdAccountsForUser(user.userId),
-    getAccountSummaries(user.userId, 30),
+    getAccountSummaries(user.userId, { sinceDate: range.from, untilDate: range.to }),
   ]);
 
   const activeCount = accounts.filter((a) => a.status === 'active').length;
@@ -71,6 +80,20 @@ export default async function AdsPage() {
         </Link>
       </div>
 
+      {/* Date range picker */}
+      {accounts.length > 0 && (
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <DateRangePicker
+            currentPreset={range.preset}
+            currentFrom={range.from}
+            currentTo={range.to}
+          />
+          <span className="text-[11px] text-zinc-500">
+            {range.from} → {range.to} ({range.days} ngày)
+          </span>
+        </div>
+      )}
+
       {accounts.length === 0 ? (
         <EmptyState />
       ) : (
@@ -92,7 +115,7 @@ export default async function AdsPage() {
           )}
 
           {/* Top KPI cards — tổng across active accounts */}
-          {activeCount > 0 && <TopKpiSummary accounts={accounts} summaries={summaries} />}
+          {activeCount > 0 && <TopKpiSummary accounts={accounts} summaries={summaries} rangeDays={range.days} />}
 
           {/* Account list — group by Business Manager */}
           {groupByBusinessManager(accounts).map(([bmName, accs]) => (
@@ -111,6 +134,7 @@ export default async function AdsPage() {
                     key={a.id}
                     account={a}
                     summary={summaries[a.id] ?? null}
+                    rangeDays={range.days}
                   />
                 ))}
               </div>
@@ -174,9 +198,11 @@ function EmptyState() {
 function TopKpiSummary({
   accounts,
   summaries,
+  rangeDays,
 }: {
   accounts: AdAccount[];
   summaries: Record<string, AccountSummary>;
+  rangeDays: number;
 }) {
   // Sum across active accounts (assume cùng currency hoặc skip rồi hiển thị %)
   let totalSpendMicros = 0;
@@ -206,7 +232,7 @@ function TopKpiSummary({
   return (
     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
       <KpiCard
-        label="Spend 30d"
+        label={`Spend ${rangeDays}d`}
         value={
           allSameCurrency && currency
             ? microsToDisplay(totalSpendMicros, currency)
@@ -239,9 +265,11 @@ function KpiCard({ label, value }: { label: string; value: string }) {
 function AccountCard({
   account,
   summary,
+  rangeDays,
 }: {
   account: AdAccount;
   summary: AccountSummary | null;
+  rangeDays: number;
 }) {
   const status = STATUS_META[account.status];
   const platform = PLATFORM_META[account.platform] ?? {
@@ -296,7 +324,7 @@ function AccountCard({
       {summary && summary.totalImpressions > 0 ? (
         <div className="grid grid-cols-3 gap-2 text-xs">
           <div className="rounded bg-zinc-50 px-2 py-1.5">
-            <p className="text-[10px] text-zinc-500">Spend 30d</p>
+            <p className="text-[10px] text-zinc-500">Spend {rangeDays}d</p>
             <p className="font-semibold tabular-nums">
               {microsToDisplay(summary.totalSpendMicros, account.currency)}
             </p>

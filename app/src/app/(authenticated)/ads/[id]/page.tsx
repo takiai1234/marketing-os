@@ -4,7 +4,7 @@
 
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, AlertCircleIcon, CheckCircle2Icon } from 'lucide-react';
+import { ArrowLeft, AlertCircleIcon, CheckCircle2Icon, DownloadIcon } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import {
   getAdAccountForUser,
@@ -12,11 +12,14 @@ import {
   listCampaignsWithSummary,
 } from '@/lib/queries/ad-accounts';
 import { microsToDisplay } from '@/lib/fb/ads-api-client';
+import { parseRangeFromSearchParams, rangeToQueryString } from '@/lib/ads/date-ranges';
+import { DateRangePicker } from '@/components/ads/date-range-picker';
 import { cn } from '@/lib/utils';
 import { AdsTrendChart } from './ads-trend-chart';
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 const NUMBER_FMT = new Intl.NumberFormat('vi-VN');
@@ -59,17 +62,20 @@ function formatRelative(iso: string | null): string {
   return `${days}d trước`;
 }
 
-export default async function AdAccountDetailPage({ params }: PageProps) {
+export default async function AdAccountDetailPage({ params, searchParams }: PageProps) {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
   const { id } = await params;
+  const sp = await searchParams;
+  const range = parseRangeFromSearchParams(sp);
+
   const account = await getAdAccountForUser(id, user.userId);
   if (!account) notFound();
 
   const [dailyMetrics, campaigns] = await Promise.all([
-    getAccountMetricsDaily(id, user.userId, 30),
-    listCampaignsWithSummary(id, user.userId, 30),
+    getAccountMetricsDaily(id, user.userId, { sinceDate: range.from, untilDate: range.to }),
+    listCampaignsWithSummary(id, user.userId, { sinceDate: range.from, untilDate: range.to }),
   ]);
 
   // 30d totals từ daily metrics
@@ -133,6 +139,23 @@ export default async function AdAccountDetailPage({ params }: PageProps) {
         </div>
       </div>
 
+      {/* Date range picker + Export */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <DateRangePicker
+          currentPreset={range.preset}
+          currentFrom={range.from}
+          currentTo={range.to}
+        />
+        <a
+          href={`/api/ads/accounts/${id}/export?${rangeToQueryString(range)}`}
+          download
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-white ring-1 ring-zinc-200 text-zinc-700 hover:bg-zinc-50"
+        >
+          <DownloadIcon className="size-3.5" />
+          Export CSV
+        </a>
+      </div>
+
       {/* Error banner */}
       {account.status === 'error' && account.lastError && (
         <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 px-4 py-3 text-sm text-rose-900 flex items-start gap-2">
@@ -157,7 +180,7 @@ export default async function AdAccountDetailPage({ params }: PageProps) {
       {/* KPI 30d */}
       {dailyMetrics.length > 0 ? (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <KpiCard label="Spend 30d" value={microsToDisplay(totalSpendMicros, account.currency)} />
+          <KpiCard label={`Spend ${range.days}d`} value={microsToDisplay(totalSpendMicros, account.currency)} />
           <KpiCard label="Impressions" value={NUMBER_FMT.format(totalImpressions)} />
           <KpiCard label="Clicks" value={NUMBER_FMT.format(totalClicks)} />
           <KpiCard label="CTR" value={`${(avgCtr * 100).toFixed(2)}%`} />
@@ -182,7 +205,7 @@ export default async function AdAccountDetailPage({ params }: PageProps) {
           <h3 className="text-sm font-semibold text-zinc-900">
             Campaigns ({campaigns.length})
           </h3>
-          <span className="text-[11px] text-zinc-500">Sort theo Spend 30d ↓</span>
+          <span className="text-[11px] text-zinc-500">Sort theo Spend {range.days}d ↓</span>
         </div>
         {campaigns.length === 0 ? (
           <p className="text-xs text-zinc-500 italic px-4 py-6 text-center">
@@ -197,7 +220,7 @@ export default async function AdAccountDetailPage({ params }: PageProps) {
                   <th className="text-left px-3 py-2 font-medium">Campaign</th>
                   <th className="text-left px-3 py-2 font-medium">Objective</th>
                   <th className="text-center px-3 py-2 font-medium">Status</th>
-                  <th className="text-right px-3 py-2 font-medium">Spend 30d</th>
+                  <th className="text-right px-3 py-2 font-medium">Spend {range.days}d</th>
                   <th className="text-right px-3 py-2 font-medium">Impressions</th>
                   <th className="text-right px-3 py-2 font-medium">Clicks</th>
                   <th className="text-right px-3 py-2 font-medium">CTR</th>
@@ -209,7 +232,7 @@ export default async function AdAccountDetailPage({ params }: PageProps) {
                   <tr key={c.id} className="hover:bg-zinc-50/50">
                     <td className="px-3 py-2">
                       <Link
-                        href={`/ads/${id}/campaigns/${c.id}`}
+                        href={`/ads/${id}/campaigns/${c.id}?${rangeToQueryString(range)}`}
                         className="font-medium text-zinc-900 hover:text-blue-700 truncate max-w-[260px] block"
                         title={c.name}
                       >
