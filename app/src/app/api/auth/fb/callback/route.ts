@@ -81,6 +81,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     // Best-effort cho cả 2 flow. Cron sẽ dùng encrypted_token sync sau.
     try {
       const adAccounts = await fetchAdAccounts(userToken);
+      console.log(
+        `[fb/callback] FB returned ${adAccounts.length} ad accounts. IDs: ${adAccounts.map((a) => a.id).join(', ')}`
+      );
       if (adAccounts.length > 0) {
         const encryptedToken = await encryptToken(userToken);
         for (const acc of adAccounts) {

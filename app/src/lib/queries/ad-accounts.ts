@@ -297,6 +297,27 @@ export interface UpsertCampaignInput {
   endTime: Date | null;
 }
 
+/** Xoá ad_campaign rows mà external_id KHÔNG có trong fetch hiện tại
+ *  cho 1 ad_account. Cascade tự xoá ad_metric_daily rows liên quan (FK).
+ *  Trả số lượng deleted để log.
+ *
+ *  Edge case: nếu currentExternalIds rỗng (FB API fail / no campaigns
+ *  được trả), SKIP để tránh accident wipe toàn bộ.
+ */
+export async function deleteStaleCampaigns(
+  adAccountId: string,
+  currentExternalIds: string[]
+): Promise<number> {
+  if (currentExternalIds.length === 0) return 0;
+  const res = await db.query(
+    `DELETE FROM ad_campaign
+      WHERE ad_account_id = $1
+        AND NOT (external_id = ANY($2::TEXT[]))`,
+    [adAccountId, currentExternalIds]
+  );
+  return res.rowCount ?? 0;
+}
+
 export async function upsertCampaign(input: UpsertCampaignInput): Promise<void> {
   await db.query(
     `INSERT INTO ad_campaign

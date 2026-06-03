@@ -16,6 +16,7 @@ import { db } from '@/lib/db';
 import {
   listActiveAdAccounts,
   upsertCampaign,
+  deleteStaleCampaigns,
   upsertMetric,
   markAdAccountSynced,
   markAdAccountError,
@@ -81,9 +82,12 @@ export async function syncOneAccount(account: {
   const since = new Date();
   since.setUTCDate(since.getUTCDate() - DAYS_BACK);
 
-  // ─── 1. Refresh campaigns ──────────────────────────────────────────────
+  // ─── 1. Refresh campaigns + cleanup stale ──────────────────────────────
   try {
     const campaigns = await fetchCampaigns(token, account.externalId);
+    console.log(
+      `[ads-ingestion] Account ${account.name}: fetched ${campaigns.length} campaigns from FB`
+    );
     for (const c of campaigns) {
       await upsertCampaign({
         adAccountId: account.id,
@@ -97,6 +101,18 @@ export async function syncOneAccount(account: {
         startTime: c.start_time ? new Date(c.start_time) : null,
         endTime: c.stop_time ? new Date(c.stop_time) : null,
       });
+    }
+
+    // Cleanup: xoá campaigns NOT trong fetch hiện tại (FB đã delete chúng,
+    // hoặc data từ test app trước còn sót). Cascade xoá ad_metric_daily.
+    if (campaigns.length > 0) {
+      const currentCampaignIds = campaigns.map((c) => c.id);
+      const stale = await deleteStaleCampaigns(account.id, currentCampaignIds);
+      if (stale > 0) {
+        console.log(
+          `[ads-ingestion] Account ${account.name}: deleted ${stale} stale campaigns`
+        );
+      }
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
