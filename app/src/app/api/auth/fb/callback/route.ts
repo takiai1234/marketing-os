@@ -63,31 +63,19 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   // Clear CSRF state immediately
   session.fb_oauth_state = undefined;
 
+  // Read returnTo NGAY — quyết định pipeline trước khi gọi FB API.
+  // 'ads' flow: chỉ cần fetchAdAccounts, KHÔNG lưu pages vào session
+  //             (tránh cookie too big với user có nhiều page).
+  // 'channels' flow (default): fetch pages → lưu session → picker.
+  const returnTo = session.fb_oauth_return_to;
+  session.fb_oauth_return_to = undefined;
+
   try {
     const shortToken = await exchangeCodeForUserToken(code);
     const userToken = await extendUserToken(shortToken);
-    const pages: FBPage[] = await listUserPages(userToken);
-
-    // Store pages in session — expires in 5 minutes. Token stays server-side only.
-    session.fb_oauth_pages = {
-      pages: pages.slice(0, 30).map((p) => ({
-        id: p.id,
-        name: p.name,
-        access_token: p.access_token,
-        category: p.category,
-      })),
-      userToken,
-      expiresAt: Date.now() + 5 * 60 * 1000,
-    };
-
-    await session.save();
 
     // ─── Ad accounts: discover qua /me/adaccounts (cần scope ads_read) ──
-    // Best-effort: nếu user chưa approve ads_read scope, fetchAdAccounts
-    // throw FB error #100/200 — catch + skip (Pages flow vẫn tiếp tục).
-    // Token được encrypt + lưu vào ad_account.encrypted_token để cron sau
-    // dùng cho /act_<id>/insights call. User token có lifespan ~60 days
-    // sau extendUserToken — đủ cho daily sync.
+    // Best-effort cho cả 2 flow. Cron sẽ dùng encrypted_token sync sau.
     try {
       const adAccounts = await fetchAdAccounts(userToken);
       if (adAccounts.length > 0) {
@@ -96,15 +84,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           const dbAccount = await upsertAdAccount({
             ownerId: user.userId,
             platform: 'facebook',
-            externalId: acc.id, // 'act_<numeric>'
+            externalId: acc.id,
             name: acc.name,
             currency: acc.currency,
             timezone: acc.timezone_name ?? null,
             businessManagerId: acc.business?.id ?? null,
             businessManagerName: acc.business?.name ?? null,
           });
-          // Cập nhật token cho row vừa upsert (separate query vì
-          // upsertAdAccount không nhận token — token là cấp user, dùng chung)
           await db.query(
             `UPDATE ad_account SET encrypted_token = $2 WHERE id = $1`,
             [dbAccount.id, encryptedToken]
@@ -115,24 +101,42 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         );
       }
     } catch (err) {
-      // Không kill Pages flow — chỉ log
       const msg = err instanceof Error ? err.message : String(err);
       console.warn(
-        `[fb/callback] Ad accounts discovery skipped (likely ads_read scope missing): ${msg.slice(0, 200)}`
+        `[fb/callback] Ad accounts discovery skipped: ${msg.slice(0, 200)}`
       );
     }
 
-    // Honor return_to — user từ /ads/connect → redirect về /ads (skip pages picker).
-    // Default → channels picker (existing behavior cho user kết nối từ /channels/new).
-    const returnTo = session.fb_oauth_return_to;
-    session.fb_oauth_return_to = undefined;
-    await session.save();
-
     if (returnTo === 'ads') {
-      // Clear pages picker session — user không cần pick pages từ /ads flow
+      // Ads flow: KHÔNG cần list pages, KHÔNG cần lưu session payload nặng.
+      // Chỉ save (để clear fb_oauth_state + return_to) rồi redirect.
       session.fb_oauth_pages = undefined;
       await session.save();
       return NextResponse.redirect(new URL('/ads', origin));
+    }
+
+    // Channels flow: cần pages để picker render. Giới hạn slice cứng để
+    // không vượt browser cookie limit ~4-8KB.
+    // 10 pages × ~200B/page (id + name + access_token + category) ≈ 2KB raw
+    // + userToken 200B + iron-session overhead → ~6KB encrypted, fit cookie.
+    const pages: FBPage[] = await listUserPages(userToken);
+    const PAGE_LIMIT = 10;
+    session.fb_oauth_pages = {
+      pages: pages.slice(0, PAGE_LIMIT).map((p) => ({
+        id: p.id,
+        name: p.name,
+        access_token: p.access_token,
+        category: p.category,
+      })),
+      userToken,
+      expiresAt: Date.now() + 5 * 60 * 1000,
+    };
+    await session.save();
+
+    if (pages.length > PAGE_LIMIT) {
+      console.warn(
+        `[fb/callback] User ${user.userId} có ${pages.length} pages — chỉ hiện ${PAGE_LIMIT} đầu trong picker do cookie limit.`
+      );
     }
 
     const redirectUrl = new URL('/channels/new/facebook', origin);
