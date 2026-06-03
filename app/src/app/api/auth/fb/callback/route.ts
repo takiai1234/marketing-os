@@ -116,6 +116,19 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       );
     }
 
+    // Honor return_to — user từ /ads/connect → redirect về /ads (skip pages picker).
+    // Default → channels picker (existing behavior cho user kết nối từ /channels/new).
+    const returnTo = session.fb_oauth_return_to;
+    session.fb_oauth_return_to = undefined;
+    await session.save();
+
+    if (returnTo === 'ads') {
+      // Clear pages picker session — user không cần pick pages từ /ads flow
+      session.fb_oauth_pages = undefined;
+      await session.save();
+      return NextResponse.redirect(new URL('/ads', req.nextUrl.origin));
+    }
+
     const redirectUrl = new URL('/channels/new/facebook', req.nextUrl.origin);
     redirectUrl.searchParams.set('step', 'pick');
     return NextResponse.redirect(redirectUrl);

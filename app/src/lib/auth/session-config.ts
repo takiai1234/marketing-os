@@ -27,6 +27,9 @@ export interface SessionData {
     userToken: string;
     expiresAt: number;
   };
+  /** Where to redirect AFTER successful OAuth callback. 'ads' = back to /ads
+   *  (skip pages picker — user came from /ads/connect flow). Default → channels picker. */
+  fb_oauth_return_to?: 'ads' | 'channels';
 }
 
 export const sessionOptions: SessionOptions = {

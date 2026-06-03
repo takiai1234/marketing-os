@@ -62,7 +62,7 @@ export default async function AdsPage() {
             (Phase 1). TikTok + Google Ads ở Phase 2-3.
           </p>
         </div>
-        <Link href="/channels/new/facebook?step=connect">
+        <Link href="/ads/connect">
           <Button className="bg-blue-600 hover:bg-blue-700 text-white">
             <PlugIcon className="size-4" />
             Kết nối Ad Account
@@ -146,7 +146,7 @@ function EmptyState() {
         Để xem báo cáo quảng cáo, kết nối Facebook Ad Account. Quá trình tự
         động — chỉ cần authorize FB với scope <code>ads_read</code>.
       </p>
-      <Link href="/channels/new/facebook?step=connect">
+      <Link href="/ads/connect">
         <Button className="bg-blue-600 hover:bg-blue-700 text-white">
           <PlugIcon className="size-4" />
           Kết nối Facebook Ads

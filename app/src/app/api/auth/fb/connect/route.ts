@@ -1,7 +1,11 @@
-// GET /api/auth/fb/connect
-// Generates a CSRF state token, stores it in the iron-session, then redirects
-// the browser to the Facebook OAuth dialog.
+// GET /api/auth/fb/connect?return_to=ads|channels
+// Generates a CSRF state token, stores it (+ return_to) in the iron-session,
+// then redirects the browser to the Facebook OAuth dialog.
 // Requires an active admin session — returns 401 if unauthenticated.
+//
+// return_to controls post-callback redirect:
+//   'ads'      → /ads (sau khi discover ad accounts, skip pages picker)
+//   'channels' → /channels/new/facebook?step=pick (mặc định)
 
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
@@ -10,7 +14,7 @@ import { buildAuthUrl } from '@/lib/fb/oauth-flow';
 
 export const runtime = 'nodejs';
 
-export async function GET(_req: NextRequest): Promise<NextResponse> {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -19,9 +23,14 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
   // Generate a 16-byte (32 hex char) CSRF state token
   const state = randomBytes(16).toString('hex');
 
+  const returnToParam = req.nextUrl.searchParams.get('return_to');
+  const returnTo: 'ads' | 'channels' =
+    returnToParam === 'ads' ? 'ads' : 'channels';
+
   // Persist state in the session for verification in the callback
   const session = await getSession();
   session.fb_oauth_state = state;
+  session.fb_oauth_return_to = returnTo;
   await session.save();
 
   const authUrl = buildAuthUrl(state);
