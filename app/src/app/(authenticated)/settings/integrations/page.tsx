@@ -7,8 +7,10 @@ import { getUserRole } from '@/lib/auth/get-role';
 import { listSettingsMetadata } from '@/lib/settings/api-keys';
 import { OPENROUTER_KEY_NAME } from '@/lib/llm/openrouter';
 import { KIE_AI_KEY_NAME } from '@/lib/llm/kie-ai';
+import { FB_APP_ID_KEY, FB_APP_SECRET_KEY } from '@/lib/fb/oauth-flow';
 import { OpenRouterKeyForm } from './openrouter-key-form';
 import { KieAiKeyForm } from './kieai-key-form';
+import { FacebookAppForm } from './facebook-app-form';
 
 export const metadata = {
   title: 'Tích hợp API — Marketing OS',
@@ -32,9 +34,11 @@ export default async function IntegrationsPage() {
     );
   }
 
-  const [orMeta, kieMeta] = await listSettingsMetadata([
+  const [orMeta, kieMeta, fbIdMeta, fbSecretMeta] = await listSettingsMetadata([
     OPENROUTER_KEY_NAME,
     KIE_AI_KEY_NAME,
+    FB_APP_ID_KEY,
+    FB_APP_SECRET_KEY,
   ]);
   const openrouter = orMeta ?? {
     key: OPENROUTER_KEY_NAME,
@@ -48,6 +52,27 @@ export default async function IntegrationsPage() {
     updatedAt: null,
     updatedByName: null,
   };
+  const fbAppId = fbIdMeta ?? {
+    key: FB_APP_ID_KEY,
+    isSet: false,
+    updatedAt: null,
+    updatedByName: null,
+  };
+  const fbAppSecret = fbSecretMeta ?? {
+    key: FB_APP_SECRET_KEY,
+    isSet: false,
+    updatedAt: null,
+    updatedByName: null,
+  };
+  // env "placeholder" string = treat as not set (giống logic ở /ads/connect)
+  const envFbAppId = process.env[FB_APP_ID_KEY];
+  const envFbAppSecret = process.env[FB_APP_SECRET_KEY];
+  const fbHasEnvFallback = Boolean(
+    envFbAppId &&
+      envFbAppId !== 'placeholder' &&
+      envFbAppSecret &&
+      envFbAppSecret !== 'placeholder'
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -58,6 +83,14 @@ export default async function IntegrationsPage() {
           lưu DB. Chỉ admin set & xem trạng thái.
         </p>
       </div>
+
+      <FacebookAppForm
+        appIdIsSet={fbAppId.isSet}
+        secretIsSet={fbAppSecret.isSet}
+        appIdUpdatedAt={fbAppId.updatedAt}
+        appIdUpdatedByName={fbAppId.updatedByName}
+        hasEnvFallback={fbHasEnvFallback}
+      />
 
       <OpenRouterKeyForm
         initialIsSet={openrouter.isSet}

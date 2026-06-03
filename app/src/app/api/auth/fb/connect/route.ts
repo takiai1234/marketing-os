@@ -33,6 +33,17 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   session.fb_oauth_return_to = returnTo;
   await session.save();
 
-  const authUrl = buildAuthUrl(state);
-  return NextResponse.redirect(authUrl);
+  try {
+    const authUrl = await buildAuthUrl(state);
+    return NextResponse.redirect(authUrl);
+  } catch (err) {
+    // FB_APP_ID chưa cấu hình — redirect về /ads/connect với hint rõ ràng
+    const msg = err instanceof Error ? err.message : String(err);
+    const url = new URL(
+      returnTo === 'ads' ? '/ads/connect' : '/channels/new/facebook',
+      req.nextUrl.origin
+    );
+    url.searchParams.set('error', encodeURIComponent(msg));
+    return NextResponse.redirect(url);
+  }
 }

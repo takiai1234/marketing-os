@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { listAdAccountsForUser } from '@/lib/queries/ad-accounts';
+import { isFbAppConfigured } from '@/lib/fb/oauth-flow';
 import { db } from '@/lib/db';
 import { Button } from '@/components/ui/button';
 
@@ -24,16 +25,9 @@ export default async function AdsConnectPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
-  // Defensive: check env FB credentials. "placeholder" = chưa set, OAuth
-  // sẽ fail với "ID ứng dụng không hợp lệ" từ Facebook side.
-  const fbAppId = process.env.FB_APP_ID ?? '';
-  const fbAppSecret = process.env.FB_APP_SECRET ?? '';
-  const envMisconfigured =
-    !fbAppId ||
-    !fbAppSecret ||
-    fbAppId === 'placeholder' ||
-    fbAppSecret === 'placeholder' ||
-    fbAppId.length < 10;
+  // Check FB credentials: DB-first (admin paste qua UI), env-fallback.
+  // Nếu cả 2 đều thiếu/placeholder → OAuth sẽ fail "ID ứng dụng không hợp lệ".
+  const envMisconfigured = !(await isFbAppConfigured());
 
   // Hiển thị số page user đã connect (để user biết flow này không ảnh hưởng)
   const pagesRes = await db.query<{ count: string }>(
@@ -64,17 +58,10 @@ export default async function AdsConnectPage() {
             <AlertCircleIcon className="size-5 text-rose-600 mt-0.5 shrink-0" />
             <div className="space-y-2 text-sm text-rose-900">
               <p className="font-semibold">
-                Server thiếu cấu hình Facebook App ID/Secret
+                Chưa cấu hình Facebook App ID + Secret
               </p>
               <p>
-                Env <code className="bg-white px-1 rounded">FB_APP_ID</code> hoặc{' '}
-                <code className="bg-white px-1 rounded">FB_APP_SECRET</code> đang là{' '}
-                <code className="bg-white px-1 rounded">"placeholder"</code> (chưa
-                được set thực tế). Click "Cấp quyền" sẽ thấy FB báo "ID ứng dụng
-                không hợp lệ".
-              </p>
-              <p className="text-xs">
-                Admin cần lấy App ID + Secret từ{' '}
+                Để OAuth hoạt động, admin cần paste App ID + Secret từ{' '}
                 <a
                   href="https://developers.facebook.com/apps"
                   target="_blank"
@@ -83,9 +70,14 @@ export default async function AdsConnectPage() {
                 >
                   developers.facebook.com/apps
                 </a>{' '}
-                → Settings → Basic, rồi cập nhật trong Coolify env vars +
-                redeploy.
+                vào trang Settings của app.
               </p>
+              <Link
+                href="/settings/integrations"
+                className="inline-block bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded text-xs font-semibold mt-1"
+              >
+                → Mở Settings để nhập App ID + Secret
+              </Link>
             </div>
           </div>
         </div>

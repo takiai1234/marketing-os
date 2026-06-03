@@ -8,11 +8,17 @@ import { getUserRole } from '@/lib/auth/get-role';
 import { listSettingsMetadata } from '@/lib/settings/api-keys';
 import { OPENROUTER_KEY_NAME } from '@/lib/llm/openrouter';
 import { KIE_AI_KEY_NAME } from '@/lib/llm/kie-ai';
+import { FB_APP_ID_KEY, FB_APP_SECRET_KEY } from '@/lib/fb/oauth-flow';
 
 export const runtime = 'nodejs';
 
 // List các key managed qua UI — extend khi add provider mới
-const MANAGED_KEYS = [OPENROUTER_KEY_NAME, KIE_AI_KEY_NAME] as const;
+const MANAGED_KEYS = [
+  OPENROUTER_KEY_NAME,
+  KIE_AI_KEY_NAME,
+  FB_APP_ID_KEY,
+  FB_APP_SECRET_KEY,
+] as const;
 
 export async function GET(): Promise<NextResponse> {
   const user = await getCurrentUser();
