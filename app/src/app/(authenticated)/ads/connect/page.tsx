@@ -24,6 +24,17 @@ export default async function AdsConnectPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
+  // Defensive: check env FB credentials. "placeholder" = chưa set, OAuth
+  // sẽ fail với "ID ứng dụng không hợp lệ" từ Facebook side.
+  const fbAppId = process.env.FB_APP_ID ?? '';
+  const fbAppSecret = process.env.FB_APP_SECRET ?? '';
+  const envMisconfigured =
+    !fbAppId ||
+    !fbAppSecret ||
+    fbAppId === 'placeholder' ||
+    fbAppSecret === 'placeholder' ||
+    fbAppId.length < 10;
+
   // Hiển thị số page user đã connect (để user biết flow này không ảnh hưởng)
   const pagesRes = await db.query<{ count: string }>(
     `SELECT COUNT(*)::TEXT AS count
@@ -46,6 +57,39 @@ export default async function AdsConnectPage() {
         <ArrowLeft className="size-3.5" />
         Quay lại danh sách
       </Link>
+
+      {envMisconfigured && (
+        <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 px-5 py-4">
+          <div className="flex items-start gap-2">
+            <AlertCircleIcon className="size-5 text-rose-600 mt-0.5 shrink-0" />
+            <div className="space-y-2 text-sm text-rose-900">
+              <p className="font-semibold">
+                Server thiếu cấu hình Facebook App ID/Secret
+              </p>
+              <p>
+                Env <code className="bg-white px-1 rounded">FB_APP_ID</code> hoặc{' '}
+                <code className="bg-white px-1 rounded">FB_APP_SECRET</code> đang là{' '}
+                <code className="bg-white px-1 rounded">"placeholder"</code> (chưa
+                được set thực tế). Click "Cấp quyền" sẽ thấy FB báo "ID ứng dụng
+                không hợp lệ".
+              </p>
+              <p className="text-xs">
+                Admin cần lấy App ID + Secret từ{' '}
+                <a
+                  href="https://developers.facebook.com/apps"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline font-semibold"
+                >
+                  developers.facebook.com/apps
+                </a>{' '}
+                → Settings → Basic, rồi cập nhật trong Coolify env vars +
+                redeploy.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-start gap-3">
         <div className="flex size-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600 shrink-0">
@@ -158,12 +202,23 @@ export default async function AdsConnectPage() {
           <Button variant="outline">Huỷ</Button>
         </Link>
         {/* return_to=ads → callback skip pages picker, redirect /ads */}
-        <a href="/api/auth/fb/connect?return_to=ads">
-          <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+        {envMisconfigured ? (
+          <Button
+            disabled
+            className="bg-zinc-300 text-zinc-500 cursor-not-allowed"
+            title="Server chưa cấu hình FB App ID/Secret — xem cảnh báo trên"
+          >
             <ZapIcon className="size-4" />
             Cấp quyền Facebook Ads
           </Button>
-        </a>
+        ) : (
+          <a href="/api/auth/fb/connect?return_to=ads">
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+              <ZapIcon className="size-4" />
+              Cấp quyền Facebook Ads
+            </Button>
+          </a>
+        )}
       </div>
 
       <p className="text-[11px] text-zinc-400 italic text-center mt-2">
