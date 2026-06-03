@@ -6,7 +6,13 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import type { AdAccountStatus } from '@/lib/queries/ad-accounts';
-import { CheckIcon, UnplugIcon, Trash2Icon, Loader2Icon } from 'lucide-react';
+import {
+  CheckIcon,
+  UnplugIcon,
+  Trash2Icon,
+  Loader2Icon,
+  RefreshCwIcon,
+} from 'lucide-react';
 
 interface Props {
   accountId: string;
@@ -15,7 +21,9 @@ interface Props {
 
 export function AdsAccountActions({ accountId, status }: Props) {
   const router = useRouter();
-  const [busy, setBusy] = useState<'activate' | 'disconnect' | 'delete' | null>(null);
+  const [busy, setBusy] = useState<'activate' | 'disconnect' | 'delete' | 'sync' | null>(
+    null
+  );
   const [_, startTransition] = useTransition();
 
   async function callPatch(action: 'activate' | 'disconnect') {
@@ -80,6 +88,42 @@ export function AdsAccountActions({ accountId, status }: Props) {
             <CheckIcon className="size-3" />
           )}
           Kích hoạt
+        </button>
+      )}
+      {status === 'active' && (
+        <button
+          type="button"
+          onClick={async () => {
+            setBusy('sync');
+            try {
+              const res = await fetch(`/api/ads/accounts/${accountId}/sync`, {
+                method: 'POST',
+              });
+              const data = (await res.json().catch(() => ({}))) as {
+                error?: string;
+                message?: string;
+              };
+              if (!res.ok) {
+                toast.error(data.error ?? 'Sync thất bại');
+                return;
+              }
+              toast.success(data.message ?? 'Đã sync xong');
+              startTransition(() => router.refresh());
+            } catch (err) {
+              toast.error((err as Error).message);
+            } finally {
+              setBusy(null);
+            }
+          }}
+          disabled={busy !== null}
+          className="inline-flex items-center gap-1 px-2 py-1 rounded text-blue-700 bg-blue-50 hover:bg-blue-100 ring-1 ring-blue-200 disabled:opacity-50"
+        >
+          {busy === 'sync' ? (
+            <Loader2Icon className="size-3 animate-spin" />
+          ) : (
+            <RefreshCwIcon className="size-3" />
+          )}
+          {busy === 'sync' ? 'Đang sync (10-60s)...' : 'Đồng bộ ngay'}
         </button>
       )}
       {(status === 'active' || status === 'error') && (

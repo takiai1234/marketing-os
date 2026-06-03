@@ -51,7 +51,7 @@ async function getEncryptedToken(adAccountId: string): Promise<Buffer | null> {
   return res.rows[0]?.encrypted_token ?? null;
 }
 
-async function syncOneAccount(account: {
+export async function syncOneAccount(account: {
   id: string;
   platform: string;
   externalId: string;

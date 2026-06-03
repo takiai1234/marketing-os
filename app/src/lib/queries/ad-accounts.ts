@@ -412,6 +412,141 @@ export async function getAccountSummaries(
   return map;
 }
 
+// ─── Detail page queries ────────────────────────────────────────────────
+
+export interface DailyMetricPoint {
+  date: string;              // ISO 'YYYY-MM-DD'
+  spendMicros: number;
+  impressions: number;
+  reach: number;
+  clicks: number;
+  conversions: number;
+}
+
+/** 30-day daily metrics — account-level only (campaign_id IS NULL).
+ *  Used for trend chart trên /ads/[id]. */
+export async function getAccountMetricsDaily(
+  adAccountId: string,
+  userId: string,
+  days = 30
+): Promise<DailyMetricPoint[]> {
+  const res = await db.query<{
+    date: string;
+    spend_micros: string;
+    impressions: string;
+    reach: string;
+    clicks: string;
+    conversions: string;
+  }>(
+    `SELECT
+        m.date::TEXT,
+        m.spend_micros::TEXT,
+        m.impressions::TEXT,
+        m.reach::TEXT,
+        m.clicks::TEXT,
+        m.conversions::TEXT
+      FROM ad_metric_daily m
+      JOIN ad_account a ON a.id = m.ad_account_id
+     WHERE m.ad_account_id = $1
+       AND a.owner_id = $2
+       AND m.campaign_id IS NULL
+       AND m.date >= CURRENT_DATE - INTERVAL '${days} days'
+     ORDER BY m.date ASC`,
+    [adAccountId, userId]
+  );
+  return res.rows.map((r) => ({
+    date: r.date,
+    spendMicros: Number(r.spend_micros),
+    impressions: Number(r.impressions),
+    reach: Number(r.reach),
+    clicks: Number(r.clicks),
+    conversions: Number(r.conversions),
+  }));
+}
+
+export interface CampaignWithSummary extends AdCampaign {
+  summary30d: {
+    spendMicros: number;
+    impressions: number;
+    clicks: number;
+    conversions: number;
+    ctr: number;
+  } | null;
+}
+
+/** Campaign list + 30d totals — table /ads/[id]. */
+export async function listCampaignsWithSummary(
+  adAccountId: string,
+  userId: string,
+  days = 30
+): Promise<CampaignWithSummary[]> {
+  const res = await db.query<{
+    id: string;
+    ad_account_id: string;
+    external_id: string;
+    name: string;
+    objective: string;
+    status: string;
+    daily_budget_micros: string | null;
+    lifetime_budget_micros: string | null;
+    start_time: string | null;
+    end_time: string | null;
+    created_at: string;
+    total_spend: string | null;
+    total_impressions: string | null;
+    total_clicks: string | null;
+    total_conversions: string | null;
+  }>(
+    `SELECT
+        c.id, c.ad_account_id, c.external_id, c.name, c.objective, c.status,
+        c.daily_budget_micros::TEXT, c.lifetime_budget_micros::TEXT,
+        c.start_time::TEXT, c.end_time::TEXT, c.created_at::TEXT,
+        COALESCE(SUM(m.spend_micros), 0)::TEXT  AS total_spend,
+        COALESCE(SUM(m.impressions), 0)::TEXT   AS total_impressions,
+        COALESCE(SUM(m.clicks), 0)::TEXT        AS total_clicks,
+        COALESCE(SUM(m.conversions), 0)::TEXT   AS total_conversions
+      FROM ad_campaign c
+      JOIN ad_account a ON a.id = c.ad_account_id
+      LEFT JOIN ad_metric_daily m
+        ON m.campaign_id = c.id
+       AND m.date >= CURRENT_DATE - INTERVAL '${days} days'
+     WHERE c.ad_account_id = $1 AND a.owner_id = $2
+     GROUP BY c.id
+     ORDER BY COALESCE(SUM(m.spend_micros), 0) DESC, c.created_at DESC`,
+    [adAccountId, userId]
+  );
+
+  return res.rows.map((r) => {
+    const spendMicros = Number(r.total_spend);
+    const impressions = Number(r.total_impressions);
+    const clicks = Number(r.total_clicks);
+    const conversions = Number(r.total_conversions);
+    const hasData = spendMicros > 0 || impressions > 0;
+    return {
+      id: r.id,
+      adAccountId: r.ad_account_id,
+      externalId: r.external_id,
+      name: r.name,
+      objective: r.objective,
+      status: r.status,
+      dailyBudgetMicros: r.daily_budget_micros !== null ? Number(r.daily_budget_micros) : null,
+      lifetimeBudgetMicros: r.lifetime_budget_micros !== null ? Number(r.lifetime_budget_micros) : null,
+      startTime: r.start_time,
+      endTime: r.end_time,
+      createdAt: r.created_at,
+      summary30d: hasData
+        ? {
+            spendMicros,
+            impressions,
+            clicks,
+            conversions,
+            ctr: impressions > 0 ? clicks / impressions : 0,
+          }
+        : null,
+    };
+  });
+}
+
 /** All active ad accounts — used by cron job to know which to sync. */
 export async function listActiveAdAccounts(): Promise<AdAccount[]> {
   const res = await db.query<AdAccountRow>(

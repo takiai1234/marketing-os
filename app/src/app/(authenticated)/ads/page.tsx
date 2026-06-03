@@ -264,12 +264,17 @@ function AccountCard({
               {status.label}
             </span>
           </div>
-          <h3
-            className="text-sm font-semibold text-zinc-900 truncate"
-            title={account.name}
+          <Link
+            href={`/ads/${account.id}`}
+            className="block group"
           >
-            {account.name}
-          </h3>
+            <h3
+              className="text-sm font-semibold text-zinc-900 truncate group-hover:text-blue-700"
+              title={account.name}
+            >
+              {account.name} →
+            </h3>
+          </Link>
           <p className="text-[11px] text-zinc-500 mt-0.5">
             ID: <code className="font-mono">{account.externalId}</code> ·{' '}
             {account.currency}
