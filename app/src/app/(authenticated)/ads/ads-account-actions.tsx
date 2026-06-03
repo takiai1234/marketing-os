@@ -141,21 +141,22 @@ export function AdsAccountActions({ accountId, status }: Props) {
           Ngắt
         </button>
       )}
-      {status === 'disconnected' && (
-        <button
-          type="button"
-          onClick={callDelete}
-          disabled={busy !== null}
-          className="inline-flex items-center gap-1 px-2 py-1 rounded text-rose-700 hover:text-rose-900 hover:bg-rose-50 disabled:opacity-50"
-        >
-          {busy === 'delete' ? (
-            <Loader2Icon className="size-3 animate-spin" />
-          ) : (
-            <Trash2Icon className="size-3" />
-          )}
-          Xoá
-        </button>
-      )}
+      {/* Xoá luôn hiển thị — user có thể clean up bất kỳ status nào
+          (pending/active/error/disconnected). Tránh dust accumulation
+          khi đổi FB app hoặc test nhiều lần. */}
+      <button
+        type="button"
+        onClick={callDelete}
+        disabled={busy !== null}
+        className="inline-flex items-center gap-1 px-2 py-1 rounded text-rose-700 hover:text-rose-900 hover:bg-rose-50 disabled:opacity-50"
+      >
+        {busy === 'delete' ? (
+          <Loader2Icon className="size-3 animate-spin" />
+        ) : (
+          <Trash2Icon className="size-3" />
+        )}
+        Xoá
+      </button>
     </div>
   );
 }

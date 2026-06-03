@@ -181,6 +181,36 @@ export async function markAdAccountError(id: string, error: string): Promise<voi
   );
 }
 
+/** Mark stale ad_accounts: rows của user mà external_id KHÔNG có trong
+ *  current FB fetch → mark disconnected với note "Không thuộc scope hiện tại".
+ *  Dùng trong OAuth callback để cleanup khi user đổi FB App hoặc revoke
+ *  permission cho subset account. Return số lượng marked.
+ */
+export async function markStaleAdAccounts(
+  ownerId: string,
+  platform: AdPlatform,
+  currentExternalIds: string[]
+): Promise<number> {
+  if (currentExternalIds.length === 0) {
+    // Edge case: user revoke hết permission → đừng mass-disconnect, để user
+    // manual review. Skip để tránh accident.
+    return 0;
+  }
+  const res = await db.query(
+    `UPDATE ad_account
+        SET status = 'disconnected',
+            disconnected_at = NOW(),
+            updated_at = NOW(),
+            last_error = 'Không có trong scope FB app hiện tại — có thể do đổi app hoặc revoke. Xoá nếu không cần.'
+      WHERE owner_id = $1
+        AND platform = $2
+        AND status != 'disconnected'
+        AND NOT (external_id = ANY($3::TEXT[]))`,
+    [ownerId, platform, currentExternalIds]
+  );
+  return res.rowCount ?? 0;
+}
+
 export async function markAdAccountSynced(id: string): Promise<void> {
   await db.query(
     `UPDATE ad_account

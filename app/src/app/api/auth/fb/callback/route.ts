@@ -13,7 +13,10 @@ import {
   listUserPages,
 } from '@/lib/fb/oauth-flow';
 import { fetchAdAccounts } from '@/lib/fb/ads-api-client';
-import { upsertAdAccount } from '@/lib/queries/ad-accounts';
+import {
+  upsertAdAccount,
+  markStaleAdAccounts,
+} from '@/lib/queries/ad-accounts';
 import { encryptToken } from '@/lib/fb/token-encryption';
 import { db } from '@/lib/db';
 import type { FBPage } from '@/lib/fb/types';
@@ -99,6 +102,21 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         console.log(
           `[fb/callback] Discovered ${adAccounts.length} ad accounts for user ${user.userId}`
         );
+
+        // Auto-cleanup: mark old ad_accounts không có trong fetch hiện tại
+        // thành 'disconnected'. Trường hợp user đổi FB app, revoke account
+        // permission, BM transfer ownership, ...
+        const currentIds = adAccounts.map((a) => a.id);
+        const staleCount = await markStaleAdAccounts(
+          user.userId,
+          'facebook',
+          currentIds
+        );
+        if (staleCount > 0) {
+          console.log(
+            `[fb/callback] Marked ${staleCount} stale ad accounts as disconnected for user ${user.userId}`
+          );
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

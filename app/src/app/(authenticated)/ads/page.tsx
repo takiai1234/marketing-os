@@ -51,6 +51,7 @@ export default async function AdsPage() {
 
   const activeCount = accounts.filter((a) => a.status === 'active').length;
   const pendingCount = accounts.filter((a) => a.status === 'pending').length;
+  const disconnectedCount = accounts.filter((a) => a.status === 'disconnected').length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -78,6 +79,15 @@ export default async function AdsPage() {
             <div className="rounded-xl bg-amber-50 ring-1 ring-amber-200 px-4 py-3 text-sm text-amber-900">
               <strong>{pendingCount} ad account</strong> đang chờ bạn xác nhận.
               Click "Kích hoạt" trên từng card để bắt đầu đồng bộ data hàng ngày.
+            </div>
+          )}
+
+          {disconnectedCount > 0 && (
+            <div className="rounded-xl bg-zinc-50 ring-1 ring-zinc-200 px-4 py-3 text-sm text-zinc-700">
+              <strong>{disconnectedCount} ad account</strong> đã ngắt kết nối
+              (có thể do đổi FB app hoặc revoke). Bấm <strong>"Xoá"</strong>{' '}
+              để dọn data cũ, hoặc reconnect FB (Cấp quyền lại) để kích hoạt
+              lại nếu vẫn cần.
             </div>
           )}
 
