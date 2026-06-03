@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser, getSession } from '@/lib/auth/get-session';
+import { getPublicOrigin } from '@/lib/auth/public-origin';
 import {
   exchangeCodeForUserToken,
   extendUserToken,
@@ -20,9 +21,14 @@ import type { FBPage } from '@/lib/fb/types';
 export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
+  // Public origin — APP_URL env (vd https://test002.taki.vn). Tuyệt đối
+  // KHÔNG dùng req.nextUrl.origin vì sau proxy/Docker nó là 0.0.0.0:3000
+  // → user click thấy ERR_ADDRESS_INVALID.
+  const origin = getPublicOrigin(req);
+
   const user = await getCurrentUser();
   if (!user) {
-    return NextResponse.redirect(new URL('/login', req.nextUrl.origin));
+    return NextResponse.redirect(new URL('/login', origin));
   }
 
   const { searchParams } = req.nextUrl;
@@ -31,14 +37,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const errorParam = searchParams.get('error');
 
   if (errorParam) {
-    const url = new URL('/channels/new/facebook', req.nextUrl.origin);
+    const url = new URL('/channels/new/facebook', origin);
     url.searchParams.set('step', 'connect');
     url.searchParams.set('error', errorParam);
     return NextResponse.redirect(url);
   }
 
   if (!code || !state) {
-    const url = new URL('/channels/new/facebook', req.nextUrl.origin);
+    const url = new URL('/channels/new/facebook', origin);
     url.searchParams.set('step', 'connect');
     url.searchParams.set('error', 'missing_params');
     return NextResponse.redirect(url);
@@ -48,7 +54,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const expectedState = session.fb_oauth_state;
 
   if (!expectedState || expectedState !== state) {
-    const url = new URL('/channels/new/facebook', req.nextUrl.origin);
+    const url = new URL('/channels/new/facebook', origin);
     url.searchParams.set('step', 'connect');
     url.searchParams.set('error', 'invalid_state');
     return NextResponse.redirect(url);
@@ -126,10 +132,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       // Clear pages picker session — user không cần pick pages từ /ads flow
       session.fb_oauth_pages = undefined;
       await session.save();
-      return NextResponse.redirect(new URL('/ads', req.nextUrl.origin));
+      return NextResponse.redirect(new URL('/ads', origin));
     }
 
-    const redirectUrl = new URL('/channels/new/facebook', req.nextUrl.origin);
+    const redirectUrl = new URL('/channels/new/facebook', origin);
     redirectUrl.searchParams.set('step', 'pick');
     return NextResponse.redirect(redirectUrl);
   } catch (err) {
@@ -138,7 +144,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     await session.save();
 
     const message = err instanceof Error ? err.message : 'oauth_failed';
-    const url = new URL('/channels/new/facebook', req.nextUrl.origin);
+    const url = new URL('/channels/new/facebook', origin);
     url.searchParams.set('step', 'connect');
     url.searchParams.set('error', encodeURIComponent(message));
     return NextResponse.redirect(url);

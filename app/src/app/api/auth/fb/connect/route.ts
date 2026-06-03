@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { getCurrentUser, getSession } from '@/lib/auth/get-session';
+import { getPublicOrigin } from '@/lib/auth/public-origin';
 import { buildAuthUrl } from '@/lib/fb/oauth-flow';
 
 export const runtime = 'nodejs';
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const msg = err instanceof Error ? err.message : String(err);
     const url = new URL(
       returnTo === 'ads' ? '/ads/connect' : '/channels/new/facebook',
-      req.nextUrl.origin
+      getPublicOrigin(req)
     );
     url.searchParams.set('error', encodeURIComponent(msg));
     return NextResponse.redirect(url);
