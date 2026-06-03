@@ -56,28 +56,14 @@ export async function fetchTrendData(days: number): Promise<TrendDataPoint[]> {
       GROUP BY (sp.published_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date
     ),
     conv_agg AS (
-      -- Lead per day theo định nghĩa của sếp = landing + inbox FB Ads.
-      -- UNION ALL gộp 2 nguồn rồi GROUP BY date để 1 row/date dù cả 2 nguồn
-      -- đều có data ngày đó. campaign_id IS NULL filter trên ad_metric_daily
-      -- → chỉ lấy account-level rows, tránh double-count với campaign rows.
-      SELECT d AS date, SUM(n) AS conversions
-      FROM (
-        SELECT lpc.occurred_date AS d, lpc.conversion_count AS n
-        FROM landing_page_conversion lpc
-        INNER JOIN social_account sa ON sa.id = lpc.account_id
-        WHERE lpc.occurred_date >= CURRENT_DATE - $1::int
-          AND lpc.occurred_date <  CURRENT_DATE
-          AND sa.status != 'disconnected'
-        UNION ALL
-        SELECT amd.date AS d, amd.inbox_messages AS n
-        FROM ad_metric_daily amd
-        INNER JOIN ad_account aa ON aa.id = amd.ad_account_id
-        WHERE amd.date >= CURRENT_DATE - $1::int
-          AND amd.date <  CURRENT_DATE
-          AND aa.status != 'disconnected'
-          AND amd.campaign_id IS NULL
-      ) lead_sources
-      GROUP BY d
+      SELECT lpc.occurred_date AS date,
+             SUM(lpc.conversion_count) AS conversions
+      FROM landing_page_conversion lpc
+      INNER JOIN social_account sa ON sa.id = lpc.account_id
+      WHERE lpc.occurred_date >= CURRENT_DATE - $1::int
+        AND lpc.occurred_date <  CURRENT_DATE
+        AND sa.status != 'disconnected'
+      GROUP BY lpc.occurred_date
     )
     -- FULL OUTER JOIN across all 3 sources so a date that appears in any
     -- source still produces a row (with 0 for missing series).
