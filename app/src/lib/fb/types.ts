@@ -102,6 +102,27 @@ export interface FBPage {
   category?: string;
 }
 
+/** A single message inside a conversation (from the `messages` edge). */
+export interface FBConversationMessage {
+  id: string;
+  created_time: string;
+  /** Sender. `id` === page id → outbound (page replied); else inbound (customer). */
+  from?: { id?: string; name?: string; email?: string };
+}
+
+/** A Page Messenger conversation/thread (from `/{page-id}/conversations`).
+ *  Requires the token to carry the `pages_messaging` scope. */
+export interface FBConversation {
+  id: string;
+  /** Time of the most recent message in the thread. */
+  updated_time: string;
+  /** Messages the page has not read yet — used for the "unanswered" snapshot. */
+  unread_count?: number;
+  message_count?: number;
+  /** Inlined recent messages (capped via messages.limit(N) at request time). */
+  messages?: { data?: FBConversationMessage[] };
+}
+
 export interface FBPaginatedResponse<T> {
   data: T[];
   paging?: {

@@ -13,7 +13,7 @@ import 'dotenv/config';
 
 const JOB = process.argv[2];
 
-const VALID_JOBS = ['page_insights', 'posts', 'health'] as const;
+const VALID_JOBS = ['page_insights', 'posts', 'health', 'messages'] as const;
 type JobName = (typeof VALID_JOBS)[number];
 
 function isValidJob(val: string | undefined): val is JobName {
@@ -46,6 +46,11 @@ async function main(): Promise<void> {
     case 'health': {
       const { runHealthRecomputeJob } = await import('../src/lib/cron/job-health-recompute');
       await runHealthRecomputeJob();
+      break;
+    }
+    case 'messages': {
+      const { runMessageSyncJob } = await import('../src/lib/cron/job-message-sync');
+      await runMessageSyncJob();
       break;
     }
   }

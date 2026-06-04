@@ -44,6 +44,19 @@ export interface PostMetricDailyRow {
   video_views: number;
 }
 
+export interface PageMessageDailyRow {
+  account_id: string;
+  date: Date | string;
+  active_conversations: number;
+  inbound_messages: number;
+  outbound_messages: number;
+  responded_conversations: number;
+  /** Snapshot — only meaningful on "today" row (current unread threads). */
+  unanswered_conversations: number;
+  /** null khi chưa có hội thoại nào có cả tin khách + tin page trả lời. */
+  avg_first_response_minutes: number | null;
+}
+
 // ─── account_metric_daily ─────────────────────────────────────────────────────
 
 /**
@@ -180,6 +193,62 @@ export async function upsertPostMetricDaily(
         row.impressions,
         row.clicks,
         row.video_views,
+      ]
+    );
+    count++;
+  }
+
+  return count;
+}
+
+// ─── page_message_daily ───────────────────────────────────────────────────────
+
+/**
+ * UPSERT rows into page_message_daily.
+ * Conflict target: (account_id, date).
+ *
+ * Count columns use GREATEST(EXCLUDED, existing): re-running the same window
+ * yields equal-or-more-complete counts (messages.limit(25) cap may undercount
+ * very busy past days), so we never regress a previously-higher value.
+ *
+ * unanswered_conversations uses EXCLUDED: it's a CURRENT snapshot (unread
+ * threads right now), so the freshest value wins — including dropping to 0
+ * once the team has replied.
+ *
+ * avg_first_response_minutes uses COALESCE(EXCLUDED, existing): keep the old
+ * average if a re-run can no longer compute one (e.g. messages aged out of the
+ * 25-message window).
+ */
+export async function upsertPageMessageDaily(
+  rows: PageMessageDailyRow[]
+): Promise<number> {
+  if (rows.length === 0) return 0;
+
+  let count = 0;
+  for (const row of rows) {
+    await db.query(
+      `INSERT INTO page_message_daily
+         (account_id, date, active_conversations, inbound_messages,
+          outbound_messages, responded_conversations, unanswered_conversations,
+          avg_first_response_minutes, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+       ON CONFLICT (account_id, date) DO UPDATE SET
+         active_conversations     = GREATEST(EXCLUDED.active_conversations, page_message_daily.active_conversations),
+         inbound_messages         = GREATEST(EXCLUDED.inbound_messages, page_message_daily.inbound_messages),
+         outbound_messages        = GREATEST(EXCLUDED.outbound_messages, page_message_daily.outbound_messages),
+         responded_conversations  = GREATEST(EXCLUDED.responded_conversations, page_message_daily.responded_conversations),
+         unanswered_conversations = EXCLUDED.unanswered_conversations,
+         avg_first_response_minutes = COALESCE(EXCLUDED.avg_first_response_minutes, page_message_daily.avg_first_response_minutes),
+         updated_at               = NOW()`,
+      [
+        row.account_id,
+        row.date,
+        row.active_conversations,
+        row.inbound_messages,
+        row.outbound_messages,
+        row.responded_conversations,
+        row.unanswered_conversations,
+        row.avg_first_response_minutes,
       ]
     );
     count++;

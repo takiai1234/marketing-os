@@ -8,11 +8,13 @@ import {
 } from '@/lib/queries/channel-detail';
 import { fetchTeamMembers } from '@/lib/queries/team-members';
 import { fetchChannelMembers } from '@/lib/queries/channel-members';
+import { fetchChannelMessages7d } from '@/lib/queries/dashboard-messages';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { getUserRole } from '@/lib/auth/get-role';
 import { ChannelHeader } from './channel-header';
 import { PersonaPanel } from './persona-panel';
 import { MetricsTrendChart } from './metrics-trend-chart';
+import { MessagesTrendChart } from './messages-trend-chart';
 import { RecentPostsList } from './recent-posts-list';
 import { SyncLogTable } from './sync-log-table';
 import { BackButton } from './back-button';
@@ -50,9 +52,10 @@ export default async function ChannelDetailPage({ params }: PageProps) {
   // Channel members list — fetch luôn cho mọi user (kể cả non-admin) vì
   // chips display read-only cũng cần data. Pool team_member chỉ fetch
   // cho admin (dùng cho dropdown "Thêm thành viên" trong edit dialog).
-  const [metrics, posts, syncLog, channelMembers, allTeamMembers] =
+  const [metrics, messages, posts, syncLog, channelMembers, allTeamMembers] =
     await Promise.all([
       fetchMetrics7d(id),
+      fetchChannelMessages7d(id),
       fetchRecentPosts(id, 10),
       fetchSyncLog(id, 10),
       fetchChannelMembers(id),
@@ -78,6 +81,8 @@ export default async function ChannelDetailPage({ params }: PageProps) {
       
 
       <MetricsTrendChart data={metrics} />
+
+      <MessagesTrendChart data={messages} />
 
       <RecentPostsList posts={posts} />
 

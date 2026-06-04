@@ -12,6 +12,7 @@ import { runBundleImportJob } from '@/lib/cron/job-bundle-import';
 import { runBundleImportPollerJob } from '@/lib/cron/job-bundle-import-poller';
 import { runBundleConnectPollerJob } from '@/lib/cron/job-bundle-connect-poller';
 import { runAdsIngestionJob } from '@/lib/cron/job-ads-ingestion';
+import { runMessageSyncJob } from '@/lib/cron/job-message-sync';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -123,11 +124,21 @@ export function initCrons(): void {
     );
   });
 
+  // Job J: Page messaging (inbox) ingestion — every 2 hours (UTC).
+  // Pull recent Messenger conversations per FB page → daily inbox metrics
+  // (new conversations, response rate, response time, unanswered snapshot).
+  // Intraday cadence keeps the "unanswered" snapshot fresh for the CEO view.
+  cron.schedule('0 */2 * * *', () => {
+    runMessageSyncJob().catch((err) =>
+      console.error('[cron] job-message-sync uncaught error:', err)
+    );
+  });
+
   globalThis.__cron_initialized = true;
 
   const now = new Date();
   console.log(
-    `[cron] 9 jobs scheduled at ${now.toISOString()} ` +
+    `[cron] 10 jobs scheduled at ${now.toISOString()} ` +
       `(container TZ offset=${-now.getTimezoneOffset() / 60}h, ` +
       `process.env.TZ=${process.env.TZ ?? 'unset'})`
   );
@@ -153,6 +164,7 @@ export function initCrons(): void {
   console.log('  - bundle_poller:    */5 * * * *       (UTC, every 5 min)');
   console.log('  - connect_poller:   */2 * * * *       (UTC, every 2 min)');
   console.log('  - ads_ingestion:    30 4 * * *         (Asia/Ho_Chi_Minh, daily 04:30 VN)');
+  console.log('  - message_sync:     0 */2 * * *        (UTC, every 2h)');
 
   // Boot-time heartbeat: log every 60s for the first 5 minutes so an
   // operator looking at `docker logs` after deploy can confirm the Node

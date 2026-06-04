@@ -29,6 +29,7 @@ const JOB_LABEL: Record<SyncTypeT, string> = {
   manual_refresh: 'Manual refresh',
   ladipage: 'Ladipage sync',
   news_ingestion: 'News ingestion',
+  message_sync: 'Tin nhắn (inbox)',
 };
 
 const JOB_SCHEDULE: Record<SyncTypeT, string> = {
@@ -38,6 +39,7 @@ const JOB_SCHEDULE: Record<SyncTypeT, string> = {
   manual_refresh: 'On demand',
   ladipage: '23:30 Asia/Ho_Chi_Minh daily',
   news_ingestion: 'Hourly (phút :15)',
+  message_sync: 'Mỗi 2 giờ (UTC)',
 };
 
 const VALID_STATUS = new Set<SyncStatusT>(['success', 'failed', 'running']);
@@ -48,6 +50,7 @@ const VALID_TYPES = new Set<SyncTypeT>([
   'manual_refresh',
   'ladipage',
   'news_ingestion',
+  'message_sync',
 ]);
 
 function formatTime(iso: string | null): string {

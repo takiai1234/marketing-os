@@ -40,6 +40,10 @@ export interface ChannelTableRow {
   /** Delta tuyệt đối = followers_end - followers_start. null khi thiếu 1
    *  trong 2 anchor — phân biệt với 0 (đứng yên thật sự). */
   followersDelta: number | null;
+  /** Tin nhắn khách (inbound) trong range. 0 nếu page chưa có data messaging. */
+  messages: number;
+  /** Snapshot: số hội thoại đang chưa trả lời (ngay lúc này). */
+  unansweredNow: number;
 }
 
 export async function fetchChannelsTable(days: number): Promise<ChannelTableRow[]> {
@@ -54,6 +58,8 @@ export async function fetchChannelsTable(days: number): Promise<ChannelTableRow[
     leads: string | null;
     follower_start: string | null;
     follower_end: string | null;
+    messages: string | null;
+    unanswered_now: string | null;
   }>(
     `
     SELECT
@@ -92,7 +98,9 @@ export async function fetchChannelsTable(days: number): Promise<ChannelTableRow[
       COALESCE(p.posts_count, 0)::TEXT AS posts_count,
       lc.leads,
       f_start.followers  AS follower_start,
-      f_end.followers    AS follower_end
+      f_end.followers    AS follower_end,
+      COALESCE(msg.inbound, 0)::TEXT      AS messages,
+      COALESCE(msg_now.unanswered, 0)::TEXT AS unanswered_now
     FROM social_account sa
     -- agg: SUM range — dùng cho FB (daily delta). Non-FB sẽ ignore via CASE.
     LEFT JOIN LATERAL (
@@ -147,6 +155,21 @@ export async function fetchChannelsTable(days: number): Promise<ChannelTableRow[
         AND date < CURRENT_DATE
       ORDER BY date ASC LIMIT 1
     ) f_start_in_range ON TRUE
+    -- Messaging: inbound trong range + snapshot "chưa trả lời" mới nhất.
+    -- Page chưa có data messaging (token thiếu pages_messaging) → 0.
+    LEFT JOIN LATERAL (
+      SELECT SUM(inbound_messages) AS inbound
+      FROM page_message_daily
+      WHERE account_id = sa.id
+        AND date >= CURRENT_DATE - $1::INT
+        AND date < CURRENT_DATE
+    ) msg ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT unanswered_conversations AS unanswered
+      FROM page_message_daily
+      WHERE account_id = sa.id
+      ORDER BY date DESC LIMIT 1
+    ) msg_now ON TRUE
     WHERE sa.status != 'disconnected'
     ORDER BY
       CASE
@@ -198,6 +221,8 @@ export async function fetchChannelsTable(days: number): Promise<ChannelTableRow[
       growthPercent,
       followers: followerEnd,
       followersDelta,
+      messages: row.messages !== null ? Number(row.messages) : 0,
+      unansweredNow: row.unanswered_now !== null ? Number(row.unanswered_now) : 0,
     };
   });
 }

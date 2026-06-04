@@ -32,6 +32,7 @@ const JOB_LABEL: Record<SyncTypeT, string> = {
   manual_refresh: 'Manual refresh',
   ladipage: 'Ladipage sync',
   news_ingestion: 'News ingestion',
+  message_sync: 'Tin nhắn (inbox)',
 };
 
 function formatTime(iso: string | null): string {

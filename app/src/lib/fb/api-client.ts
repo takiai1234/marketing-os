@@ -1,7 +1,13 @@
 // Facebook Graph API HTTP client with retry, timeout, and token-expiry detection.
 // All data-fetching calls go through the `fb()` wrapper defined here.
 
-import type { FBApiError, FBPageInsight, FBPagePost, FBPaginatedResponse } from './types';
+import type {
+  FBApiError,
+  FBPageInsight,
+  FBPagePost,
+  FBPaginatedResponse,
+  FBConversation,
+} from './types';
 import { TokenExpiredError } from './types';
 import { recordCall, truncateForLog } from '@/lib/sync/call-context';
 
@@ -429,4 +435,70 @@ export async function fetchPageInsights(
   );
 
   return data.data ?? [];
+}
+
+/** Inline field expansion for conversations. `messages.limit(25)` keeps it to a
+ *  single paginated call per page — recent message detail per thread is enough
+ *  to derive daily inbound/outbound counts + first-response time for SME volume.
+ *  NO whitespace inside — Graph API rejects it. */
+const CONVERSATION_FIELDS = [
+  'id',
+  'updated_time',
+  'unread_count',
+  'message_count',
+  'messages.limit(25){id,created_time,from}',
+].join(',');
+
+/**
+ * Fetch Messenger conversations for a page, newest-activity first.
+ *
+ * Requires the page token to carry `pages_messaging`. Pages connected via the
+ * app's OAuth flow (which does NOT request that scope) get an FB permission
+ * error — the caller (job-message-sync) catches it per-account and skips.
+ *
+ * Auto-paginates but stops early once a batch's OLDEST thread is already older
+ * than `sinceMs` (conversations come sorted by updated_time DESC), so we only
+ * pull threads with activity inside the lookback window.
+ *
+ * @param token   Decrypted page access token
+ * @param pageId  Facebook page ID
+ * @param sinceMs Lower bound (epoch ms) — stop paging past this updated_time
+ */
+export async function fetchPageConversations(
+  token: string,
+  pageId: string,
+  sinceMs: number
+): Promise<FBConversation[]> {
+  const all: FBConversation[] = [];
+  let after: string | undefined;
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    if (page > 0) await fbThrottle();
+
+    const params: Record<string, string> = {
+      fields: CONVERSATION_FIELDS,
+      limit: '25',
+    };
+    if (after) params.after = after;
+
+    const res = await fb<FBPaginatedResponse<FBConversation>>(
+      `/${pageId}/conversations`,
+      params,
+      token
+    );
+
+    const batch = res.data ?? [];
+    all.push(...batch);
+
+    // Early stop: if the OLDEST thread in this batch is already older than the
+    // window, no later page can contain newer threads.
+    const oldest = batch[batch.length - 1];
+    if (oldest && new Date(oldest.updated_time).getTime() < sinceMs) break;
+
+    const nextCursor = res.paging?.cursors?.after;
+    if (!res.paging?.next || !nextCursor || batch.length === 0) break;
+    after = nextCursor;
+  }
+
+  return all;
 }

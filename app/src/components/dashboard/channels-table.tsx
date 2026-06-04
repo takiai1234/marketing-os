@@ -87,6 +87,34 @@ function FollowersCell({
   );
 }
 
+/**
+ * Tin nhắn cell: tổng inbound trong range + dòng đỏ "N chưa trả lời" khi có
+ * hội thoại đang chờ. messages=0 → "—" (page chưa có data messaging).
+ */
+function MessagesCell({
+  messages,
+  unanswered,
+}: {
+  messages: number;
+  unanswered: number;
+}) {
+  if (messages === 0 && unanswered === 0) {
+    return <span className="text-zinc-400">—</span>;
+  }
+  return (
+    <div className="flex flex-col items-end leading-tight">
+      <span className="font-semibold text-zinc-800 tabular-nums">
+        {formatCompact(messages)}
+      </span>
+      {unanswered > 0 && (
+        <span className="text-[10.5px] tabular-nums text-red-500">
+          {unanswered} chưa trả lời
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function ChannelsTable({ data, days }: Props) {
   return (
     <div className="rounded-xl bg-white ring-1 ring-zinc-200 shadow-sm">
@@ -114,6 +142,7 @@ export function ChannelsTable({ data, days }: Props) {
                 <th className="text-left font-medium px-5 py-2.5">Tên kênh</th>
                 <th className="text-right font-medium px-3 py-2.5">Followers</th>
                 <th className="text-right font-medium px-3 py-2.5">Reach</th>
+                <th className="text-right font-medium px-3 py-2.5">Tin nhắn</th>
                 <th className="text-right font-medium px-3 py-2.5">Lead</th>
                 <th className="text-right font-medium px-3 py-2.5">
                   Tỉ lệ tương tác
@@ -147,6 +176,9 @@ export function ChannelsTable({ data, days }: Props) {
                   </td>
                   <td className="px-3 py-3 text-right tabular-nums text-zinc-700">
                     {formatCompact(row.reach)}
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    <MessagesCell messages={row.messages} unanswered={row.unansweredNow} />
                   </td>
                   <td className="px-3 py-3 text-right tabular-nums font-semibold text-zinc-800">
                     {row.leads > 0 ? formatCompact(row.leads) : <span className="text-zinc-400 font-normal">—</span>}

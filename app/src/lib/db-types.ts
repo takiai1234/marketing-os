@@ -38,7 +38,8 @@ export type SyncTypeT =
   | 'health_recompute'
   | 'manual_refresh'
   | 'ladipage'
-  | 'news_ingestion';
+  | 'news_ingestion'
+  | 'message_sync';
 
 export type SyncStatusT = 'running' | 'success' | 'failed';
 
