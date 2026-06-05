@@ -4,10 +4,8 @@ import { fetchChannelsTable } from '@/lib/queries/dashboard-channels-table';
 import { fetchUnreadAlerts } from '@/lib/queries/alerts';
 import { fetchTopPerformers } from '@/lib/queries/dashboard-top-performers';
 import { fetchFollowersTrend } from '@/lib/queries/dashboard-followers-trend';
-import { fetchMessagingKpis } from '@/lib/queries/dashboard-messages';
 import { parseRangeParam } from '@/lib/dashboard/time-range';
 import { KpiHeroGrid } from '@/components/dashboard/kpi-hero-grid';
-import { MessagingKpiRow } from '@/components/dashboard/messaging-kpi-row';
 import { PerformanceTrendChart } from '@/components/dashboard/performance-trend-chart';
 import { ChannelsTable } from '@/components/dashboard/channels-table';
 import { FollowersTrendChart } from '@/components/dashboard/followers-trend-chart';
@@ -29,7 +27,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const days = parseRangeParam(params.range);
 
   // Fetch in parallel — independent queries, no shared state.
-  const [kpi, trend, channels, alerts, topPerformers, followersTrend, messaging] =
+  const [kpi, trend, channels, alerts, topPerformers, followersTrend] =
     await Promise.all([
       getKpiData(days),
       getTrendData(days),
@@ -37,7 +35,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       fetchUnreadAlerts(10),
       fetchTopPerformers(days, 5),
       fetchFollowersTrend(days),
-      fetchMessagingKpis(days),
     ]);
 
   return (
@@ -53,11 +50,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <TimeRangeSelector current={days} />
       </div>
 
-      {/* Tier 1: 4 KPI cards with sparklines */}
+      {/* Tier 1: 4 KPI cards with sparklines (Lead = Ladipage + tin nhắn) */}
       <KpiHeroGrid data={kpi} days={days} trend={trend} />
-
-      {/* Tier 1b: Messaging / inbox KPIs */}
-      <MessagingKpiRow data={messaging} days={days} />
 
       {/* Tier 2: Performance trend full-width */}
       <PerformanceTrendChart data={trend} days={days} />

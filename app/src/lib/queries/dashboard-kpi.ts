@@ -63,20 +63,29 @@ export async function fetchKpiData(days: number): Promise<KpiData> {
     `,
       [days]
     ),
-    // Conversions (= leads) — SUM(conversion_count) from landing_page_conversion.
-    // INCLUDES today: cron pulls today's data at 23:30 VN, no extra sync delay.
+    // Lead = Ladipage conversions + tin nhắn (số hội thoại Messenger).
+    // Mỗi hội thoại = 1 người quan tâm = 1 lead (active_conversations).
+    // Cả 2 nguồn INCLUDE today (data final ngay khi ghi, không có sync lag).
     db.query<{ conv: string; conv_prev: string }>(
       `
       SELECT
-        COALESCE(SUM(lpc.conversion_count) FILTER (
-          WHERE lpc.occurred_date >= CURRENT_DATE - $1::int AND lpc.occurred_date <= CURRENT_DATE
+        COALESCE(SUM(u.cnt) FILTER (
+          WHERE u.d >= CURRENT_DATE - $1::int AND u.d <= CURRENT_DATE
         ), 0) AS conv,
-        COALESCE(SUM(lpc.conversion_count) FILTER (
-          WHERE lpc.occurred_date >= CURRENT_DATE - ($1::int * 2) AND lpc.occurred_date < CURRENT_DATE - $1::int
+        COALESCE(SUM(u.cnt) FILTER (
+          WHERE u.d >= CURRENT_DATE - ($1::int * 2) AND u.d < CURRENT_DATE - $1::int
         ), 0) AS conv_prev
-      FROM landing_page_conversion lpc
-      INNER JOIN social_account sa ON sa.id = lpc.account_id
-      WHERE sa.status != 'disconnected'
+      FROM (
+        SELECT lpc.occurred_date AS d, lpc.conversion_count AS cnt
+        FROM landing_page_conversion lpc
+        INNER JOIN social_account sa ON sa.id = lpc.account_id
+        WHERE sa.status != 'disconnected'
+        UNION ALL
+        SELECT pmd.date AS d, pmd.active_conversations AS cnt
+        FROM page_message_daily pmd
+        INNER JOIN social_account sa ON sa.id = pmd.account_id
+        WHERE sa.status != 'disconnected'
+      ) u
     `,
       [days]
     ),

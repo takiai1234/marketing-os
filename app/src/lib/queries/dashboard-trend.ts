@@ -64,19 +64,31 @@ export async function fetchTrendData(days: number): Promise<TrendDataPoint[]> {
         AND lpc.occurred_date <  CURRENT_DATE
         AND sa.status != 'disconnected'
       GROUP BY lpc.occurred_date
+    ),
+    -- Lead cũng gồm tin nhắn: số hội thoại Messenger/ngày (mỗi hội thoại = 1 lead).
+    msg_agg AS (
+      SELECT pmd.date AS date,
+             SUM(pmd.active_conversations) AS conversations
+      FROM page_message_daily pmd
+      INNER JOIN social_account sa ON sa.id = pmd.account_id
+      WHERE pmd.date >= CURRENT_DATE - $1::int
+        AND pmd.date <  CURRENT_DATE
+        AND sa.status != 'disconnected'
+      GROUP BY pmd.date
     )
     -- FULL OUTER JOIN across all 3 sources so a date that appears in any
     -- source still produces a row (with 0 for missing series).
     SELECT
-      COALESCE(m.date, p.date, c.date)::text AS date,
+      COALESCE(m.date, p.date, c.date, mm.date)::text AS date,
       COALESCE(m.reach, 0)        AS reach,
       COALESCE(m.engagement, 0)   AS engagement,
       COALESCE(m.followers, 0)    AS followers,
       COALESCE(p.total_post, 0)   AS total_post,
-      COALESCE(c.conversions, 0)  AS conversions
+      COALESCE(c.conversions, 0) + COALESCE(mm.conversions, 0) AS conversions
     FROM metric_agg m
     FULL OUTER JOIN post_agg p ON p.date = m.date
     FULL OUTER JOIN conv_agg c ON c.date = COALESCE(m.date, p.date)
+    FULL OUTER JOIN msg_agg mm ON mm.date = COALESCE(m.date, p.date, c.date)
     ORDER BY date ASC
   `,
     [days]
