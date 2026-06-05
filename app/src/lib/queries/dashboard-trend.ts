@@ -84,7 +84,7 @@ export async function fetchTrendData(days: number): Promise<TrendDataPoint[]> {
       COALESCE(m.engagement, 0)   AS engagement,
       COALESCE(m.followers, 0)    AS followers,
       COALESCE(p.total_post, 0)   AS total_post,
-      COALESCE(c.conversions, 0) + COALESCE(mm.conversions, 0) AS conversions
+      COALESCE(c.conversions, 0) + COALESCE(mm.conversations, 0) AS conversions
     FROM metric_agg m
     FULL OUTER JOIN post_agg p ON p.date = m.date
     FULL OUTER JOIN conv_agg c ON c.date = COALESCE(m.date, p.date)
