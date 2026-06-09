@@ -32,8 +32,19 @@ interface DbRow {
 // Score normalize qua window function MAX() OVER () — 1 query duy nhất, no second pass.
 export async function fetchTopPerformers(
   days: number,
-  limit = 5
+  limit = 5,
+  tagSlug?: string | null
 ): Promise<TopPerformerRow[]> {
+  // Tag filter — params: $1=days, $2=limit, $3=tagSlug (if active).
+  const tagFilter = tagSlug
+    ? `AND sa.id IN (
+        SELECT sat.account_id FROM social_account_tag sat
+        INNER JOIN channel_tag ct ON ct.id = sat.tag_id
+        WHERE ct.slug = $3
+      )`
+    : '';
+  const params: unknown[] = tagSlug ? [days, limit, tagSlug] : [days, limit];
+
   const res = await db.query<DbRow>(
     `
     WITH member_stats AS (
@@ -47,6 +58,7 @@ export async function fetchTopPerformers(
       -- còn hoạt động. Kênh disconnected thì coi như không có data hôm nay.
       INNER JOIN social_account sa ON sa.owner_member_id = tm.id
         AND sa.status != 'disconnected'
+        ${tagFilter}
       INNER JOIN social_post sp ON sp.account_id = sa.id
         AND sp.published_at >= CURRENT_DATE - $1::int
         AND sp.published_at < CURRENT_DATE
@@ -70,7 +82,7 @@ export async function fetchTopPerformers(
     ORDER BY engagement DESC, posts_count DESC
     LIMIT $2
     `,
-    [days, limit]
+    params
   );
 
   return res.rows.map((r, i) => ({

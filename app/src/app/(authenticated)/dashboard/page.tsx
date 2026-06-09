@@ -4,6 +4,7 @@ import { fetchChannelsTable } from '@/lib/queries/dashboard-channels-table';
 import { fetchUnreadAlerts } from '@/lib/queries/alerts';
 import { fetchTopPerformers } from '@/lib/queries/dashboard-top-performers';
 import { fetchFollowersTrend } from '@/lib/queries/dashboard-followers-trend';
+import { listAllTags } from '@/lib/queries/channel-tags';
 import { parseRangeParam } from '@/lib/dashboard/time-range';
 import { KpiHeroGrid } from '@/components/dashboard/kpi-hero-grid';
 import { PerformanceTrendChart } from '@/components/dashboard/performance-trend-chart';
@@ -13,6 +14,10 @@ import { TopPerformersRankedList } from '@/components/dashboard/top-performers-r
 import { ActiveCampaignsList } from '@/components/dashboard/active-campaigns-list';
 import { AlertsFeed } from '@/components/dashboard/alerts-feed';
 import { TimeRangeSelector } from '@/components/dashboard/time-range-selector';
+import {
+  ChannelTagTabs,
+  type ChannelTagOption,
+} from '@/components/dashboard/channel-tag-tabs';
 
 export const metadata: Metadata = {
   title: 'Dashboard — Marketing OS',
@@ -22,20 +27,42 @@ interface DashboardPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
+/** Normalize searchParams.tag → string|null. Array hoặc empty/invalid → null
+ *  (tab "Tổng"). Slug được inject vào SQL string nên PHẢI validate format. */
+function parseTagParam(value: string | string[] | undefined): string | null {
+  if (Array.isArray(value)) return null;
+  if (!value || value.trim() === '') return null;
+  if (!/^[a-z0-9-]+$/.test(value)) return null;
+  return value;
+}
+
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const params = await searchParams;
   const days = parseRangeParam(params.range);
+  const tagSlug = parseTagParam(params.tag);
 
   // Fetch in parallel — independent queries, no shared state.
-  const [kpi, trend, channels, alerts, topPerformers, followersTrend] =
+  // tagSlug truyền cùng days vào mọi query → toàn bộ KPI/chart/table filter
+  // đồng bộ theo nhóm kênh đang chọn. listAllTags() build tab list.
+  const [kpi, trend, channels, alerts, topPerformers, followersTrend, tags] =
     await Promise.all([
-      getKpiData(days),
-      getTrendData(days),
-      fetchChannelsTable(days),
+      getKpiData(days, tagSlug),
+      getTrendData(days, tagSlug),
+      fetchChannelsTable(days, tagSlug),
       fetchUnreadAlerts(10),
-      fetchTopPerformers(days, 5),
-      fetchFollowersTrend(days),
+      fetchTopPerformers(days, 5, tagSlug),
+      fetchFollowersTrend(days, tagSlug),
+      listAllTags(),
     ]);
+
+  // Build tab options: "Tổng" đầu list (slug=null) + danh sách tag từ DB.
+  const tagOptions: ChannelTagOption[] = [
+    { slug: null, label: 'Tổng' },
+    ...tags.map((t) => ({ slug: t.slug, label: t.name })),
+  ];
+
+  const activeTagName =
+    tagSlug !== null ? tags.find((t) => t.slug === tagSlug)?.name ?? null : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -44,11 +71,21 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <div>
           <h2 className="text-xl font-bold text-zinc-900">Bảng điều khiển CEO</h2>
           <p className="text-sm text-zinc-500 mt-0.5">
-            Hiệu suất toàn hệ thống · {days} ngày qua (không tính hôm nay)
+            {activeTagName ? (
+              <>
+                Nhóm <span className="font-medium text-zinc-700">{activeTagName}</span>{' '}
+                · {days} ngày qua (không tính hôm nay)
+              </>
+            ) : (
+              <>Hiệu suất toàn hệ thống · {days} ngày qua (không tính hôm nay)</>
+            )}
           </p>
         </div>
         <TimeRangeSelector current={days} />
       </div>
+
+      {/* Channel tag tabs — segmented control phía trên KPI grid */}
+      <ChannelTagTabs current={tagSlug} options={tagOptions} />
 
       {/* Tier 1: 4 KPI cards with sparklines (Lead = Ladipage + tin nhắn) */}
       <KpiHeroGrid data={kpi} days={days} trend={trend} />

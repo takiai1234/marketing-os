@@ -39,8 +39,20 @@ export interface FollowerTrendResponse {
 }
 
 export async function fetchFollowersTrend(
-  days: number
+  days: number,
+  tagSlug?: string | null
 ): Promise<FollowerTrendResponse> {
+  // Tag filter — $2 = tagSlug khi active. Bước 1 dùng $1=TOP_N, nên tag pad
+  // sang $2 thẳng.
+  const tagFilter = tagSlug
+    ? `AND sa.id IN (
+        SELECT sat.account_id FROM social_account_tag sat
+        INNER JOIN channel_tag ct ON ct.id = sat.tag_id
+        WHERE ct.slug = $2
+      )`
+    : '';
+  const topParams: unknown[] = tagSlug ? [TOP_N, tagSlug] : [TOP_N];
+
   // Bước 1: identify top N channels by current followers
   const topChannelsRes = await db.query<{
     account_id: string;
@@ -66,10 +78,11 @@ export async function fetchFollowersTrend(
     ) latest ON TRUE
     WHERE sa.status != 'disconnected'
       AND latest.followers > 0
+      ${tagFilter}
     ORDER BY latest.followers DESC
     LIMIT $1
     `,
-    [TOP_N]
+    topParams
   );
 
   const channels = topChannelsRes.rows.map((r) => ({

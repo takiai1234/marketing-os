@@ -20,6 +20,12 @@
 //      return cached value (up to 5 min old).
 //   2. Mutation handlers (Route Handlers / Server Actions) call
 //      invalidateDashboard() for immediate refresh — bypasses TTL.
+//
+// Tag dimension (channel_tag):
+//   getKpiData/getTrendData nhận thêm `tagSlug?` arg. Cache key tách per-tag
+//   bằng cách include slug trong array `keyParts` của unstable_cache — Next.js
+//   auto-hash args + keyParts → 1 entry per (days, tagSlug) combo. Tab "Tổng"
+//   pass null → cache entry riêng từ ['kpi-data-v1', 'all'].
 
 import { unstable_cache, revalidateTag } from 'next/cache';
 import { fetchKpiData } from '@/lib/queries/dashboard-kpi';
@@ -35,15 +41,20 @@ export const DASHBOARD_TAG = 'dashboard';
  *  writes (which can't invalidate) show up within one coffee break. */
 const CACHE_TTL_SECONDS = 100;
 
+/** Normalize tagSlug → cache key segment. null/undefined → 'all'. */
+function tagKey(tagSlug?: string | null): string {
+  return tagSlug && tagSlug.trim() !== '' ? tagSlug : 'all';
+}
+
 export const getKpiData = unstable_cache(
-  async (days: number) => fetchKpiData(days),
-  ['kpi-data-v1'],
+  async (days: number, tagSlug?: string | null) => fetchKpiData(days, tagSlug ?? null),
+  ['kpi-data-v2'],
   { tags: [DASHBOARD_TAG], revalidate: CACHE_TTL_SECONDS }
 );
 
 export const getTrendData = unstable_cache(
-  async (days: number) => fetchTrendData(days),
-  ['trend-data-v1'],
+  async (days: number, tagSlug?: string | null) => fetchTrendData(days, tagSlug ?? null),
+  ['trend-data-v2'],
   { tags: [DASHBOARD_TAG], revalidate: CACHE_TTL_SECONDS }
 );
 
@@ -53,6 +64,9 @@ export const getRecentRevenue = unstable_cache(
   { tags: [DASHBOARD_TAG], revalidate: CACHE_TTL_SECONDS }
 );
 
+/** Re-export tagKey for callers tạo cache key consistent (vd dashboard page). */
+export { tagKey };
+
 /**
  * Force-refresh dashboard cache immediately. Only call from Route Handlers
  * or Server Actions — these have the request context revalidateTag requires.
@@ -61,6 +75,7 @@ export const getRecentRevenue = unstable_cache(
  * Use for:
  *   - User submits / deletes a revenue entry (revenue routes)
  *   - Manual /api/sync/fetch-now finishes
+ *   - Admin assigns/changes channel tags
  */
 export function invalidateDashboard(): void {
   // 'max' profile = stale-while-revalidate. Required positional arg in

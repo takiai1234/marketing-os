@@ -9,9 +9,11 @@ import {
 import { fetchTeamMembers } from '@/lib/queries/team-members';
 import { fetchChannelMembers } from '@/lib/queries/channel-members';
 import { fetchChannelMessages7d } from '@/lib/queries/dashboard-messages';
+import { listAllTags, getTagsForAccount } from '@/lib/queries/channel-tags';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { getUserRole } from '@/lib/auth/get-role';
 import { ChannelHeader } from './channel-header';
+import { ChannelTagsEditor } from './channel-tags-editor';
 import { PersonaPanel } from './persona-panel';
 import { MetricsTrendChart } from './metrics-trend-chart';
 import { MessagesTrendChart } from './messages-trend-chart';
@@ -52,15 +54,25 @@ export default async function ChannelDetailPage({ params }: PageProps) {
   // Channel members list — fetch luôn cho mọi user (kể cả non-admin) vì
   // chips display read-only cũng cần data. Pool team_member chỉ fetch
   // cho admin (dùng cho dropdown "Thêm thành viên" trong edit dialog).
-  const [metrics, messages, posts, syncLog, channelMembers, allTeamMembers] =
-    await Promise.all([
-      fetchMetrics7d(id),
-      fetchChannelMessages7d(id),
-      fetchRecentPosts(id, 10),
-      fetchSyncLog(id, 10),
-      fetchChannelMembers(id),
-      isAdmin ? fetchTeamMembers() : Promise.resolve([]),
-    ]);
+  const [
+    metrics,
+    messages,
+    posts,
+    syncLog,
+    channelMembers,
+    allTeamMembers,
+    allTags,
+    channelTags,
+  ] = await Promise.all([
+    fetchMetrics7d(id),
+    fetchChannelMessages7d(id),
+    fetchRecentPosts(id, 10),
+    fetchSyncLog(id, 10),
+    fetchChannelMembers(id),
+    isAdmin ? fetchTeamMembers() : Promise.resolve([]),
+    listAllTags(),
+    getTagsForAccount(id),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -79,6 +91,13 @@ export default async function ChannelDetailPage({ params }: PageProps) {
       />
 
       
+
+      <ChannelTagsEditor
+        channelId={id}
+        allTags={allTags}
+        selectedTagIds={channelTags.map((t) => t.id)}
+        isAdmin={isAdmin}
+      />
 
       <MetricsTrendChart data={metrics} />
 

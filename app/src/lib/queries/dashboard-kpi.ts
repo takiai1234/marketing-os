@@ -17,6 +17,9 @@ import { db } from '@/lib/db';
 // `status = 'disconnected'`. Keeps 'active' + 'token_expired' (token_expired
 // is temporary — user may reconnect, so we still want their historical data).
 // Without this filter, kênh đã hủy kết nối vẫn được tính vào tổng KPI.
+//
+// Tag scope: nếu `tagSlug` được pass, mỗi query chỉ tính kênh có tag đó (qua
+// social_account_tag). Tab "Tổng" trên dashboard pass null → behavior cũ.
 export interface KpiData {
   reach: number;
   reachPrev: number;
@@ -30,7 +33,22 @@ export interface KpiData {
   totalFollowersPrev: number;
 }
 
-export async function fetchKpiData(days: number): Promise<KpiData> {
+export async function fetchKpiData(
+  days: number,
+  tagSlug?: string | null
+): Promise<KpiData> {
+  // Tag filter: nếu có slug → mọi query INNER JOIN channel_tag để chỉ tính
+  // kênh thuộc tag đó. Không có slug → behavior cũ (tab "Tổng").
+  // Params: $1=days, $2=tagSlug (chỉ dùng khi tagFilter active).
+  const tagFilter = tagSlug
+    ? `AND sa.id IN (
+        SELECT sat.account_id FROM social_account_tag sat
+        INNER JOIN channel_tag ct ON ct.id = sat.tag_id
+        WHERE ct.slug = $2
+      )`
+    : '';
+  const params: unknown[] = tagSlug ? [days, tagSlug] : [days];
+
   const [reachRes, erRes, convRes, revenueRes, followersRes] = await Promise.all([
     db.query<{ reach: string; reach_prev: string }>(
       `
@@ -44,8 +62,9 @@ export async function fetchKpiData(days: number): Promise<KpiData> {
       FROM account_metric_daily amd
       INNER JOIN social_account sa ON sa.id = amd.account_id
       WHERE sa.status != 'disconnected'
+        ${tagFilter}
     `,
-      [days]
+      params
     ),
     db.query<{ avg_er: string; avg_er_prev: string }>(
       `
@@ -60,34 +79,27 @@ export async function fetchKpiData(days: number): Promise<KpiData> {
       INNER JOIN social_post sp ON sp.id = pmd.post_id
       INNER JOIN social_account sa ON sa.id = sp.account_id
       WHERE sa.status != 'disconnected'
+        ${tagFilter}
     `,
-      [days]
+      params
     ),
-    // Lead = Ladipage conversions + tin nhắn (số hội thoại Messenger).
-    // Mỗi hội thoại = 1 người quan tâm = 1 lead (active_conversations).
-    // Cả 2 nguồn INCLUDE today (data final ngay khi ghi, không có sync lag).
+    // Conversions (= leads) — SUM(conversion_count) from landing_page_conversion.
+    // INCLUDES today: cron pulls today's data at 23:30 VN, no extra sync delay.
     db.query<{ conv: string; conv_prev: string }>(
       `
       SELECT
-        COALESCE(SUM(u.cnt) FILTER (
-          WHERE u.d >= CURRENT_DATE - $1::int AND u.d <= CURRENT_DATE
+        COALESCE(SUM(lpc.conversion_count) FILTER (
+          WHERE lpc.occurred_date >= CURRENT_DATE - $1::int AND lpc.occurred_date <= CURRENT_DATE
         ), 0) AS conv,
-        COALESCE(SUM(u.cnt) FILTER (
-          WHERE u.d >= CURRENT_DATE - ($1::int * 2) AND u.d < CURRENT_DATE - $1::int
+        COALESCE(SUM(lpc.conversion_count) FILTER (
+          WHERE lpc.occurred_date >= CURRENT_DATE - ($1::int * 2) AND lpc.occurred_date < CURRENT_DATE - $1::int
         ), 0) AS conv_prev
-      FROM (
-        SELECT lpc.occurred_date AS d, lpc.conversion_count AS cnt
-        FROM landing_page_conversion lpc
-        INNER JOIN social_account sa ON sa.id = lpc.account_id
-        WHERE sa.status != 'disconnected'
-        UNION ALL
-        SELECT pmd.date AS d, pmd.active_conversations AS cnt
-        FROM page_message_daily pmd
-        INNER JOIN social_account sa ON sa.id = pmd.account_id
-        WHERE sa.status != 'disconnected'
-      ) u
+      FROM landing_page_conversion lpc
+      INNER JOIN social_account sa ON sa.id = lpc.account_id
+      WHERE sa.status != 'disconnected'
+        ${tagFilter}
     `,
-      [days]
+      params
     ),
     // Revenue — SUM(amount_vnd) from manual_revenue.
     // INCLUDES today (entered manually, always final).
@@ -103,8 +115,9 @@ export async function fetchKpiData(days: number): Promise<KpiData> {
       FROM manual_revenue mr
       INNER JOIN social_account sa ON sa.id = mr.account_id
       WHERE sa.status != 'disconnected'
+        ${tagFilter}
     `,
-      [days]
+      params
     ),
     // Followers — current = latest snapshot per account.
     // Previous = latest snapshot per account on/before (CURRENT_DATE - days).
@@ -116,6 +129,7 @@ export async function fetchKpiData(days: number): Promise<KpiData> {
         FROM account_metric_daily amd
         INNER JOIN social_account sa ON sa.id = amd.account_id
         WHERE amd.date < CURRENT_DATE AND sa.status != 'disconnected'
+          ${tagFilter}
         ORDER BY amd.account_id, amd.date DESC
       ),
       latest_prev AS (
@@ -123,13 +137,14 @@ export async function fetchKpiData(days: number): Promise<KpiData> {
         FROM account_metric_daily amd
         INNER JOIN social_account sa ON sa.id = amd.account_id
         WHERE amd.date < CURRENT_DATE - $1::int AND sa.status != 'disconnected'
+          ${tagFilter}
         ORDER BY amd.account_id, amd.date DESC
       )
       SELECT
         COALESCE((SELECT SUM(followers) FROM latest_now), 0)  AS total_followers,
         COALESCE((SELECT SUM(followers) FROM latest_prev), 0) AS total_followers_prev
     `,
-      [days]
+      params
     ),
   ]);
 

@@ -42,7 +42,19 @@ export interface ChannelTableRow {
   followersDelta: number | null;
 }
 
-export async function fetchChannelsTable(days: number): Promise<ChannelTableRow[]> {
+export async function fetchChannelsTable(
+  days: number,
+  tagSlug?: string | null
+): Promise<ChannelTableRow[]> {
+  // Tag filter — chỉ inject khi tagSlug active. $2 = tagSlug, $1 = days.
+  const tagFilter = tagSlug
+    ? `AND sa.id IN (
+        SELECT sat.account_id FROM social_account_tag sat
+        INNER JOIN channel_tag ct ON ct.id = sat.tag_id
+        WHERE ct.slug = $2
+      )`
+    : '';
+  const queryParams: unknown[] = tagSlug ? [days, tagSlug] : [days];
   const res = await db.query<{
     account_id: string;
     name: string;
@@ -159,6 +171,7 @@ export async function fetchChannelsTable(days: number): Promise<ChannelTableRow[
         AND date <= CURRENT_DATE
     ) mc ON TRUE
     WHERE sa.status != 'disconnected'
+      ${tagFilter}
     ORDER BY
       CASE
         WHEN sa.platform = 'facebook' THEN COALESCE(agg.reach, 0)
@@ -173,7 +186,7 @@ export async function fetchChannelsTable(days: number): Promise<ChannelTableRow[
       END DESC,
       sa.name ASC
     `,
-    [days]
+    queryParams
   );
 
   return res.rows.map((row) => {
