@@ -104,14 +104,39 @@ export const DEFAULT_TWITTER_ACTOR = 'apidojo/twitter-scraper-lite';
 /** Default Facebook posts actor — apify/facebook-posts-scraper. */
 export const DEFAULT_FACEBOOK_ACTOR = 'apify/facebook-posts-scraper';
 
-/** Build input cho Twitter scraper từ list handle. */
+/** Build input cho Twitter scraper từ list handle.
+ *
+ *  Mỗi actor có field name khác nhau cho input. Để work với nhiều actor
+ *  cùng lúc, push cả mọi candidate field — actor sẽ chỉ đọc field nó cần,
+ *  ignore unknown fields (Apify behavior chung).
+ *
+ *  Actor coverage:
+ *    - apidojo/twitter-scraper-lite      → `twitterHandles`
+ *    - kaitoeasyapi/...                  → `searchTerms` hoặc `usernames`
+ *    - quacker/twitter-scraper           → `handles` hoặc `startUrls`
+ *    - microworlds/twitter-scraper       → `searchTerms: ["from:user"]`
+ *    - tweetscout/...                    → `usernames`
+ */
 export function buildTwitterInput(
   handles: string[],
   maxItemsPerHandle = 20
 ): Record<string, unknown> {
+  const maxTotal = handles.length * maxItemsPerHandle;
   return {
+    // apidojo, kaitoeasyapi, microworlds, tweetscout — đa số dùng 1 trong
+    // 5 field này:
     twitterHandles: handles,
-    maxItems: handles.length * maxItemsPerHandle,
+    handles: handles,
+    usernames: handles,
+    searchTerms: handles.map((h) => `from:${h}`),
+    startUrls: handles.map((h) => ({
+      url: `https://twitter.com/${h}`,
+    })),
+    // Limits — cũng đa danh field
+    maxItems: maxTotal,
+    maxTweets: maxTotal,
+    maxTweetsPerProfile: maxItemsPerHandle,
+    tweetsDesired: maxTotal,
     sort: 'Latest',
   };
 }

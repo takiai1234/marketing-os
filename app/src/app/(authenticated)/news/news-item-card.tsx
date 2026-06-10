@@ -7,6 +7,7 @@ import { ExternalLink } from 'lucide-react';
 import { getSourceById } from '@/lib/news/sources';
 import type { StoredNewsItem } from '@/lib/news/news-db';
 import { RewriteButton } from '@/components/rewrite/rewrite-button';
+import { NewsCoverImage } from './news-cover-image';
 
 /** Format "Xh trước" / "Xd trước" / "DD/MM" — pattern giống library/post-card. */
 function formatRelativeDate(isoStr: string | null): string {
@@ -28,14 +29,42 @@ function formatRelativeDate(isoStr: string | null): string {
 
 const FALLBACK_GRADIENT = 'from-zinc-400 to-zinc-600';
 
+// Gradient + label cho social source mới (twitter:user, facebook:page).
+// Map sang gradient riêng theo platform để UI phân biệt visual.
+const SOCIAL_GRADIENTS: Record<string, string> = {
+  twitter: 'from-sky-400 to-blue-600',
+  facebook: 'from-indigo-500 to-blue-700',
+};
+
+/** Resolve source → { name, gradient }.
+ *  - RSS source: lookup từ NEWS_SOURCES registry
+ *  - Social source format "twitter:sama" / "facebook:HoangChironCTO":
+ *    - name = "Twitter @sama" / "Facebook HoangChironCTO"
+ *    - gradient theo platform */
+function resolveSource(rawSource: string): { name: string; gradient: string } {
+  if (rawSource.startsWith('twitter:') || rawSource.startsWith('facebook:')) {
+    const [platform, handle] = rawSource.split(':');
+    const platformLabel =
+      platform === 'twitter' ? `@${handle}` : (handle ?? rawSource);
+    const prefix = platform === 'twitter' ? 'X' : 'FB';
+    return {
+      name: `${prefix} ${platformLabel}`,
+      gradient: SOCIAL_GRADIENTS[platform!] ?? FALLBACK_GRADIENT,
+    };
+  }
+  const meta = getSourceById(rawSource);
+  return {
+    name: meta?.name ?? rawSource,
+    gradient: meta?.gradient ?? FALLBACK_GRADIENT,
+  };
+}
+
 interface NewsItemCardProps {
   item: StoredNewsItem;
 }
 
 export function NewsItemCard({ item }: NewsItemCardProps) {
-  const source = getSourceById(item.source);
-  const sourceName = source?.name ?? item.source;
-  const gradient = source?.gradient ?? FALLBACK_GRADIENT;
+  const { name: sourceName, gradient } = resolveSource(item.source);
 
   // Build source content cho AI rewrite — title + excerpt (nếu có)
   const aiSourceContent = item.excerpt
@@ -50,25 +79,14 @@ export function NewsItemCard({ item }: NewsItemCardProps) {
       rel="noopener noreferrer"
       className="group flex flex-col rounded-xl bg-white ring-1 ring-zinc-200 overflow-hidden hover:ring-blue-400 hover:shadow-md transition-all"
     >
-      {/* Cover image — aspect 16/9 cố định để grid đều nhau */}
-      <div className={`relative aspect-[16/9] w-full bg-gradient-to-br ${gradient}`}>
-        {item.coverImage ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          // Lý do dùng <img> thay vì <Image>:
-          //   - URL ngoại đa dạng (4 nguồn) → cấu hình remotePatterns phức tạp
-          //   - Tin tức không cần optimization aggressive
-          //   - Tránh build error nếu domain mới được thêm
-          <img
-            src={item.coverImage}
-            alt=""
-            loading="lazy"
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-white/80 text-xs font-semibold tracking-wide">
-            {sourceName}
-          </div>
-        )}
+      {/* Cover image — aspect 16/9 cố định. Client subcomponent handle
+          onError fallback (FB CDN expire token, image 404, CORS block...) */}
+      <div className="relative">
+        <NewsCoverImage
+          src={item.coverImage}
+          gradient={gradient}
+          fallbackLabel={sourceName}
+        />
         {/* Badge nguồn — overlay góc trái-trên */}
         <span className="absolute top-2 left-2 rounded-md bg-black/60 backdrop-blur-sm px-2 py-0.5 text-[10px] font-semibold text-white">
           {sourceName}
