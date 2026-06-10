@@ -1,24 +1,37 @@
-// PUT  /api/settings/apify — save APIFY_API_TOKEN + APIFY_WEBHOOK_SECRET (admin only)
-// DELETE /api/settings/apify — xoá cả 2 keys
+// PUT  /api/settings/apify — save APIFY settings (token + usernames + pages)
+// POST /api/settings/apify — sync ngay (manual trigger cron)
+// DELETE /api/settings/apify — clear all Apify settings
+//
+// Settings keys lưu (encrypted) trong app_setting:
+//   - APIFY_API_TOKEN        (required cho cron chạy)
+//   - APIFY_TWITTER_HANDLES  (csv: "sama,rubenhassid,...")
+//   - APIFY_FACEBOOK_PAGES   (csv: "huanyoutube,nghecontent,..." hoặc full URL)
+//   - APIFY_TWITTER_ACTOR    (optional override, default apidojo/twitter-scraper-lite)
+//   - APIFY_FACEBOOK_ACTOR   (optional override, default apify/facebook-posts-scraper)
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { getUserRole } from '@/lib/auth/get-role';
 import { setSetting, deleteSetting } from '@/lib/settings/api-keys';
+import { runApifyNewsJob } from '@/lib/cron/job-apify-news';
 
 export const runtime = 'nodejs';
 
-const APIFY_API_TOKEN_KEY = 'APIFY_API_TOKEN';
-const APIFY_WEBHOOK_SECRET_KEY = 'APIFY_WEBHOOK_SECRET';
+const KEYS = {
+  TOKEN: 'APIFY_API_TOKEN',
+  TWITTER_HANDLES: 'APIFY_TWITTER_HANDLES',
+  FACEBOOK_PAGES: 'APIFY_FACEBOOK_PAGES',
+  TWITTER_ACTOR: 'APIFY_TWITTER_ACTOR',
+  FACEBOOK_ACTOR: 'APIFY_FACEBOOK_ACTOR',
+} as const;
 
 const putBodySchema = z.object({
-  apiToken: z.string().trim().min(8, 'Token quá ngắn').max(200, 'Token quá dài'),
-  webhookSecret: z
-    .string()
-    .trim()
-    .min(8, 'Secret tối thiểu 8 ký tự')
-    .max(128, 'Secret tối đa 128 ký tự'),
+  apiToken: z.string().trim().min(8).max(200).optional(),
+  twitterHandles: z.string().trim().max(5000).optional(),
+  facebookPages: z.string().trim().max(5000).optional(),
+  twitterActor: z.string().trim().max(100).optional(),
+  facebookActor: z.string().trim().max(100).optional(),
 });
 
 async function requireAdmin(): Promise<NextResponse | { userId: string }> {
@@ -48,28 +61,73 @@ export async function PUT(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  await setSetting(
-    APIFY_API_TOKEN_KEY,
-    parsed.data.apiToken,
-    auth.userId,
-    'Apify API token (fetch dataset items khi webhook callback)'
-  );
-  await setSetting(
-    APIFY_WEBHOOK_SECRET_KEY,
-    parsed.data.webhookSecret,
-    auth.userId,
-    'Secret verify webhook calls từ Apify (?secret= query param)'
-  );
+  // Mỗi field optional → chỉ save field nào user gửi (cho phép update từng phần).
+  // Empty string → KHÔNG xóa (dùng DELETE cho việc xóa). Bỏ qua.
+  const updates: Array<Promise<void>> = [];
+  if (parsed.data.apiToken) {
+    updates.push(
+      setSetting(KEYS.TOKEN, parsed.data.apiToken, auth.userId, 'Apify API token')
+    );
+  }
+  if (parsed.data.twitterHandles !== undefined) {
+    updates.push(
+      setSetting(
+        KEYS.TWITTER_HANDLES,
+        parsed.data.twitterHandles,
+        auth.userId,
+        'CSV list Twitter handles cần pull (vd "sama,rubenhassid")'
+      )
+    );
+  }
+  if (parsed.data.facebookPages !== undefined) {
+    updates.push(
+      setSetting(
+        KEYS.FACEBOOK_PAGES,
+        parsed.data.facebookPages,
+        auth.userId,
+        'CSV list FB page slugs hoặc URLs cần pull'
+      )
+    );
+  }
+  if (parsed.data.twitterActor) {
+    updates.push(setSetting(KEYS.TWITTER_ACTOR, parsed.data.twitterActor, auth.userId));
+  }
+  if (parsed.data.facebookActor) {
+    updates.push(setSetting(KEYS.FACEBOOK_ACTOR, parsed.data.facebookActor, auth.userId));
+  }
+
+  await Promise.all(updates);
 
   return NextResponse.json({ ok: true });
+}
+
+/** POST trigger sync ngay (không đợi cron 6h). Long-running — return job result. */
+export async function POST(): Promise<NextResponse> {
+  const auth = await requireAdmin();
+  if (auth instanceof NextResponse) return auth;
+
+  try {
+    const result = await runApifyNewsJob();
+    return NextResponse.json({ ok: true, result });
+  } catch (err) {
+    return NextResponse.json(
+      { ok: false, error: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
+    );
+  }
 }
 
 export async function DELETE(): Promise<NextResponse> {
   const auth = await requireAdmin();
   if (auth instanceof NextResponse) return auth;
 
-  await deleteSetting(APIFY_API_TOKEN_KEY);
-  await deleteSetting(APIFY_WEBHOOK_SECRET_KEY);
+  await Promise.all([
+    deleteSetting(KEYS.TOKEN),
+    deleteSetting(KEYS.TWITTER_HANDLES),
+    deleteSetting(KEYS.FACEBOOK_PAGES),
+    deleteSetting(KEYS.TWITTER_ACTOR),
+    deleteSetting(KEYS.FACEBOOK_ACTOR),
+  ]);
 
   return NextResponse.json({ ok: true });
 }

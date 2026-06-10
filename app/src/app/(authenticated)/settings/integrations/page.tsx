@@ -4,7 +4,7 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { getUserRole } from '@/lib/auth/get-role';
-import { listSettingsMetadata } from '@/lib/settings/api-keys';
+import { listSettingsMetadata, getSetting } from '@/lib/settings/api-keys';
 import { OPENROUTER_KEY_NAME } from '@/lib/llm/openrouter';
 import { KIE_AI_KEY_NAME } from '@/lib/llm/kie-ai';
 import { FB_APP_ID_KEY, FB_APP_SECRET_KEY } from '@/lib/fb/oauth-flow';
@@ -35,15 +35,21 @@ export default async function IntegrationsPage() {
     );
   }
 
-  const [orMeta, kieMeta, fbIdMeta, fbSecretMeta, apifyTokenMeta, apifySecretMeta] =
+  const [orMeta, kieMeta, fbIdMeta, fbSecretMeta, apifyTokenMeta] =
     await listSettingsMetadata([
       OPENROUTER_KEY_NAME,
       KIE_AI_KEY_NAME,
       FB_APP_ID_KEY,
       FB_APP_SECRET_KEY,
       'APIFY_API_TOKEN',
-      'APIFY_WEBHOOK_SECRET',
     ]);
+  // Load plaintext Apify lists (not secret — hiển thị OK trong UI)
+  const [twitterHandles, facebookPages, twitterActor, facebookActor] = await Promise.all([
+    getSetting('APIFY_TWITTER_HANDLES'),
+    getSetting('APIFY_FACEBOOK_PAGES'),
+    getSetting('APIFY_TWITTER_ACTOR'),
+    getSetting('APIFY_FACEBOOK_ACTOR'),
+  ]);
   const openrouter = orMeta ?? {
     key: OPENROUTER_KEY_NAME,
     isSet: false,
@@ -112,7 +118,10 @@ export default async function IntegrationsPage() {
 
       <ApifyForm
         apiTokenIsSet={apifyTokenMeta?.isSet ?? false}
-        webhookSecretIsSet={apifySecretMeta?.isSet ?? false}
+        twitterHandles={twitterHandles ?? ''}
+        facebookPages={facebookPages ?? ''}
+        twitterActor={twitterActor ?? ''}
+        facebookActor={facebookActor ?? ''}
         updatedAt={apifyTokenMeta?.updatedAt ?? null}
         updatedByName={apifyTokenMeta?.updatedByName ?? null}
       />

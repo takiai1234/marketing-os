@@ -13,6 +13,7 @@ import { runBundleImportPollerJob } from '@/lib/cron/job-bundle-import-poller';
 import { runBundleConnectPollerJob } from '@/lib/cron/job-bundle-connect-poller';
 import { runAdsIngestionJob } from '@/lib/cron/job-ads-ingestion';
 import { runMessageSyncJob } from '@/lib/cron/job-message-sync';
+import { runApifyNewsJob } from '@/lib/cron/job-apify-news';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -124,6 +125,15 @@ export function initCrons(): void {
     );
   });
 
+  // Job K: Apify news ingestion — every 6 hours.
+  // Pull Twitter handles + FB pages từ admin config qua Apify sync API.
+  // Skip cleanly nếu APIFY_API_TOKEN chưa set (admin chưa config).
+  cron.schedule('0 */6 * * *', () => {
+    runApifyNewsJob().catch((err) =>
+      console.error('[cron] job-apify-news uncaught error:', err)
+    );
+  });
+
   // Job J: Page messaging (inbox) ingestion — every 2 hours (UTC).
   // Pull recent Messenger conversations per FB page → daily inbox metrics
   // (new conversations, response rate, response time, unanswered snapshot).
@@ -138,7 +148,7 @@ export function initCrons(): void {
 
   const now = new Date();
   console.log(
-    `[cron] 10 jobs scheduled at ${now.toISOString()} ` +
+    `[cron] 11 jobs scheduled at ${now.toISOString()} ` +
       `(container TZ offset=${-now.getTimezoneOffset() / 60}h, ` +
       `process.env.TZ=${process.env.TZ ?? 'unset'})`
   );
@@ -165,6 +175,7 @@ export function initCrons(): void {
   console.log('  - connect_poller:   */2 * * * *       (UTC, every 2 min)');
   console.log('  - ads_ingestion:    30 4 * * *         (Asia/Ho_Chi_Minh, daily 04:30 VN)');
   console.log('  - message_sync:     0 */2 * * *        (UTC, every 2h)');
+  console.log('  - apify_news:       0 */6 * * *        (UTC, every 6h)');
 
   // Boot-time heartbeat: log every 60s for the first 5 minutes so an
   // operator looking at `docker logs` after deploy can confirm the Node

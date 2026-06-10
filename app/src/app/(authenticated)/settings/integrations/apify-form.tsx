@@ -1,13 +1,11 @@
 'use client';
 
-// Apify integration form — admin only.
-// 2 keys cùng 1 form (save atomic):
-//   - APIFY_API_TOKEN: app dùng fetch dataset items sau khi webhook fired
-//   - APIFY_WEBHOOK_SECRET: app verify webhook calls (?secret= query)
+// Apify integration form — simplified (no webhook config).
 //
-// Webhook URL hiển thị động theo origin user đang xem (dùng window.location).
+// User chỉ paste 1 token + 2 textarea username/page → app cron tự lo.
+// KHÔNG cần touch Apify Console.
 
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -22,16 +20,22 @@ import {
   EyeIcon,
   EyeOffIcon,
   Loader2Icon,
-  CopyIcon,
+  RefreshCwIcon,
   WebhookIcon,
 } from 'lucide-react';
 
 interface Props {
   apiTokenIsSet: boolean;
-  webhookSecretIsSet: boolean;
+  twitterHandles: string;
+  facebookPages: string;
+  twitterActor: string;
+  facebookActor: string;
   updatedAt: string | null;
   updatedByName: string | null;
 }
+
+const DEFAULT_TWITTER_ACTOR = 'apidojo/twitter-scraper-lite';
+const DEFAULT_FACEBOOK_ACTOR = 'apify/facebook-posts-scraper';
 
 function formatRelativeTime(iso: string | null): string {
   if (!iso) return '';
@@ -47,50 +51,58 @@ function formatRelativeTime(iso: string | null): string {
 
 export function ApifyForm({
   apiTokenIsSet,
-  webhookSecretIsSet,
+  twitterHandles: initialTwitter,
+  facebookPages: initialFacebook,
+  twitterActor: initialTwActor,
+  facebookActor: initialFbActor,
   updatedAt,
   updatedByName,
 }: Props) {
   const router = useRouter();
   const [apiToken, setApiToken] = useState('');
-  const [webhookSecret, setWebhookSecret] = useState('');
+  const [twitter, setTwitter] = useState(initialTwitter);
+  const [facebook, setFacebook] = useState(initialFacebook);
+  const [twActor, setTwActor] = useState(initialTwActor || DEFAULT_TWITTER_ACTOR);
+  const [fbActor, setFbActor] = useState(initialFbActor || DEFAULT_FACEBOOK_ACTOR);
   const [showToken, setShowToken] = useState(false);
-  const [showSecret, setShowSecret] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [bothSet, setBothSet] = useState(apiTokenIsSet && webhookSecretIsSet);
+  const [tokenSet, setTokenSet] = useState(apiTokenIsSet);
 
-  // Origin để dựng webhook URL hiển thị
-  const [origin, setOrigin] = useState('');
-  useEffect(() => {
-    setOrigin(window.location.origin);
-  }, []);
-
-  const sourceText = bothSet
-    ? `✓ Đã set Apify token + webhook secret ${updatedByName ? `bởi ${updatedByName}` : ''} ${formatRelativeTime(updatedAt)}`
-    : '✗ CHƯA SET — webhook từ Apify sẽ bị reject 401.';
+  // Đếm số source active
+  const twCount = twitter.split(/[,\n]/).map((s) => s.trim()).filter(Boolean).length;
+  const fbCount = facebook.split(/[,\n]/).map((s) => s.trim()).filter(Boolean).length;
+  const totalActive = (tokenSet ? 1 : 0) > 0 ? twCount + fbCount : 0;
 
   async function onSave(e: FormEvent) {
     e.preventDefault();
-    if (!apiToken.trim() || !webhookSecret.trim()) {
-      toast.error('Nhập đủ cả Apify API token + Webhook secret');
-      return;
-    }
     setSaving(true);
     try {
+      const body: Record<string, string> = {
+        twitterHandles: twitter.trim(),
+        facebookPages: facebook.trim(),
+      };
+      // Chỉ gửi token nếu user nhập mới
+      if (apiToken.trim()) body.apiToken = apiToken.trim();
+      if (twActor !== DEFAULT_TWITTER_ACTOR) body.twitterActor = twActor.trim();
+      if (fbActor !== DEFAULT_FACEBOOK_ACTOR) body.facebookActor = fbActor.trim();
+
       const res = await fetch('/api/settings/apify', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiToken, webhookSecret }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error ?? `HTTP ${res.status}`);
       }
       toast.success('Đã lưu cấu hình Apify');
-      setApiToken('');
-      setWebhookSecret('');
-      setBothSet(true);
+      if (apiToken.trim()) {
+        setApiToken('');
+        setTokenSet(true);
+      }
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Lưu fail');
@@ -99,14 +111,50 @@ export function ApifyForm({
     }
   }
 
+  async function onSyncNow() {
+    if (!tokenSet) {
+      toast.error('Cần save Apify token trước');
+      return;
+    }
+    if (twCount + fbCount === 0) {
+      toast.error('Chưa có username/page nào — paste danh sách trước');
+      return;
+    }
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/settings/apify', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error ?? `HTTP ${res.status}`);
+      }
+      const r = data.result;
+      const twMsg = r.twitter
+        ? `Twitter: ${r.twitter.inserted}/${r.twitter.fetched} new`
+        : 'Twitter: skip';
+      const fbMsg = r.facebook
+        ? `FB: ${r.facebook.inserted}/${r.facebook.fetched} new`
+        : 'FB: skip';
+      toast.success(`Sync xong! ${twMsg} · ${fbMsg}`);
+      router.refresh();
+    } catch (err) {
+      toast.error(
+        `Sync fail: ${err instanceof Error ? err.message : String(err)}`
+      );
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   async function onDelete() {
-    if (!window.confirm('Xoá Apify token + webhook secret khỏi DB?')) return;
+    if (!window.confirm('Xoá toàn bộ cấu hình Apify (token + list usernames)?')) return;
     setDeleting(true);
     try {
       const res = await fetch('/api/settings/apify', { method: 'DELETE' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       toast.success('Đã xoá cấu hình Apify');
-      setBothSet(false);
+      setTokenSet(false);
+      setTwitter('');
+      setFacebook('');
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Xoá fail');
@@ -115,52 +163,45 @@ export function ApifyForm({
     }
   }
 
-  function copyToClipboard(text: string) {
-    void navigator.clipboard.writeText(text).then(() => toast.success('Đã copy'));
-  }
-
-  const webhookTwitter = origin
-    ? `${origin}/api/news/apify-webhook?type=twitter&secret=${webhookSecret || '<SECRET>'}`
-    : '...';
-  const webhookFacebook = origin
-    ? `${origin}/api/news/apify-webhook?type=facebook&secret=${webhookSecret || '<SECRET>'}`
-    : '...';
-
   return (
     <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
       <div className="flex items-center gap-2 mb-1">
         <WebhookIcon className="size-4 text-violet-600" />
         <h4 className="text-sm font-semibold text-zinc-900">
-          Apify (Twitter + Facebook scraping)
+          Apify — Twitter + Facebook → /news
         </h4>
       </div>
       <p className="text-xs text-zinc-500 mb-3">
-        Pull Twitter/X tweets + Facebook page posts vào /news. User setup Apify
-        Schedule + webhook → Apify gọi app sau mỗi actor run.
+        Paste token + list usernames. App tự cron mỗi 6h pull tweet/post mới
+        vào /news. Bạn KHÔNG cần touch Apify Console.
       </p>
 
       {/* Status */}
       <div
         className={cn(
           'mb-3 rounded-md px-3 py-2 text-xs flex items-center gap-2',
-          bothSet
+          tokenSet
             ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
             : 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
         )}
       >
-        {bothSet ? (
+        {tokenSet ? (
           <CheckCircleIcon className="size-4" />
         ) : (
           <AlertCircleIcon className="size-4" />
         )}
-        <span>{sourceText}</span>
+        <span>
+          {tokenSet
+            ? `✓ Đã set ${updatedByName ? `bởi ${updatedByName}` : ''} ${formatRelativeTime(updatedAt)} · ${totalActive} username/page đang track`
+            : '✗ Chưa set token'}
+        </span>
       </div>
 
-      {/* Form */}
       <form onSubmit={onSave} className="space-y-3">
+        {/* API token */}
         <div>
           <Label htmlFor="apify-token" className="text-xs">
-            APIFY API token
+            Apify API token
           </Label>
           <div className="mt-1 flex gap-1">
             <Input
@@ -169,9 +210,7 @@ export function ApifyForm({
               value={apiToken}
               onChange={(e) => setApiToken(e.target.value)}
               placeholder={
-                apiTokenIsSet
-                  ? '(đã set — để trống nếu không đổi)'
-                  : 'apify_api_...'
+                tokenSet ? '(đã set — để trống nếu không đổi)' : 'apify_api_...'
               }
               className="font-mono text-xs"
               autoComplete="off"
@@ -186,7 +225,7 @@ export function ApifyForm({
             </button>
           </div>
           <p className="mt-1 text-[11px] text-zinc-500">
-            Lấy từ{' '}
+            Lấy tại{' '}
             <a
               href="https://console.apify.com/account/integrations"
               target="_blank"
@@ -198,151 +237,145 @@ export function ApifyForm({
           </p>
         </div>
 
+        {/* Twitter handles */}
         <div>
-          <Label htmlFor="apify-secret" className="text-xs">
-            Webhook secret (tự đặt — tối thiểu 8 ký tự)
+          <Label htmlFor="apify-twitter" className="text-xs">
+            Twitter handles ({twCount} tài khoản)
           </Label>
-          <div className="mt-1 flex gap-1">
-            <Input
-              id="apify-secret"
-              type={showSecret ? 'text' : 'password'}
-              value={webhookSecret}
-              onChange={(e) => setWebhookSecret(e.target.value)}
-              placeholder={
-                webhookSecretIsSet ? '(đã set — để trống nếu không đổi)' : 'random-string-12345...'
-              }
-              className="font-mono text-xs"
-              autoComplete="off"
-            />
-            <button
-              type="button"
-              onClick={() => setShowSecret(!showSecret)}
-              className="rounded-md border border-zinc-200 px-2 hover:bg-zinc-50"
-              aria-label="Toggle hiển thị secret"
-            >
-              {showSecret ? <EyeOffIcon className="size-4" /> : <EyeIcon className="size-4" />}
-            </button>
-          </div>
+          <textarea
+            id="apify-twitter"
+            value={twitter}
+            onChange={(e) => setTwitter(e.target.value)}
+            placeholder="sama, rubenhassid, NFTCPS, claudeai&#10;hoặc mỗi tài khoản 1 dòng (KHÔNG có @)"
+            rows={4}
+            className="mt-1 w-full rounded-md border border-zinc-200 px-3 py-2 text-xs font-mono focus:border-violet-400 focus:outline-none"
+          />
           <p className="mt-1 text-[11px] text-zinc-500">
-            Chuỗi random bất kỳ. Dùng làm <code>?secret=</code> trong URL webhook
-            để app verify request từ Apify.
+            Username không có dấu @. Cách bởi dấu phẩy hoặc xuống dòng.
           </p>
         </div>
 
-        <div className="flex gap-2 pt-1">
+        {/* Facebook pages */}
+        <div>
+          <Label htmlFor="apify-facebook" className="text-xs">
+            Facebook pages ({fbCount} trang)
+          </Label>
+          <textarea
+            id="apify-facebook"
+            value={facebook}
+            onChange={(e) => setFacebook(e.target.value)}
+            placeholder="huanyoutube, nghecontent, CuongMeAI&#10;hoặc full URL: https://www.facebook.com/HoangChironCTO"
+            rows={4}
+            className="mt-1 w-full rounded-md border border-zinc-200 px-3 py-2 text-xs font-mono focus:border-violet-400 focus:outline-none"
+          />
+          <p className="mt-1 text-[11px] text-zinc-500">
+            Page slug (vd <code>huanyoutube</code>) hoặc full URL. Chỉ pull
+            được page public — KHÔNG pull được profile cá nhân
+            (<code>profile.php?id=...</code>).
+          </p>
+        </div>
+
+        {/* Advanced — actor overrides */}
+        <details
+          open={showAdvanced}
+          onToggle={(e) => setShowAdvanced((e.target as HTMLDetailsElement).open)}
+        >
+          <summary className="cursor-pointer text-[11px] font-semibold text-zinc-500 hover:text-zinc-700">
+            Nâng cao: actor IDs (chỉ đổi khi biết bạn đang làm gì)
+          </summary>
+          <div className="mt-2 space-y-2 pl-2 border-l-2 border-zinc-100">
+            <div>
+              <Label htmlFor="tw-actor" className="text-[11px] text-zinc-600">
+                Twitter actor
+              </Label>
+              <Input
+                id="tw-actor"
+                value={twActor}
+                onChange={(e) => setTwActor(e.target.value)}
+                placeholder={DEFAULT_TWITTER_ACTOR}
+                className="font-mono text-xs h-8"
+              />
+            </div>
+            <div>
+              <Label htmlFor="fb-actor" className="text-[11px] text-zinc-600">
+                Facebook actor
+              </Label>
+              <Input
+                id="fb-actor"
+                value={fbActor}
+                onChange={(e) => setFbActor(e.target.value)}
+                placeholder={DEFAULT_FACEBOOK_ACTOR}
+                className="font-mono text-xs h-8"
+              />
+            </div>
+            <p className="text-[10px] text-zinc-400 italic">
+              Nếu actor khác → input shape có thể không khớp, cần check log{' '}
+              /settings/dashboard-debug.
+            </p>
+          </div>
+        </details>
+
+        {/* Actions */}
+        <div className="flex gap-2 pt-2">
           <Button type="submit" disabled={saving} className="text-xs">
             {saving && <Loader2Icon className="size-3 animate-spin mr-1" />}
             <KeyRoundIcon className="size-3 mr-1" />
-            Lưu cả 2
+            Lưu
           </Button>
-          {bothSet && (
+          <Button
+            type="button"
+            onClick={onSyncNow}
+            disabled={syncing || !tokenSet}
+            variant="outline"
+            className="text-xs bg-violet-50 text-violet-700 hover:bg-violet-100 border-violet-200"
+          >
+            {syncing && <Loader2Icon className="size-3 animate-spin mr-1" />}
+            {!syncing && <RefreshCwIcon className="size-3 mr-1" />}
+            {syncing ? 'Đang sync (1-3 phút)...' : 'Sync ngay'}
+          </Button>
+          {tokenSet && (
             <Button
               type="button"
               variant="outline"
               disabled={deleting}
               onClick={onDelete}
-              className="text-xs text-red-600 hover:bg-red-50"
+              className="text-xs text-red-600 hover:bg-red-50 ml-auto"
             >
               {deleting && <Loader2Icon className="size-3 animate-spin mr-1" />}
               <Trash2Icon className="size-3 mr-1" />
-              Xoá
+              Xoá tất cả
             </Button>
           )}
         </div>
       </form>
 
-      {/* Setup guide */}
-      <details className="mt-4 rounded-md bg-zinc-50 border border-zinc-200 p-3">
-        <summary className="cursor-pointer text-xs font-semibold text-zinc-700">
-          📖 Hướng dẫn setup Apify Schedule + Webhook
-        </summary>
-        <div className="mt-2 space-y-3 text-xs text-zinc-600">
-          <div>
-            <strong className="text-zinc-800">Bước 1: Apify token</strong>
-            <ol className="mt-1 space-y-0.5 list-decimal list-inside ml-1">
-              <li>Vào console.apify.com → Settings → Integrations</li>
-              <li>Copy "Personal API tokens" → paste vào ô trên</li>
-            </ol>
-          </div>
-          <div>
-            <strong className="text-zinc-800">Bước 2: Webhook URL</strong>
-            <p className="mt-1">Copy URL dưới, paste vào Apify Schedule → Webhook → URL:</p>
-            <div className="mt-1.5 space-y-1.5">
-              <div>
-                <p className="text-[10px] uppercase tracking-wide text-zinc-400 font-semibold">
-                  Cho actor Twitter:
-                </p>
-                <div className="flex items-center gap-1 mt-0.5">
-                  <code className="flex-1 bg-white border border-zinc-200 rounded px-2 py-1 text-[10px] font-mono break-all">
-                    {webhookTwitter}
-                  </code>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(webhookTwitter)}
-                    className="rounded border border-zinc-200 p-1 hover:bg-white"
-                    title="Copy"
-                  >
-                    <CopyIcon className="size-3" />
-                  </button>
-                </div>
-              </div>
-              <div>
-                <p className="text-[10px] uppercase tracking-wide text-zinc-400 font-semibold">
-                  Cho actor Facebook:
-                </p>
-                <div className="flex items-center gap-1 mt-0.5">
-                  <code className="flex-1 bg-white border border-zinc-200 rounded px-2 py-1 text-[10px] font-mono break-all">
-                    {webhookFacebook}
-                  </code>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(webhookFacebook)}
-                    className="rounded border border-zinc-200 p-1 hover:bg-white"
-                    title="Copy"
-                  >
-                    <CopyIcon className="size-3" />
-                  </button>
-                </div>
-              </div>
-            </div>
-            <p className="mt-1 text-[10px] italic text-zinc-500">
-              ⚠️ URL chứa secret. Đừng share public — chỉ paste trên Apify.
-            </p>
-          </div>
-          <div>
-            <strong className="text-zinc-800">Bước 3: Apify Schedule</strong>
-            <ol className="mt-1 space-y-0.5 list-decimal list-inside ml-1">
-              <li>Apify Console → Schedules → Create new schedule</li>
-              <li>Actor: chọn Twitter scraper (vd apidojo/twitter-scraper-lite) hoặc FB scraper</li>
-              <li>Input: list usernames cần pull (vd 10 Twitter handles)</li>
-              <li>Cron: vd <code>0 */6 * * *</code> (6h/lần)</li>
-              <li>Webhook tab → URL từ Bước 2 → Event: ACTOR.RUN.SUCCEEDED → Save</li>
-              <li>Click "Run now" để test, check /news 1-2 phút sau</li>
-            </ol>
-          </div>
-          <div>
-            <strong className="text-zinc-800">Bước 4: Verify</strong>
-            <p className="mt-1">
-              GET{' '}
-              <a
-                href="/api/news/apify-webhook"
-                target="_blank"
-                className="text-blue-600 hover:underline font-mono"
-              >
-                /api/news/apify-webhook
-              </a>{' '}
-              trả status JSON. Xem sync history tại{' '}
-              <a
-                href="/settings/dashboard-debug"
-                className="text-blue-600 hover:underline"
-              >
-                /settings/dashboard-debug
-              </a>{' '}
-              (bảng 3 — sync log).
-            </p>
-          </div>
-        </div>
-      </details>
+      {/* Mini guide */}
+      <div className="mt-4 rounded-md bg-blue-50 border border-blue-200 p-3 text-xs text-blue-800">
+        <strong>3 bước:</strong>
+        <ol className="mt-1 space-y-0.5 list-decimal list-inside">
+          <li>
+            Lấy token tại{' '}
+            <a
+              href="https://console.apify.com/account/integrations"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline font-mono"
+            >
+              console.apify.com/account/integrations
+            </a>{' '}
+            → paste vào ô trên
+          </li>
+          <li>Paste list Twitter handles + FB pages</li>
+          <li>
+            Click <strong>Lưu</strong> → <strong>Sync ngay</strong> để test
+            (1-3 phút). Sau đó cron 6h/lần tự chạy.
+          </li>
+        </ol>
+        <p className="mt-2 text-[11px] italic">
+          Pricing: Twitter ~$0.30/1k tweets, FB ~$25/m — phụ thuộc actor bạn
+          chọn trên Apify.
+        </p>
+      </div>
     </section>
   );
 }
