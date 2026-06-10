@@ -101,21 +101,36 @@ export async function fetchKpiData(
     `,
       params
     ),
-    // Conversions (= leads) — SUM(conversion_count) from landing_page_conversion.
-    // INCLUDES today: cron pulls today's data at 23:30 VN, no extra sync delay.
+    // Lead = Ladipage conversions + tin nhắn (số hội thoại Messenger).
+    // Định nghĩa của sếp: mỗi hội thoại = 1 người quan tâm = 1 lead.
+    // UNION ALL gộp 2 nguồn vào 1 stream rồi SUM theo window.
+    // Cả 2 nguồn INCLUDE today (data final ngay khi ghi, không có sync lag).
+    //
+    // ⚠️ Lưu ý: bug đã xảy ra khi rewrite cho tag filter — mất phần
+    // page_message_daily. Restore lại (Lead 48 chỉ là landing → thực tế
+    // landing + inbox sẽ cao hơn nhiều).
     db.query<{ conv: string; conv_prev: string }>(
       `
       SELECT
-        COALESCE(SUM(lpc.conversion_count) FILTER (
-          WHERE lpc.occurred_date >= CURRENT_DATE - $1::int AND lpc.occurred_date <= CURRENT_DATE
+        COALESCE(SUM(u.cnt) FILTER (
+          WHERE u.d >= CURRENT_DATE - $1::int AND u.d <= CURRENT_DATE
         ), 0) AS conv,
-        COALESCE(SUM(lpc.conversion_count) FILTER (
-          WHERE lpc.occurred_date >= CURRENT_DATE - ($1::int * 2) AND lpc.occurred_date < CURRENT_DATE - $1::int
+        COALESCE(SUM(u.cnt) FILTER (
+          WHERE u.d >= CURRENT_DATE - ($1::int * 2) AND u.d < CURRENT_DATE - $1::int
         ), 0) AS conv_prev
-      FROM landing_page_conversion lpc
-      INNER JOIN social_account sa ON sa.id = lpc.account_id
-      WHERE sa.status != 'disconnected'
-        ${tagFilter}
+      FROM (
+        SELECT lpc.occurred_date AS d, lpc.conversion_count AS cnt
+        FROM landing_page_conversion lpc
+        INNER JOIN social_account sa ON sa.id = lpc.account_id
+        WHERE sa.status != 'disconnected'
+          ${tagFilter}
+        UNION ALL
+        SELECT pmd.date AS d, pmd.active_conversations AS cnt
+        FROM page_message_daily pmd
+        INNER JOIN social_account sa ON sa.id = pmd.account_id
+        WHERE sa.status != 'disconnected'
+          ${tagFilter}
+      ) u
     `,
       params
     ),
