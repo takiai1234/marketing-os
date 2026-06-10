@@ -4,6 +4,7 @@ import { fetchChannelsTable } from '@/lib/queries/dashboard-channels-table';
 import { fetchUnreadAlerts } from '@/lib/queries/alerts';
 import { fetchTopPerformers } from '@/lib/queries/dashboard-top-performers';
 import { fetchFollowersTrend } from '@/lib/queries/dashboard-followers-trend';
+import { fetchTopReachPosts } from '@/lib/queries/dashboard-top-reach-posts';
 import { listAllTags } from '@/lib/queries/channel-tags';
 import { parseRangeParam } from '@/lib/dashboard/time-range';
 import { KpiHeroGrid } from '@/components/dashboard/kpi-hero-grid';
@@ -11,7 +12,7 @@ import { PerformanceTrendChart } from '@/components/dashboard/performance-trend-
 import { ChannelsTable } from '@/components/dashboard/channels-table';
 import { FollowersTrendChart } from '@/components/dashboard/followers-trend-chart';
 import { TopPerformersRankedList } from '@/components/dashboard/top-performers-ranked-list';
-import { ActiveCampaignsList } from '@/components/dashboard/active-campaigns-list';
+import { TopReachPostsList } from '@/components/dashboard/top-reach-posts-list';
 import { AlertsFeed } from '@/components/dashboard/alerts-feed';
 import { TimeRangeSelector } from '@/components/dashboard/time-range-selector';
 import {
@@ -45,16 +46,25 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   // top performers, followers trend — VẪN hiển thị toàn hệ thống không bị
   // filter (sếp muốn KPI tổng giữ nguyên, chỉ cần xem bảng channels per nhóm).
   // → tagSlug truyền duy nhất vào fetchChannelsTable.
-  const [kpi, trend, channels, alerts, topPerformers, followersTrend, tags] =
-    await Promise.all([
-      getKpiData(days),
-      getTrendData(days),
-      fetchChannelsTable(days, tagSlug),
-      fetchUnreadAlerts(10),
-      fetchTopPerformers(days, 5),
-      fetchFollowersTrend(days),
-      listAllTags(),
-    ]);
+  const [
+    kpi,
+    trend,
+    channels,
+    alerts,
+    topPerformers,
+    followersTrend,
+    topReachPosts,
+    tags,
+  ] = await Promise.all([
+    getKpiData(days),
+    getTrendData(days),
+    fetchChannelsTable(days, tagSlug),
+    fetchUnreadAlerts(10),
+    fetchTopPerformers(days, 5),
+    fetchFollowersTrend(days),
+    fetchTopReachPosts(days, 5),
+    listAllTags(),
+  ]);
 
   // Build tab options: "Tổng" đầu list (slug=null) + danh sách tag từ DB.
   const tagOptions: ChannelTagOption[] = [
@@ -99,12 +109,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           context cho cột Followers ở table phía trên. */}
       <FollowersTrendChart data={followersTrend} days={days} />
 
-      {/* Tier 4: Top Performers / Alerts / Active Campaigns.
-          On <lg, stack full-width. On md, 2-col with campaigns wrapping. */}
+      {/* Tier 4: Top Performers / Alerts / Top Reach Posts.
+          On <lg, stack full-width. On md, 2-col with widgets wrapping.
+          Top Reach Posts thay thế Active Campaigns (mock data) — show
+          các bài reach cao nhất kèm nút "Viết lại" để remix nhanh. */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <TopPerformersRankedList performers={topPerformers} days={days} />
         <AlertsFeed initialData={alerts} />
-        <ActiveCampaignsList />
+        <TopReachPostsList posts={topReachPosts} days={days} />
       </div>
     </div>
   );
