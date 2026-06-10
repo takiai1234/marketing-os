@@ -57,6 +57,13 @@ export async function fetchKpiData(
   const prevUntilDate =
     range?.prevUntilDate ?? new Date(today.getTime() - (days + 1) * 86_400_000);
 
+  // Pass dates as ISO YYYY-MM-DD strings (not Date objects).
+  // Lý do: node-pg serialize Date thành timestamptz string với TZ — PG có
+  // thể infer kiểu timestamptz thay vì date, conflict với $::date cast →
+  // throw 42P18 "could not determine data type". String YYYY-MM-DD parse
+  // rõ ràng thành date.
+  const toIso = (d: Date) => d.toISOString().slice(0, 10);
+
   // Params order: $1=sinceDate $2=untilDate $3=prevSinceDate $4=prevUntilDate
   //               $5=tagSlug (nếu có)
   const tagFilter = tagSlug
@@ -67,8 +74,8 @@ export async function fetchKpiData(
       )`
     : '';
   const params: unknown[] = tagSlug
-    ? [sinceDate, untilDate, prevSinceDate, prevUntilDate, tagSlug]
-    : [sinceDate, untilDate, prevSinceDate, prevUntilDate];
+    ? [toIso(sinceDate), toIso(untilDate), toIso(prevSinceDate), toIso(prevUntilDate), tagSlug]
+    : [toIso(sinceDate), toIso(untilDate), toIso(prevSinceDate), toIso(prevUntilDate)];
 
   const [reachRes, erRes, convRes, revenueRes, followersRes] = await Promise.all([
     db.query<{ reach: string; reach_prev: string }>(

@@ -48,6 +48,8 @@ export async function fetchTopPerformers(
   const untilDate =
     range?.untilDate ?? new Date(today.getTime() - 86_400_000);
 
+  const toIso = (d: Date) => d.toISOString().slice(0, 10);
+
   // Params: $1=sinceDate $2=untilDate $3=limit $4=tagSlug
   const tagFilter = tagSlug
     ? `AND sa.id IN (
@@ -57,8 +59,8 @@ export async function fetchTopPerformers(
       )`
     : '';
   const params: unknown[] = tagSlug
-    ? [sinceDate, untilDate, limit, tagSlug]
-    : [sinceDate, untilDate, limit];
+    ? [toIso(sinceDate), toIso(untilDate), limit, tagSlug]
+    : [toIso(sinceDate), toIso(untilDate), limit];
 
   const res = await db.query<DbRow>(
     `

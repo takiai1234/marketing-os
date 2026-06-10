@@ -55,6 +55,8 @@ export async function fetchFollowersTrend(
   const untilDate =
     range?.untilDate ?? new Date(today.getTime() - 86_400_000);
 
+  const toIso = (d: Date) => d.toISOString().slice(0, 10);
+
   // Bước 1 params: $1=TOP_N $2=untilDate (anchor latest snapshot) $3=tagSlug
   const tagFilter = tagSlug
     ? `AND sa.id IN (
@@ -64,8 +66,8 @@ export async function fetchFollowersTrend(
       )`
     : '';
   const topParams: unknown[] = tagSlug
-    ? [TOP_N, untilDate, tagSlug]
-    : [TOP_N, untilDate];
+    ? [TOP_N, toIso(untilDate), tagSlug]
+    : [TOP_N, toIso(untilDate)];
 
   // Bước 1: top N channels by latest followers (tại/trước untilDate)
   const topChannelsRes = await db.query<{
@@ -153,7 +155,7 @@ export async function fetchFollowersTrend(
       ON amd.account_id = ta.id AND amd.date = da.date
     ORDER BY ta.id, da.date ASC
     `,
-    [accountIds, sinceDate, untilDate]
+    [accountIds, toIso(sinceDate), toIso(untilDate)]
   );
 
   // Forward-fill state per account. Pass 1 lần qua rows đã sort by
