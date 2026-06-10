@@ -46,6 +46,9 @@ function compact(value: number): string {
 
 function formatValue(value: number, format: KpiFormat): string {
   if (format === 'percent') {
+    // KPI nhận value dạng % (1.5 = 1.5%). Caller phải convert ratio → %
+    // trước khi pass (vd `er * 100` nếu DB lưu decimal 0.015).
+    // toFixed(2) giữ 2 chữ số thập phân cho ER nhỏ (0.45%, 1.23%).
     return `${value.toFixed(2)}%`;
   }
   // number + currency share the same compact rule — only the unit suffix differs

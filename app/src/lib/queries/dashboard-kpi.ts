@@ -67,14 +67,32 @@ export async function fetchKpiData(
       params
     ),
     db.query<{ avg_er: string; avg_er_prev: string }>(
+      // Engagement Rate dùng WEIGHTED average: SUM(eng) / SUM(reach) thay vì
+      // AVG(per_post_ratio). AVG-of-ratios bị Simpson's paradox: post nhỏ 0
+      // engagement kéo trung bình xuống không đại diện. Weighted phản ánh
+      // đúng engagement rate tổng thể.
+      // Nhân 100 để convert ratio (0.03) → percent (3.00) cho UI hiển thị
+      // "3.00%" thay vì "0.03%".
       `
       SELECT
-        COALESCE(AVG(pmd.engagement_rate) FILTER (
-          WHERE pmd.date >= CURRENT_DATE - $1::int AND pmd.date < CURRENT_DATE
-        ), 0) AS avg_er,
-        COALESCE(AVG(pmd.engagement_rate) FILTER (
-          WHERE pmd.date >= CURRENT_DATE - ($1::int * 2) AND pmd.date < CURRENT_DATE - $1::int
-        ), 0) AS avg_er_prev
+        COALESCE(
+          (SUM(pmd.reactions + pmd.comments + pmd.shares) FILTER (
+            WHERE pmd.date >= CURRENT_DATE - $1::int AND pmd.date < CURRENT_DATE
+          ))::NUMERIC
+          / NULLIF(SUM(pmd.reach) FILTER (
+            WHERE pmd.date >= CURRENT_DATE - $1::int AND pmd.date < CURRENT_DATE
+          ), 0) * 100,
+          0
+        ) AS avg_er,
+        COALESCE(
+          (SUM(pmd.reactions + pmd.comments + pmd.shares) FILTER (
+            WHERE pmd.date >= CURRENT_DATE - ($1::int * 2) AND pmd.date < CURRENT_DATE - $1::int
+          ))::NUMERIC
+          / NULLIF(SUM(pmd.reach) FILTER (
+            WHERE pmd.date >= CURRENT_DATE - ($1::int * 2) AND pmd.date < CURRENT_DATE - $1::int
+          ), 0) * 100,
+          0
+        ) AS avg_er_prev
       FROM post_metric_daily pmd
       INNER JOIN social_post sp ON sp.id = pmd.post_id
       INNER JOIN social_account sa ON sa.id = sp.account_id
