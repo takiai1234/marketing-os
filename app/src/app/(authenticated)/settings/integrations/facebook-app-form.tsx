@@ -6,7 +6,7 @@
 // Lưu ý: cả 2 setting save cùng lúc trong 1 PUT để không bao giờ
 // có half-state (chỉ có ID thiếu Secret hoặc ngược lại).
 
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -64,6 +64,16 @@ export function FacebookAppForm({
   const router = useRouter();
   const [appId, setAppId] = useState('');
   const [appSecret, setAppSecret] = useState('');
+  // Origin hiện tại để hiển thị trong hướng dẫn FB App setup. Dùng
+  // window.location thay vì hardcode domain → instructions luôn khớp domain
+  // user đang xem (an toàn cả khi domain đổi vd test002 → mkt.taki.vn).
+  // useEffect vì SSR không có window.
+  const [origin, setOrigin] = useState('');
+  const [host, setHost] = useState('');
+  useEffect(() => {
+    setOrigin(window.location.origin);
+    setHost(window.location.host);
+  }, []);
   const [showSecret, setShowSecret] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -357,14 +367,15 @@ export function FacebookAppForm({
             <strong>App Secret</strong> (click "Show", nhập password FB)
           </li>
           <li>
-            App Domains thêm <code>test002.taki.vn</code>
+            App Domains thêm <code>{host || '<domain-app>'}</code>
           </li>
           <li>
-            Add Platform → Website → URL <code>https://test002.taki.vn</code>
+            Add Platform → Website → URL{' '}
+            <code>{origin || 'https://<domain-app>'}</code>
           </li>
           <li>
             Facebook Login → Settings → Valid OAuth Redirect URIs thêm{' '}
-            <code>https://test002.taki.vn/api/auth/fb/callback</code>
+            <code>{origin || 'https://<domain-app>'}/api/auth/fb/callback</code>
           </li>
           <li>
             Permissions: enable <code>pages_show_list</code>,{' '}
