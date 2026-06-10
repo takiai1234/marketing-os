@@ -19,6 +19,7 @@ const NAV: NavItem[] = [
   { label: 'Tài khoản', href: '/settings/account' },
   { label: 'Tích hợp API', href: '/settings/integrations', adminOnly: true },
   { label: 'Nhóm kênh', href: '/settings/channel-tags', adminOnly: true },
+  { label: 'Debug Dashboard', href: '/settings/dashboard-debug', adminOnly: true },
 ];
 
 export default function SettingsLayout({
