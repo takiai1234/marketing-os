@@ -11,6 +11,7 @@ import { FB_APP_ID_KEY, FB_APP_SECRET_KEY } from '@/lib/fb/oauth-flow';
 import { OpenRouterKeyForm } from './openrouter-key-form';
 import { KieAiKeyForm } from './kieai-key-form';
 import { FacebookAppForm } from './facebook-app-form';
+import { ApifyForm } from './apify-form';
 
 export const metadata = {
   title: 'Tích hợp API — Marketing OS',
@@ -34,12 +35,15 @@ export default async function IntegrationsPage() {
     );
   }
 
-  const [orMeta, kieMeta, fbIdMeta, fbSecretMeta] = await listSettingsMetadata([
-    OPENROUTER_KEY_NAME,
-    KIE_AI_KEY_NAME,
-    FB_APP_ID_KEY,
-    FB_APP_SECRET_KEY,
-  ]);
+  const [orMeta, kieMeta, fbIdMeta, fbSecretMeta, apifyTokenMeta, apifySecretMeta] =
+    await listSettingsMetadata([
+      OPENROUTER_KEY_NAME,
+      KIE_AI_KEY_NAME,
+      FB_APP_ID_KEY,
+      FB_APP_SECRET_KEY,
+      'APIFY_API_TOKEN',
+      'APIFY_WEBHOOK_SECRET',
+    ]);
   const openrouter = orMeta ?? {
     key: OPENROUTER_KEY_NAME,
     isSet: false,
@@ -106,10 +110,18 @@ export default async function IntegrationsPage() {
         hasEnvFallback={Boolean(process.env[KIE_AI_KEY_NAME])}
       />
 
+      <ApifyForm
+        apiTokenIsSet={apifyTokenMeta?.isSet ?? false}
+        webhookSecretIsSet={apifySecretMeta?.isSet ?? false}
+        updatedAt={apifyTokenMeta?.updatedAt ?? null}
+        updatedByName={apifyTokenMeta?.updatedByName ?? null}
+      />
+
       <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 px-5 py-4 text-xs text-zinc-500 italic">
         <strong>OpenRouter</strong> cho Chat LLM (Claude/GPT/Gemini/Grok/Llama) ·{' '}
-        <strong>kie.ai</strong> cho Tạo ảnh + Tạo video. Mỗi feature dùng 1 key
-        riêng — fail provider này không ảnh hưởng provider kia.
+        <strong>kie.ai</strong> cho Tạo ảnh + Tạo video ·{' '}
+        <strong>Apify</strong> cho pull Twitter/Facebook vào /news. Mỗi feature
+        1 key riêng — fail provider này không ảnh hưởng provider kia.
       </div>
     </div>
   );

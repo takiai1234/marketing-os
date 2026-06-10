@@ -5,6 +5,7 @@
 
 import { db } from '@/lib/db';
 import type { NewsItem } from './types';
+import type { MappedNewsArticle } from './apify-mapper';
 
 /** Row trả về từ SELECT — snake_case như DB. */
 interface NewsArticleRow {
@@ -107,6 +108,63 @@ export async function upsertNewsItems(
   const { rowCount } = await db.query(
     `
     INSERT INTO news_article (source, title, link, description, cover_image, published_at)
+    VALUES ${values.join(', ')}
+    ON CONFLICT (link) DO NOTHING
+    `,
+    params
+  );
+
+  return rowCount ?? 0;
+}
+
+/**
+ * Bulk upsert Apify items (Twitter/Facebook posts) → news_article.
+ * Khác upsertNewsItems vì có thêm source_type, author_handle/name/avatar,
+ * raw_payload (JSONB).
+ *
+ * Dedupe theo link (cùng UNIQUE constraint với RSS). Trả về số row insert thật.
+ */
+export async function upsertApifyArticles(
+  items: MappedNewsArticle[]
+): Promise<number> {
+  if (items.length === 0) return 0;
+
+  const COLS = 10; // source, source_type, title, link, description, cover_image,
+                   // published_at, author_handle, author_name, author_avatar, raw_payload
+                   // → 11 cột thực tế (raw_payload JSONB)
+  // Tách raw_payload thành param riêng vì JSONB cast cần ::jsonb
+  const values: string[] = [];
+  const params: unknown[] = [];
+  items.forEach((it, i) => {
+    const base = i * 11;
+    values.push(
+      `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, ` +
+        `$${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, ` +
+        `$${base + 11}::jsonb)`
+    );
+    params.push(
+      it.source,
+      it.sourceType,
+      it.title,
+      it.link,
+      it.description,
+      it.coverImage,
+      it.publishedAt,
+      it.authorHandle,
+      it.authorName,
+      it.authorAvatar,
+      JSON.stringify(it.rawPayload)
+    );
+  });
+
+  // Bỏ biến COLS unused warning bằng cách dùng nó trong assert ngầm — TS pure
+  void COLS;
+
+  const { rowCount } = await db.query(
+    `
+    INSERT INTO news_article
+      (source, source_type, title, link, description, cover_image,
+       published_at, author_handle, author_name, author_avatar, raw_payload)
     VALUES ${values.join(', ')}
     ON CONFLICT (link) DO NOTHING
     `,
