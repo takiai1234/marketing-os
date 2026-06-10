@@ -15,9 +15,15 @@ interface Props {
   days: number;
 }
 
+/** Format reach với 1 chữ số thập phân khi cần — phân biệt 9.5K vs 10.5K
+ *  thay vì cả 2 cùng hiển thị "10K" (gây hiểu nhầm). Trim ".0" nếu nguyên. */
 function formatReach(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+  if (n >= 1_000_000) {
+    return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  }
+  if (n >= 1_000) {
+    return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}K`;
+  }
   return n.toLocaleString('vi-VN');
 }
 

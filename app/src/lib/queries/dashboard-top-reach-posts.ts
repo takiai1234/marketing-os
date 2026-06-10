@@ -44,6 +44,10 @@ export async function fetchTopReachPosts(
   days = 7,
   limit = 5
 ): Promise<TopReachPost[]> {
+  // ⚠️ BUG fix: trước đây cast total_reach::TEXT trong SELECT rồi ORDER BY
+  // alias đó → PG sort theo CHỮ CÁI ("9999" > "10500" lex) → bài 99 reach
+  // đứng trên bài 10K reach. Fix: ORDER BY expression NUMERIC trực tiếp,
+  // KHÔNG dùng alias casted TEXT.
   const res = await db.query<DbRow>(
     `
     SELECT
@@ -65,7 +69,7 @@ export async function fetchTopReachPosts(
     GROUP BY sp.id, sp.content, sp.permalink, sp.post_type, sp.published_at,
              sa.id, sa.name, sa.platform
     HAVING COALESCE(SUM(pmd.reach), 0) > 0
-    ORDER BY total_reach DESC
+    ORDER BY COALESCE(SUM(pmd.reach), 0) DESC, sp.published_at DESC
     LIMIT $2::INT
     `,
     [days, limit]
