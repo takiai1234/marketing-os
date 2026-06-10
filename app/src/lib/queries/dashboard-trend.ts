@@ -72,8 +72,10 @@ export async function fetchTrendData(
              COUNT(*) AS total_post
       FROM social_post sp
       INNER JOIN social_account sa ON sa.id = sp.account_id
-      WHERE sp.published_at >= $1::timestamptz
-        AND sp.published_at <  ($2::date + INTERVAL '1 day')::timestamptz
+      -- $1/$2 ::date — published_at timestamptz auto-coerce ($1 dùng cast
+      -- ::date ở các CTE khác, type phải đồng nhất → tránh PG 42P18).
+      WHERE sp.published_at >= $1::date
+        AND sp.published_at <  $2::date + INTERVAL '1 day'
         AND sa.status != 'disconnected'
         ${tagFilter}
       GROUP BY (sp.published_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date
