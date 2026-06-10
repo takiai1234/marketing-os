@@ -41,17 +41,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const days = parseRangeParam(params.range);
   const tagSlug = parseTagParam(params.tag);
 
-  // Fetch in parallel — independent queries, no shared state.
-  // tagSlug truyền cùng days vào mọi query → toàn bộ KPI/chart/table filter
-  // đồng bộ theo nhóm kênh đang chọn. listAllTags() build tab list.
+  // Tag scope: CHỈ bảng "Chanel" filter theo tag. KPI cards, trend chart,
+  // top performers, followers trend — VẪN hiển thị toàn hệ thống không bị
+  // filter (sếp muốn KPI tổng giữ nguyên, chỉ cần xem bảng channels per nhóm).
+  // → tagSlug truyền duy nhất vào fetchChannelsTable.
   const [kpi, trend, channels, alerts, topPerformers, followersTrend, tags] =
     await Promise.all([
-      getKpiData(days, tagSlug),
-      getTrendData(days, tagSlug),
+      getKpiData(days),
+      getTrendData(days),
       fetchChannelsTable(days, tagSlug),
       fetchUnreadAlerts(10),
-      fetchTopPerformers(days, 5, tagSlug),
-      fetchFollowersTrend(days, tagSlug),
+      fetchTopPerformers(days, 5),
+      fetchFollowersTrend(days),
       listAllTags(),
     ]);
 
@@ -61,9 +62,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     ...tags.map((t) => ({ slug: t.slug, label: t.name })),
   ];
 
-  const activeTagName =
-    tagSlug !== null ? tags.find((t) => t.slug === tagSlug)?.name ?? null : null;
-
   return (
     <div className="flex flex-col gap-6">
       {/* Page header — title + time range selector */}
@@ -71,21 +69,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <div>
           <h2 className="text-xl font-bold text-zinc-900">Bảng điều khiển CEO</h2>
           <p className="text-sm text-zinc-500 mt-0.5">
-            {activeTagName ? (
-              <>
-                Nhóm <span className="font-medium text-zinc-700">{activeTagName}</span>{' '}
-                · {days} ngày qua (không tính hôm nay)
-              </>
-            ) : (
-              <>Hiệu suất toàn hệ thống · {days} ngày qua (không tính hôm nay)</>
-            )}
+            Hiệu suất toàn hệ thống · {days} ngày qua (không tính hôm nay)
           </p>
         </div>
         <TimeRangeSelector current={days} />
       </div>
-
-      {/* Channel tag tabs — segmented control phía trên KPI grid */}
-      <ChannelTagTabs current={tagSlug} options={tagOptions} />
 
       {/* Tier 1: 4 KPI cards with sparklines (Lead = Ladipage + tin nhắn) */}
       <KpiHeroGrid data={kpi} days={days} trend={trend} />
@@ -93,8 +81,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       {/* Tier 2: Performance trend full-width */}
       <PerformanceTrendChart data={trend} days={days} />
 
-      {/* Tier 3: Chanel table full-width (replaces sidebar Channel Health widget) */}
-      <ChannelsTable data={channels} days={days} />
+      {/* Tier 3: Chanel table — tag tabs đặt ngay dưới title "Chanel" trong
+          card này, scope filter giới hạn ở đây (KPI/trend/top performers
+          phía trên KHÔNG bị filter theo nhóm kênh). */}
+      <ChannelsTable
+        data={channels}
+        days={days}
+        tagTabs={
+          tagOptions.length > 1 ? (
+            <ChannelTagTabs current={tagSlug} options={tagOptions} />
+          ) : null
+        }
+      />
 
       {/* Tier 3b: Multi-line follower trend per channel — đặt ngay sau bảng
           channels vì cùng "domain" (per-channel detail) và chart cung cấp

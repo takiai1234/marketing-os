@@ -11,6 +11,10 @@ import type { ChannelTableRow } from '@/lib/queries/dashboard-channels-table';
 interface Props {
   data: ChannelTableRow[];
   days: number;
+  /** Optional segmented control để filter theo nhóm kênh. Render ngay dưới
+   *  title "Chanel". Scope: chỉ bảng này — KPI/trend cards bên trên không
+   *  bị filter. Dashboard page truyền ChannelTagTabs vào prop này. */
+  tagTabs?: React.ReactNode;
 }
 
 function formatCompact(n: number): string {
@@ -87,7 +91,7 @@ function FollowersCell({
   );
 }
 
-export function ChannelsTable({ data, days }: Props) {
+export function ChannelsTable({ data, days, tagTabs }: Props) {
   return (
     <div className="rounded-xl bg-white ring-1 ring-zinc-200 shadow-sm">
       <div className="flex items-center justify-between p-5 pb-3">
@@ -101,6 +105,9 @@ export function ChannelsTable({ data, days }: Props) {
           Xem tất cả →
         </Link>
       </div>
+
+      {/* Tag tabs — scope chỉ bảng này (KPI/trend bên trên KHÔNG filter). */}
+      {tagTabs && <div className="px-5 pb-3">{tagTabs}</div>}
 
       {data.length === 0 ? (
         <p className="text-sm text-zinc-400 py-8 text-center">
