@@ -6,7 +6,10 @@ import { fetchTopPerformers } from '@/lib/queries/dashboard-top-performers';
 import { fetchFollowersTrend } from '@/lib/queries/dashboard-followers-trend';
 import { fetchTopReachPosts } from '@/lib/queries/dashboard-top-reach-posts';
 import { listAllTags } from '@/lib/queries/channel-tags';
-import { parseRangeParam } from '@/lib/dashboard/time-range';
+import {
+  resolveRangeFromSearchParams,
+  previousPeriodOf,
+} from '@/lib/dashboard/time-range';
 import { KpiHeroGrid } from '@/components/dashboard/kpi-hero-grid';
 import { PerformanceTrendChart } from '@/components/dashboard/performance-trend-chart';
 import { ChannelsTable } from '@/components/dashboard/channels-table';
@@ -14,7 +17,7 @@ import { FollowersTrendChart } from '@/components/dashboard/followers-trend-char
 import { TopPerformersRankedList } from '@/components/dashboard/top-performers-ranked-list';
 import { TopReachPostsList } from '@/components/dashboard/top-reach-posts-list';
 import { AlertsFeed } from '@/components/dashboard/alerts-feed';
-import { TimeRangeSelector } from '@/components/dashboard/time-range-selector';
+import { DashboardDateRangePicker } from '@/components/dashboard/date-range-picker';
 import {
   ChannelTagTabs,
   type ChannelTagOption,
@@ -28,8 +31,8 @@ interface DashboardPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-/** Normalize searchParams.tag → string|null. Array hoặc empty/invalid → null
- *  (tab "Tổng"). Slug được inject vào SQL string nên PHẢI validate format. */
+/** Normalize searchParams.tag → string|null. Slug injected vào SQL string
+ *  nên PHẢI validate format. */
 function parseTagParam(value: string | string[] | undefined): string | null {
   if (Array.isArray(value)) return null;
   if (!value || value.trim() === '') return null;
@@ -39,61 +42,84 @@ function parseTagParam(value: string | string[] | undefined): string | null {
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const params = await searchParams;
-  const days = parseRangeParam(params.range);
   const tagSlug = parseTagParam(params.tag);
 
-  // Tag scope: CHỈ bảng "Chanel" filter theo tag. KPI cards, trend chart,
-  // top performers, followers trend — VẪN hiển thị toàn hệ thống không bị
-  // filter (sếp muốn KPI tổng giữ nguyên, chỉ cần xem bảng channels per nhóm).
-  // → tagSlug truyền duy nhất vào fetchChannelsTable.
-  const [
-    kpi,
-    trend,
-    channels,
-    alerts,
-    topPerformers,
-    followersTrend,
-    topReachPosts,
-    tags,
-  ] = await Promise.all([
-    getKpiData(days),
-    getTrendData(days),
-    fetchChannelsTable(days, tagSlug),
-    fetchUnreadAlerts(10),
-    fetchTopPerformers(days, 5),
-    fetchFollowersTrend(days),
-    fetchTopReachPosts(days, 5),
-    listAllTags(),
-  ]);
+  // Resolve date range from URL (?range=7|14|30|90|custom + ?from=&to=)
+  const range = resolveRangeFromSearchParams({
+    range: params.range,
+    from: params.from,
+    to: params.to,
+  });
+  const { prevSinceDate, prevUntilDate } = previousPeriodOf(
+    range.sinceDate,
+    range.untilDate
+  );
+  const days = range.days;
 
-  // Build tab options: "Tổng" đầu list (slug=null) + danh sách tag từ DB.
+  // Pack date range options cho queries
+  const kpiRange = {
+    sinceDate: range.sinceDate,
+    untilDate: range.untilDate,
+    prevSinceDate,
+    prevUntilDate,
+  };
+  const trendRange = {
+    sinceDate: range.sinceDate,
+    untilDate: range.untilDate,
+  };
+
+  // Tag scope: CHỈ bảng "Chanel" filter theo tag. KPI/trend/top performers
+  // VẪN tính toàn hệ thống.
+  // tagSlug truyền duy nhất vào fetchChannelsTable.
+  const [kpi, trend, channels, alerts, topPerformers, followersTrend, topReachPosts, tags] =
+    await Promise.all([
+      getKpiData(days, null, kpiRange),
+      getTrendData(days, null, trendRange),
+      fetchChannelsTable(days, tagSlug, trendRange),
+      fetchUnreadAlerts(10),
+      fetchTopPerformers(days, 5, null, trendRange),
+      fetchFollowersTrend(days, null, trendRange),
+      fetchTopReachPosts(days, 5),
+      listAllTags(),
+    ]);
+
+  // Build tag tab options
   const tagOptions: ChannelTagOption[] = [
     { slug: null, label: 'Tổng' },
     ...tags.map((t) => ({ slug: t.slug, label: t.name })),
   ];
 
+  // Subtitle text — show range info
+  const rangeLabel =
+    range.mode === 'custom'
+      ? `${range.fromIso} → ${range.toIso} (${days} ngày)`
+      : `${days} ngày qua (không tính hôm nay)`;
+
   return (
     <div className="flex flex-col gap-6">
-      {/* Page header — title + time range selector */}
+      {/* Page header — title + date range picker */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-zinc-900">Bảng điều khiển CEO</h2>
           <p className="text-sm text-zinc-500 mt-0.5">
-            Hiệu suất toàn hệ thống · {days} ngày qua (không tính hôm nay)
+            Hiệu suất toàn hệ thống · {rangeLabel}
           </p>
         </div>
-        <TimeRangeSelector current={days} />
+        <DashboardDateRangePicker
+          currentMode={range.mode}
+          currentPreset={range.preset}
+          currentFromIso={range.fromIso}
+          currentToIso={range.toIso}
+        />
       </div>
 
-      {/* Tier 1: 4 KPI cards with sparklines (Lead = Ladipage + tin nhắn) */}
+      {/* Tier 1: 4 KPI cards with sparklines */}
       <KpiHeroGrid data={kpi} days={days} trend={trend} />
 
       {/* Tier 2: Performance trend full-width */}
       <PerformanceTrendChart data={trend} days={days} />
 
-      {/* Tier 3: Chanel table — tag tabs đặt ngay dưới title "Chanel" trong
-          card này, scope filter giới hạn ở đây (KPI/trend/top performers
-          phía trên KHÔNG bị filter theo nhóm kênh). */}
+      {/* Tier 3: Chanel table — tag tabs ngay dưới title "Chanel" */}
       <ChannelsTable
         data={channels}
         days={days}
@@ -104,15 +130,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         }
       />
 
-      {/* Tier 3b: Multi-line follower trend per channel — đặt ngay sau bảng
-          channels vì cùng "domain" (per-channel detail) và chart cung cấp
-          context cho cột Followers ở table phía trên. */}
+      {/* Tier 3b: Multi-line follower trend per channel */}
       <FollowersTrendChart data={followersTrend} days={days} />
 
-      {/* Tier 4: Top Performers / Alerts / Top Reach Posts.
-          On <lg, stack full-width. On md, 2-col with widgets wrapping.
-          Top Reach Posts thay thế Active Campaigns (mock data) — show
-          các bài reach cao nhất kèm nút "Viết lại" để remix nhanh. */}
+      {/* Tier 4: Top Performers / Alerts / Top Reach Posts */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <TopPerformersRankedList performers={topPerformers} days={days} />
         <AlertsFeed initialData={alerts} />

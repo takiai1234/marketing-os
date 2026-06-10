@@ -38,22 +38,36 @@ export interface FollowerTrendResponse {
   }>;
 }
 
+export interface FollowersTrendDateRangeOpts {
+  sinceDate: Date;
+  untilDate: Date;
+}
+
 export async function fetchFollowersTrend(
   days: number,
-  tagSlug?: string | null
+  tagSlug?: string | null,
+  range?: FollowersTrendDateRangeOpts
 ): Promise<FollowerTrendResponse> {
-  // Tag filter — $2 = tagSlug khi active. Bước 1 dùng $1=TOP_N, nên tag pad
-  // sang $2 thẳng.
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const sinceDate =
+    range?.sinceDate ?? new Date(today.getTime() - days * 86_400_000);
+  const untilDate =
+    range?.untilDate ?? new Date(today.getTime() - 86_400_000);
+
+  // Bước 1 params: $1=TOP_N $2=untilDate (anchor latest snapshot) $3=tagSlug
   const tagFilter = tagSlug
     ? `AND sa.id IN (
         SELECT sat.account_id FROM social_account_tag sat
         INNER JOIN channel_tag ct ON ct.id = sat.tag_id
-        WHERE ct.slug = $2
+        WHERE ct.slug = $3
       )`
     : '';
-  const topParams: unknown[] = tagSlug ? [TOP_N, tagSlug] : [TOP_N];
+  const topParams: unknown[] = tagSlug
+    ? [TOP_N, untilDate, tagSlug]
+    : [TOP_N, untilDate];
 
-  // Bước 1: identify top N channels by current followers
+  // Bước 1: top N channels by latest followers (tại/trước untilDate)
   const topChannelsRes = await db.query<{
     account_id: string;
     name: string;
@@ -71,7 +85,7 @@ export async function fetchFollowersTrend(
       SELECT followers
       FROM account_metric_daily
       WHERE account_id = sa.id
-        AND date < CURRENT_DATE
+        AND date <= $2::date
         AND followers IS NOT NULL
       ORDER BY date DESC
       LIMIT 1
@@ -113,8 +127,8 @@ export async function fetchFollowersTrend(
     `
     WITH date_axis AS (
       SELECT generate_series(
-        CURRENT_DATE - $2::INT,
-        CURRENT_DATE - 1,
+        $2::date,
+        $3::date,
         '1 day'::INTERVAL
       )::DATE AS date
     ),
@@ -139,7 +153,7 @@ export async function fetchFollowersTrend(
       ON amd.account_id = ta.id AND amd.date = da.date
     ORDER BY ta.id, da.date ASC
     `,
-    [accountIds, days]
+    [accountIds, sinceDate, untilDate]
   );
 
   // Forward-fill state per account. Pass 1 lần qua rows đã sort by

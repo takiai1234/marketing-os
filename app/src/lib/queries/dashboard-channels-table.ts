@@ -42,19 +42,35 @@ export interface ChannelTableRow {
   followersDelta: number | null;
 }
 
+export interface ChannelsTableDateRangeOpts {
+  sinceDate: Date;
+  untilDate: Date;
+}
+
 export async function fetchChannelsTable(
   days: number,
-  tagSlug?: string | null
+  tagSlug?: string | null,
+  range?: ChannelsTableDateRangeOpts
 ): Promise<ChannelTableRow[]> {
-  // Tag filter — chỉ inject khi tagSlug active. $2 = tagSlug, $1 = days.
+  // Compute dates: ưu tiên range custom, fallback today-based theo days.
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const sinceDate =
+    range?.sinceDate ?? new Date(today.getTime() - days * 86_400_000);
+  const untilDate =
+    range?.untilDate ?? new Date(today.getTime() - 86_400_000);
+
+  // Params order: $1=sinceDate $2=untilDate $3=tagSlug (nếu có)
   const tagFilter = tagSlug
     ? `AND sa.id IN (
         SELECT sat.account_id FROM social_account_tag sat
         INNER JOIN channel_tag ct ON ct.id = sat.tag_id
-        WHERE ct.slug = $2
+        WHERE ct.slug = $3
       )`
     : '';
-  const queryParams: unknown[] = tagSlug ? [days, tagSlug] : [days];
+  const queryParams: unknown[] = tagSlug
+    ? [sinceDate, untilDate, tagSlug]
+    : [sinceDate, untilDate];
   const res = await db.query<{
     account_id: string;
     name: string;
@@ -115,60 +131,56 @@ export async function fetchChannelsTable(
         SUM(total_engagement)::NUMERIC AS engagement
       FROM account_metric_daily
       WHERE account_id = sa.id
-        AND date >= CURRENT_DATE - $1::INT
-        AND date < CURRENT_DATE
+        AND date >= $1::date
+        AND date <= $2::date
     ) agg ON TRUE
     -- Posts count from social_post (published_at falls in range)
     LEFT JOIN LATERAL (
       SELECT COUNT(*) AS posts_count
       FROM social_post
       WHERE account_id = sa.id
-        AND published_at >= CURRENT_DATE - $1::INT
-        AND published_at < CURRENT_DATE
+        AND published_at >= $1::timestamptz
+        AND published_at <  ($2::date + INTERVAL '1 day')::timestamptz
     ) p ON TRUE
     -- Leads (= conversion_count) từ landing_page_conversion.
-    -- INCLUDE today vì cron Ladipage pull data hôm nay lúc 23:30 VN, không có sync lag.
-    -- Logic này nhất quán với dashboard-kpi.ts (conversions cũng include today).
     LEFT JOIN LATERAL (
       SELECT SUM(conversion_count)::TEXT AS leads
       FROM landing_page_conversion
       WHERE account_id = sa.id
-        AND occurred_date >= CURRENT_DATE - $1::INT
-        AND occurred_date <= CURRENT_DATE
+        AND occurred_date >= $1::date
+        AND occurred_date <= $2::date
     ) lc ON TRUE
-    -- Snapshot ĐẦU range: followers cho growth + reach/engagement cumulative cho non-FB
+    -- Snapshot ĐẦU range: followers + total_reach/engagement (cumulative)
+    -- tại NGÀY TRƯỚC sinceDate.
     LEFT JOIN LATERAL (
       SELECT followers, total_reach, total_engagement
       FROM account_metric_daily
-      WHERE account_id = sa.id AND date <= CURRENT_DATE - $1::INT
+      WHERE account_id = sa.id AND date < $1::date
       ORDER BY date DESC LIMIT 1
     ) f_start ON TRUE
-    -- Snapshot CUỐI range (gần hôm nay nhất, không bao gồm hôm nay)
+    -- Snapshot CUỐI range: tại/trước untilDate.
     LEFT JOIN LATERAL (
       SELECT followers, total_reach, total_engagement
       FROM account_metric_daily
-      WHERE account_id = sa.id AND date < CURRENT_DATE
+      WHERE account_id = sa.id AND date <= $2::date
       ORDER BY date DESC LIMIT 1
     ) f_end ON TRUE
     -- FALLBACK start anchor cho non-FB: snapshot SỚM NHẤT trong range.
-    -- Chỉ kick in khi f_start NULL (account vừa connect, chưa đủ history).
-    -- Không dùng cho followers/growth — growth thiếu data nên hiển thị "—".
     LEFT JOIN LATERAL (
       SELECT total_reach, total_engagement
       FROM account_metric_daily
       WHERE account_id = sa.id
-        AND date > CURRENT_DATE - $1::INT
-        AND date < CURRENT_DATE
+        AND date >= $1::date
+        AND date <= $2::date
       ORDER BY date ASC LIMIT 1
     ) f_start_in_range ON TRUE
-    -- Lead gồm tin nhắn: số hội thoại Messenger trong range (include today,
-    -- giống lc.leads). Page chưa có data messaging → 0.
+    -- Lead gồm tin nhắn: số hội thoại Messenger trong range.
     LEFT JOIN LATERAL (
       SELECT SUM(active_conversations) AS inbox_conv
       FROM page_message_daily
       WHERE account_id = sa.id
-        AND date >= CURRENT_DATE - $1::INT
-        AND date <= CURRENT_DATE
+        AND date >= $1::date
+        AND date <= $2::date
     ) mc ON TRUE
     WHERE sa.status != 'disconnected'
       ${tagFilter}

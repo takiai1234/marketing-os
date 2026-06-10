@@ -28,8 +28,11 @@
 //   pass null → cache entry riêng từ ['kpi-data-v1', 'all'].
 
 import { unstable_cache, revalidateTag } from 'next/cache';
-import { fetchKpiData } from '@/lib/queries/dashboard-kpi';
-import { fetchTrendData } from '@/lib/queries/dashboard-trend';
+import { fetchKpiData, type DateRangeOpts } from '@/lib/queries/dashboard-kpi';
+import {
+  fetchTrendData,
+  type TrendDateRangeOpts,
+} from '@/lib/queries/dashboard-trend';
 import { fetchRecentRevenue } from '@/lib/queries/revenue';
 
 /** Single shared tag — all dashboard data invalidates together. KISS first;
@@ -46,15 +49,21 @@ function tagKey(tagSlug?: string | null): string {
   return tagSlug && tagSlug.trim() !== '' ? tagSlug : 'all';
 }
 
+// Note: dateRange object passed as cache arg — unstable_cache key derive
+// from args hash (Date serialized as ISO string). Different (since,until)
+// pairs → different cache entries. Version v3 bump để invalidate cache cũ
+// (signature đã thay đổi: thêm range param).
 export const getKpiData = unstable_cache(
-  async (days: number, tagSlug?: string | null) => fetchKpiData(days, tagSlug ?? null),
-  ['kpi-data-v2'],
+  async (days: number, tagSlug?: string | null, range?: DateRangeOpts) =>
+    fetchKpiData(days, tagSlug ?? null, range),
+  ['kpi-data-v3'],
   { tags: [DASHBOARD_TAG], revalidate: CACHE_TTL_SECONDS }
 );
 
 export const getTrendData = unstable_cache(
-  async (days: number, tagSlug?: string | null) => fetchTrendData(days, tagSlug ?? null),
-  ['trend-data-v2'],
+  async (days: number, tagSlug?: string | null, range?: TrendDateRangeOpts) =>
+    fetchTrendData(days, tagSlug ?? null, range),
+  ['trend-data-v3'],
   { tags: [DASHBOARD_TAG], revalidate: CACHE_TTL_SECONDS }
 );
 

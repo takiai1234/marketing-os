@@ -30,20 +30,35 @@ interface DbRow {
 //   social_post ⟕ post_metric_daily — LEFT vì post mới đăng có thể chưa có metric
 //
 // Score normalize qua window function MAX() OVER () — 1 query duy nhất, no second pass.
+export interface TopPerformersDateRangeOpts {
+  sinceDate: Date;
+  untilDate: Date;
+}
+
 export async function fetchTopPerformers(
   days: number,
   limit = 5,
-  tagSlug?: string | null
+  tagSlug?: string | null,
+  range?: TopPerformersDateRangeOpts
 ): Promise<TopPerformerRow[]> {
-  // Tag filter — params: $1=days, $2=limit, $3=tagSlug (if active).
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const sinceDate =
+    range?.sinceDate ?? new Date(today.getTime() - days * 86_400_000);
+  const untilDate =
+    range?.untilDate ?? new Date(today.getTime() - 86_400_000);
+
+  // Params: $1=sinceDate $2=untilDate $3=limit $4=tagSlug
   const tagFilter = tagSlug
     ? `AND sa.id IN (
         SELECT sat.account_id FROM social_account_tag sat
         INNER JOIN channel_tag ct ON ct.id = sat.tag_id
-        WHERE ct.slug = $3
+        WHERE ct.slug = $4
       )`
     : '';
-  const params: unknown[] = tagSlug ? [days, limit, tagSlug] : [days, limit];
+  const params: unknown[] = tagSlug
+    ? [sinceDate, untilDate, limit, tagSlug]
+    : [sinceDate, untilDate, limit];
 
   const res = await db.query<DbRow>(
     `
@@ -54,17 +69,15 @@ export async function fetchTopPerformers(
         COUNT(DISTINCT sp.id) AS posts_count,
         COALESCE(SUM(pmd.reactions + pmd.comments + pmd.shares), 0) AS engagement
       FROM team_member tm
-      -- Filter sa.status != 'disconnected' để member chỉ tính điểm trên kênh
-      -- còn hoạt động. Kênh disconnected thì coi như không có data hôm nay.
       INNER JOIN social_account sa ON sa.owner_member_id = tm.id
         AND sa.status != 'disconnected'
         ${tagFilter}
       INNER JOIN social_post sp ON sp.account_id = sa.id
-        AND sp.published_at >= CURRENT_DATE - $1::int
-        AND sp.published_at < CURRENT_DATE
+        AND sp.published_at >= $1::timestamptz
+        AND sp.published_at <  ($2::date + INTERVAL '1 day')::timestamptz
       LEFT JOIN post_metric_daily pmd ON pmd.post_id = sp.id
-        AND pmd.date >= CURRENT_DATE - $1::int
-        AND pmd.date < CURRENT_DATE
+        AND pmd.date >= $1::date
+        AND pmd.date <= $2::date
       GROUP BY tm.id, tm.name
       HAVING COUNT(DISTINCT sp.id) > 0
     )
@@ -80,7 +93,7 @@ export async function fetchTopPerformers(
       END AS score
     FROM member_stats
     ORDER BY engagement DESC, posts_count DESC
-    LIMIT $2
+    LIMIT $3
     `,
     params
   );
