@@ -60,9 +60,6 @@ export async function fetchChannelsTable(
   const untilDate =
     range?.untilDate ?? new Date(today.getTime() - 86_400_000);
 
-  // Pass dates as ISO strings — tránh 42P18. Xem dashboard-kpi.ts.
-  const toIso = (d: Date) => d.toISOString().slice(0, 10);
-
   // Params order: $1=sinceDate $2=untilDate $3=tagSlug (nếu có)
   const tagFilter = tagSlug
     ? `AND sa.id IN (
@@ -72,8 +69,8 @@ export async function fetchChannelsTable(
       )`
     : '';
   const queryParams: unknown[] = tagSlug
-    ? [toIso(sinceDate), toIso(untilDate), tagSlug]
-    : [toIso(sinceDate), toIso(untilDate)];
+    ? [sinceDate, untilDate, tagSlug]
+    : [sinceDate, untilDate];
   const res = await db.query<{
     account_id: string;
     name: string;
