@@ -139,11 +139,8 @@ export async function fetchChannelsTable(
       SELECT COUNT(*) AS posts_count
       FROM social_post
       WHERE account_id = sa.id
-        -- $1/$2 ::date — published_at timestamptz coerce date thành midnight.
-        -- KHÔNG cast $1::timestamptz vì $1 dùng cast ::date ở nhiều subquery
-        -- khác — PG đòi 1 type cố định per prepared statement param.
-        AND published_at >= $1::date
-        AND published_at <  $2::date + INTERVAL '1 day'
+        AND published_at >= $1::timestamptz
+        AND published_at <  ($2::date + INTERVAL '1 day')::timestamptz
     ) p ON TRUE
     -- Leads (= conversion_count) từ landing_page_conversion.
     LEFT JOIN LATERAL (

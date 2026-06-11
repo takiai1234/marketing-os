@@ -73,10 +73,8 @@ export async function fetchTopPerformers(
         AND sa.status != 'disconnected'
         ${tagFilter}
       INNER JOIN social_post sp ON sp.account_id = sa.id
-        -- $1/$2 ::date — published_at timestamptz auto-coerce. Cast cùng
-        -- type với pmd.date references để tránh 42P18.
-        AND sp.published_at >= $1::date
-        AND sp.published_at <  $2::date + INTERVAL '1 day'
+        AND sp.published_at >= $1::timestamptz
+        AND sp.published_at <  ($2::date + INTERVAL '1 day')::timestamptz
       LEFT JOIN post_metric_daily pmd ON pmd.post_id = sp.id
         AND pmd.date >= $1::date
         AND pmd.date <= $2::date
