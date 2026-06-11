@@ -299,30 +299,47 @@ async function fetchWithDateRange(
     `,
       params
     ),
-    db.query<{ total_followers: string; total_followers_prev: string }>(
-      `
-      WITH latest_now AS (
-        SELECT DISTINCT ON (amd.account_id) amd.account_id, amd.followers
-        FROM account_metric_daily amd
-        INNER JOIN social_account sa ON sa.id = amd.account_id
-        WHERE amd.date <= $2::date AND sa.status != 'disconnected'
-          ${tagFilter}
-        ORDER BY amd.account_id, amd.date DESC
-      ),
-      latest_prev AS (
-        SELECT DISTINCT ON (amd.account_id) amd.account_id, amd.followers
-        FROM account_metric_daily amd
-        INNER JOIN social_account sa ON sa.id = amd.account_id
-        WHERE amd.date <= $4::date AND sa.status != 'disconnected'
-          ${tagFilter}
-        ORDER BY amd.account_id, amd.date DESC
-      )
-      SELECT
-        COALESCE((SELECT SUM(followers) FROM latest_now), 0)  AS total_followers,
-        COALESCE((SELECT SUM(followers) FROM latest_prev), 0) AS total_followers_prev
-    `,
-      params
-    ),
+    // Followers query CHỈ dùng untilIso + prevUntilIso (anchor points).
+    // KHÔNG share params array với 4 query trên — vì nếu share, $1/$3 (sinceIso,
+    // prevSinceIso) sẽ unused trong query này → PG 42P18 "could not determine
+    // data type" trên position unreferenced. Pass riêng params [untilIso,
+    // prevUntilIso] + tagSlug nếu có. Tag pad sang $3.
+    (() => {
+      const followersTagFilter = tagSlug
+        ? `AND sa.id IN (
+            SELECT sat.account_id FROM social_account_tag sat
+            INNER JOIN channel_tag ct ON ct.id = sat.tag_id
+            WHERE ct.slug = $3
+          )`
+        : '';
+      const followersParams: unknown[] = tagSlug
+        ? [range.untilIso, range.prevUntilIso, tagSlug]
+        : [range.untilIso, range.prevUntilIso];
+      return db.query<{ total_followers: string; total_followers_prev: string }>(
+        `
+        WITH latest_now AS (
+          SELECT DISTINCT ON (amd.account_id) amd.account_id, amd.followers
+          FROM account_metric_daily amd
+          INNER JOIN social_account sa ON sa.id = amd.account_id
+          WHERE amd.date <= $1::date AND sa.status != 'disconnected'
+            ${followersTagFilter}
+          ORDER BY amd.account_id, amd.date DESC
+        ),
+        latest_prev AS (
+          SELECT DISTINCT ON (amd.account_id) amd.account_id, amd.followers
+          FROM account_metric_daily amd
+          INNER JOIN social_account sa ON sa.id = amd.account_id
+          WHERE amd.date <= $2::date AND sa.status != 'disconnected'
+            ${followersTagFilter}
+          ORDER BY amd.account_id, amd.date DESC
+        )
+        SELECT
+          COALESCE((SELECT SUM(followers) FROM latest_now), 0)  AS total_followers,
+          COALESCE((SELECT SUM(followers) FROM latest_prev), 0) AS total_followers_prev
+      `,
+        followersParams
+      );
+    })(),
   ]);
 
   return parseRows(reachRes, erRes, convRes, revenueRes, followersRes);
