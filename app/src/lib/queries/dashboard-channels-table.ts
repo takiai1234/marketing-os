@@ -42,9 +42,27 @@ export interface ChannelTableRow {
   followersDelta: number | null;
 }
 
+export interface ChannelsTableDateRangeIso {
+  sinceIso: string;
+  untilIso: string;
+}
+
 export async function fetchChannelsTable(
   days: number,
-  tagSlug?: string | null
+  tagSlug?: string | null,
+  range?: ChannelsTableDateRangeIso
+): Promise<ChannelTableRow[]> {
+  if (range) {
+    return fetchWithDateRange(days, range, tagSlug ?? null);
+  }
+  return fetchWithDays(days, tagSlug ?? null);
+}
+
+// ─── Legacy days-anchor path ────────────────────────────────────────────
+
+async function fetchWithDays(
+  days: number,
+  tagSlug: string | null
 ): Promise<ChannelTableRow[]> {
   // Tag filter — chỉ inject khi tagSlug active. $2 = tagSlug, $1 = days.
   const tagFilter = tagSlug
@@ -189,42 +207,196 @@ export async function fetchChannelsTable(
     queryParams
   );
 
-  return res.rows.map((row) => {
-    const reach = row.reach !== null ? Number(row.reach) : 0;
-    const engagement = row.engagement !== null ? Number(row.engagement) : 0;
-    const postsCount = Number(row.posts_count);
-    // Lead = Ladipage conversions + số hội thoại Messenger.
-    const landingLeads = row.leads !== null ? Number(row.leads) : 0;
-    const inboxConv = row.inbox_conv !== null ? Number(row.inbox_conv) : 0;
-    const leads = landingLeads + inboxConv;
-    const kpiPerDay = Number(row.kpi_posts_per_day);
-    const followerStart = row.follower_start !== null ? Number(row.follower_start) : null;
-    const followerEnd = row.follower_end !== null ? Number(row.follower_end) : null;
+  return res.rows.map((row) => mapRow(row, days));
+}
 
-    let growthPercent: number | null = null;
-    if (followerStart !== null && followerStart > 0 && followerEnd !== null) {
-      growthPercent = ((followerEnd - followerStart) / followerStart) * 100;
-    }
+// ─── New custom range path (ISO strings) ────────────────────────────────
 
-    // Delta tuyệt đối — chỉ tính khi có cả 2 anchor. Nếu chỉ có 1 → null
-    // (không claim "đứng yên" khi thật ra thiếu data).
-    const followersDelta =
-      followerStart !== null && followerEnd !== null
-        ? followerEnd - followerStart
-        : null;
+interface RawRow {
+  account_id: string;
+  name: string;
+  platform: string;
+  kpi_posts_per_day: number;
+  reach: string | null;
+  engagement: string | null;
+  posts_count: string;
+  leads: string | null;
+  follower_start: string | null;
+  follower_end: string | null;
+  inbox_conv: string | null;
+}
 
-    return {
-      accountId: row.account_id,
-      name: row.name,
-      platform: row.platform,
-      reach,
-      leads,
-      engagementRate: reach > 0 ? (engagement / reach) * 100 : 0,
-      postsCount,
-      kpiTotal: kpiPerDay * days,
-      growthPercent,
-      followers: followerEnd,
-      followersDelta,
-    };
-  });
+async function fetchWithDateRange(
+  days: number,
+  range: ChannelsTableDateRangeIso,
+  tagSlug: string | null
+): Promise<ChannelTableRow[]> {
+  // Params: $1=sinceIso $2=untilIso $3=tagSlug (nếu có).
+  // EVERY LATERAL reference cả $1 và $2 (hoặc ít nhất 1 trong 2 nhưng các
+  // LATERAL khác bù) → không có position unreferenced (PG 42P18 lesson).
+  // Specifically:
+  //   - agg, p, lc, f_start_in_range, mc dùng cả $1 và $2
+  //   - f_start dùng $1 ($1::date - 1 cho snapshot trước range)
+  //   - f_end dùng $2 ($2::date cho snapshot cuối range)
+  const tagFilter = tagSlug
+    ? `AND sa.id IN (
+        SELECT sat.account_id FROM social_account_tag sat
+        INNER JOIN channel_tag ct ON ct.id = sat.tag_id
+        WHERE ct.slug = $3
+      )`
+    : '';
+  const queryParams: unknown[] = tagSlug
+    ? [range.sinceIso, range.untilIso, tagSlug]
+    : [range.sinceIso, range.untilIso];
+
+  const res = await db.query<RawRow>(
+    `
+    SELECT
+      sa.id              AS account_id,
+      sa.name,
+      sa.platform,
+      sa.kpi_posts_per_day,
+      CASE
+        WHEN sa.platform = 'facebook' THEN COALESCE(agg.reach, 0)
+        ELSE GREATEST(
+          0,
+          COALESCE(
+            f_end.total_reach - f_start.total_reach,
+            f_end.total_reach - f_start_in_range.total_reach,
+            0
+          )
+        )
+      END::TEXT          AS reach,
+      CASE
+        WHEN sa.platform = 'facebook' THEN COALESCE(agg.engagement, 0)
+        ELSE GREATEST(
+          0,
+          COALESCE(
+            f_end.total_engagement - f_start.total_engagement,
+            f_end.total_engagement - f_start_in_range.total_engagement,
+            0
+          )
+        )
+      END::TEXT          AS engagement,
+      COALESCE(p.posts_count, 0)::TEXT AS posts_count,
+      lc.leads,
+      f_start.followers  AS follower_start,
+      f_end.followers    AS follower_end,
+      COALESCE(mc.inbox_conv, 0)::TEXT AS inbox_conv
+    FROM social_account sa
+    LEFT JOIN LATERAL (
+      SELECT
+        SUM(total_reach)::NUMERIC      AS reach,
+        SUM(total_engagement)::NUMERIC AS engagement
+      FROM account_metric_daily
+      WHERE account_id = sa.id
+        AND date >= $1::date
+        AND date <= $2::date
+    ) agg ON TRUE
+    LEFT JOIN LATERAL (
+      -- published_at timestamptz so sánh với $::date — PG auto-coerce midnight.
+      SELECT COUNT(*) AS posts_count
+      FROM social_post
+      WHERE account_id = sa.id
+        AND published_at >= $1::date
+        AND published_at <  $2::date + INTERVAL '1 day'
+    ) p ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT SUM(conversion_count)::TEXT AS leads
+      FROM landing_page_conversion
+      WHERE account_id = sa.id
+        AND occurred_date >= $1::date
+        AND occurred_date <= $2::date
+    ) lc ON TRUE
+    -- Snapshot ĐẦU range = snapshot mới nhất TRƯỚC sinceIso ($1).
+    LEFT JOIN LATERAL (
+      SELECT followers, total_reach, total_engagement
+      FROM account_metric_daily
+      WHERE account_id = sa.id AND date < $1::date
+      ORDER BY date DESC LIMIT 1
+    ) f_start ON TRUE
+    -- Snapshot CUỐI range = snapshot mới nhất TẠI/TRƯỚC untilIso ($2).
+    LEFT JOIN LATERAL (
+      SELECT followers, total_reach, total_engagement
+      FROM account_metric_daily
+      WHERE account_id = sa.id AND date <= $2::date
+      ORDER BY date DESC LIMIT 1
+    ) f_end ON TRUE
+    -- FALLBACK start anchor: snapshot SỚM NHẤT trong range.
+    LEFT JOIN LATERAL (
+      SELECT total_reach, total_engagement
+      FROM account_metric_daily
+      WHERE account_id = sa.id
+        AND date >= $1::date
+        AND date <= $2::date
+      ORDER BY date ASC LIMIT 1
+    ) f_start_in_range ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT SUM(active_conversations) AS inbox_conv
+      FROM page_message_daily
+      WHERE account_id = sa.id
+        AND date >= $1::date
+        AND date <= $2::date
+    ) mc ON TRUE
+    WHERE sa.status != 'disconnected'
+      ${tagFilter}
+    ORDER BY
+      CASE
+        WHEN sa.platform = 'facebook' THEN COALESCE(agg.reach, 0)
+        ELSE GREATEST(
+          0,
+          COALESCE(
+            f_end.total_reach - f_start.total_reach,
+            f_end.total_reach - f_start_in_range.total_reach,
+            0
+          )
+        )
+      END DESC,
+      sa.name ASC
+    `,
+    queryParams
+  );
+
+  return res.rows.map((row) => mapRow(row, days));
+}
+
+// ─── Shared row mapper ──────────────────────────────────────────────────
+
+function mapRow(row: RawRow, days: number): ChannelTableRow {
+  const reach = row.reach !== null ? Number(row.reach) : 0;
+  const engagement = row.engagement !== null ? Number(row.engagement) : 0;
+  const postsCount = Number(row.posts_count);
+  // Lead = Ladipage conversions + số hội thoại Messenger.
+  const landingLeads = row.leads !== null ? Number(row.leads) : 0;
+  const inboxConv = row.inbox_conv !== null ? Number(row.inbox_conv) : 0;
+  const leads = landingLeads + inboxConv;
+  const kpiPerDay = Number(row.kpi_posts_per_day);
+  const followerStart =
+    row.follower_start !== null ? Number(row.follower_start) : null;
+  const followerEnd =
+    row.follower_end !== null ? Number(row.follower_end) : null;
+
+  let growthPercent: number | null = null;
+  if (followerStart !== null && followerStart > 0 && followerEnd !== null) {
+    growthPercent = ((followerEnd - followerStart) / followerStart) * 100;
+  }
+
+  const followersDelta =
+    followerStart !== null && followerEnd !== null
+      ? followerEnd - followerStart
+      : null;
+
+  return {
+    accountId: row.account_id,
+    name: row.name,
+    platform: row.platform,
+    reach,
+    leads,
+    engagementRate: reach > 0 ? (engagement / reach) * 100 : 0,
+    postsCount,
+    kpiTotal: kpiPerDay * days,
+    growthPercent,
+    followers: followerEnd,
+    followersDelta,
+  };
 }

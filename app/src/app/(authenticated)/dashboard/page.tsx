@@ -56,16 +56,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   );
   const days = range.days;
 
-  // Step 2 (incremental rollout): KPI cards + Trend chart dùng dateRange.
-  // 3 query khác (channels-table, followers, top performers) vẫn dùng `days`
-  // legacy → window anchor about today. Step 3-5 sẽ refactor tiếp.
+  // Step 3 (incremental rollout): KPI + Trend + Channels table dùng dateRange.
+  // 2 query khác (followers, top performers) vẫn dùng `days` legacy.
+  // Step 4-5 sẽ refactor tiếp.
   const kpiRange = {
     sinceIso: range.sinceIso,
     untilIso: range.untilIso,
     prevSinceIso,
     prevUntilIso,
   };
-  const trendRange = {
+  const simpleRange = {
     sinceIso: range.sinceIso,
     untilIso: range.untilIso,
   };
@@ -81,8 +81,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     tags,
   ] = await Promise.all([
     getKpiData(days, null, kpiRange),
-    getTrendData(days, null, trendRange),
-    fetchChannelsTable(days, tagSlug),
+    getTrendData(days, null, simpleRange),
+    fetchChannelsTable(days, tagSlug, simpleRange),
     fetchUnreadAlerts(10),
     fetchTopPerformers(days, 5),
     fetchFollowersTrend(days),
@@ -105,8 +105,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <p className="text-sm text-zinc-500 mt-0.5">
             {range.mode === 'custom' ? (
               <>
-                KPI &amp; Trend: {range.sinceIso} → {range.untilIso} ({days} ngày)
-                · Bảng: {days} ngày qua
+                KPI + Trend + Bảng kênh: {range.sinceIso} → {range.untilIso} ({days}
+                ngày) · Followers/Top performers: {days} ngày qua
               </>
             ) : (
               <>Hiệu suất toàn hệ thống · {days} ngày qua (không tính hôm nay)</>
