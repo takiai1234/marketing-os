@@ -1,12 +1,14 @@
 import { db } from '@/lib/db';
 
-// Daily trend over the last `days` days, EXCLUDING today.
-// reach + followers: SUM across accounts from account_metric_daily.
-// total_post: counted from social_post.published_at — page-insights cron sets
-// account_metric_daily.posts_count to 0 so we can't trust it there.
-// conversions: SUM(conversion_count) from landing_page_conversion grouped by occurred_date.
+// Daily trend over a date window. 2 calling patterns:
+//
+// 1. Legacy: fetchTrendData(days, tagSlug) — int days, today-anchor window.
+// 2. Custom range: fetchTrendData(days, tagSlug, {sinceIso, untilIso}) —
+//    explicit ISO YYYY-MM-DD strings (KHÔNG pass Date object — xem note
+//    trong dashboard-kpi.ts về PG 42P18).
 //
 // Tag scope: nếu `tagSlug` được pass, mỗi CTE chỉ tính kênh có tag đó.
+
 export interface TrendDataPoint {
   date: string;
   reach: number;
@@ -16,11 +18,28 @@ export interface TrendDataPoint {
   conversions: number;
 }
 
+export interface TrendDateRangeIso {
+  sinceIso: string;
+  untilIso: string;
+}
+
 export async function fetchTrendData(
   days: number,
-  tagSlug?: string | null
+  tagSlug?: string | null,
+  range?: TrendDateRangeIso
 ): Promise<TrendDataPoint[]> {
-  // Tag filter snippet — chỉ inject khi tagSlug active. $2 = tagSlug.
+  if (range) {
+    return fetchWithDateRange(range, tagSlug ?? null);
+  }
+  return fetchWithDays(days, tagSlug ?? null);
+}
+
+// ─── Legacy days-anchor path ────────────────────────────────────────────
+
+async function fetchWithDays(
+  days: number,
+  tagSlug: string | null
+): Promise<TrendDataPoint[]> {
   const tagFilter = tagSlug
     ? `AND sa.id IN (
         SELECT sat.account_id FROM social_account_tag sat
@@ -30,18 +49,8 @@ export async function fetchTrendData(
     : '';
   const params: unknown[] = tagSlug ? [days, tagSlug] : [days];
 
-  const res = await db.query<{
-    date: string;
-    reach: string;
-    engagement: string;
-    followers: string;
-    total_post: string;
-    conversions: string;
-  }>(
+  const res = await db.query<TrendRow>(
     `
-    -- Channel scope: every CTE INNER JOINs social_account and filters out
-    -- status='disconnected'. Without this, kênh đã hủy kết nối vẫn được tính
-    -- vào trend chart. Keeps 'active' + 'token_expired'.
     WITH metric_agg AS (
       SELECT amd.date,
              SUM(amd.total_reach)      AS reach,
@@ -55,13 +64,6 @@ export async function fetchTrendData(
       GROUP BY amd.date
     ),
     post_agg AS (
-      -- Group post by VN date — align with account_metric_daily.date which is
-      -- now VN (post-2026-05-23 timezone migration). Without explicit TZ cast
-      -- the container TZ (UTC) would push posts sent in the early VN morning
-      -- (00:00–06:59 VN = previous-day UTC) onto the previous bucket and they
-      -- would never JOIN against amd.date. conv_agg below also uses VN dates
-      -- (occurred_date is plain DATE written by VN-aware caller), so all
-      -- three series now share the same calendar.
       SELECT (sp.published_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date AS date,
              COUNT(*) AS total_post
       FROM social_post sp
@@ -83,8 +85,6 @@ export async function fetchTrendData(
         ${tagFilter}
       GROUP BY lpc.occurred_date
     ),
-    -- Lead cũng gồm tin nhắn: số hội thoại Messenger/ngày (mỗi hội thoại = 1 lead).
-    -- Tách CTE riêng để FULL OUTER JOIN với conv_agg → cộng dồn 2 nguồn.
     msg_agg AS (
       SELECT pmd.date AS date,
              SUM(pmd.active_conversations) AS conversations
@@ -96,9 +96,6 @@ export async function fetchTrendData(
         ${tagFilter}
       GROUP BY pmd.date
     )
-    -- FULL OUTER JOIN across all 4 sources so a date that appears in any
-    -- source still produces a row (with 0 for missing series).
-    -- conversions = landing + tin nhắn (định nghĩa lead của sếp).
     SELECT
       COALESCE(m.date, p.date, c.date, mm.date)::text AS date,
       COALESCE(m.reach, 0)        AS reach,
@@ -115,7 +112,111 @@ export async function fetchTrendData(
     params
   );
 
-  return res.rows.map((row) => ({
+  return mapRows(res.rows);
+}
+
+// ─── New custom range path (ISO strings) ────────────────────────────────
+
+async function fetchWithDateRange(
+  range: TrendDateRangeIso,
+  tagSlug: string | null
+): Promise<TrendDataPoint[]> {
+  // Params: $1=sinceIso $2=untilIso $3=tagSlug (nếu có).
+  // EVERY CTE reference cả $1 và $2 → không có position unreferenced
+  // → tránh PG 42P18 (xem lesson trong dashboard-kpi.ts).
+  // published_at column timestamptz so sánh với $1::date / $2::date — PG
+  // auto-coerce date → midnight timestamp. KHÔNG cast $::timestamptz để
+  // tránh mixed-type conflict trên same param (lesson lần trước).
+  const tagFilter = tagSlug
+    ? `AND sa.id IN (
+        SELECT sat.account_id FROM social_account_tag sat
+        INNER JOIN channel_tag ct ON ct.id = sat.tag_id
+        WHERE ct.slug = $3
+      )`
+    : '';
+  const params: unknown[] = tagSlug
+    ? [range.sinceIso, range.untilIso, tagSlug]
+    : [range.sinceIso, range.untilIso];
+
+  const res = await db.query<TrendRow>(
+    `
+    WITH metric_agg AS (
+      SELECT amd.date,
+             SUM(amd.total_reach)      AS reach,
+             SUM(amd.total_engagement) AS engagement,
+             SUM(amd.followers)        AS followers
+      FROM account_metric_daily amd
+      INNER JOIN social_account sa ON sa.id = amd.account_id
+      WHERE amd.date >= $1::date AND amd.date <= $2::date
+        AND sa.status != 'disconnected'
+        ${tagFilter}
+      GROUP BY amd.date
+    ),
+    post_agg AS (
+      SELECT (sp.published_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date AS date,
+             COUNT(*) AS total_post
+      FROM social_post sp
+      INNER JOIN social_account sa ON sa.id = sp.account_id
+      WHERE sp.published_at >= $1::date
+        AND sp.published_at <  $2::date + INTERVAL '1 day'
+        AND sa.status != 'disconnected'
+        ${tagFilter}
+      GROUP BY (sp.published_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date
+    ),
+    conv_agg AS (
+      SELECT lpc.occurred_date AS date,
+             SUM(lpc.conversion_count) AS conversions
+      FROM landing_page_conversion lpc
+      INNER JOIN social_account sa ON sa.id = lpc.account_id
+      WHERE lpc.occurred_date >= $1::date
+        AND lpc.occurred_date <= $2::date
+        AND sa.status != 'disconnected'
+        ${tagFilter}
+      GROUP BY lpc.occurred_date
+    ),
+    msg_agg AS (
+      SELECT pmd.date AS date,
+             SUM(pmd.active_conversations) AS conversations
+      FROM page_message_daily pmd
+      INNER JOIN social_account sa ON sa.id = pmd.account_id
+      WHERE pmd.date >= $1::date
+        AND pmd.date <= $2::date
+        AND sa.status != 'disconnected'
+        ${tagFilter}
+      GROUP BY pmd.date
+    )
+    SELECT
+      COALESCE(m.date, p.date, c.date, mm.date)::text AS date,
+      COALESCE(m.reach, 0)        AS reach,
+      COALESCE(m.engagement, 0)   AS engagement,
+      COALESCE(m.followers, 0)    AS followers,
+      COALESCE(p.total_post, 0)   AS total_post,
+      COALESCE(c.conversions, 0) + COALESCE(mm.conversations, 0) AS conversions
+    FROM metric_agg m
+    FULL OUTER JOIN post_agg p ON p.date = m.date
+    FULL OUTER JOIN conv_agg c ON c.date = COALESCE(m.date, p.date)
+    FULL OUTER JOIN msg_agg mm ON mm.date = COALESCE(m.date, p.date, c.date)
+    ORDER BY date ASC
+  `,
+    params
+  );
+
+  return mapRows(res.rows);
+}
+
+// ─── Shared helpers ──────────────────────────────────────────────────────
+
+interface TrendRow {
+  date: string;
+  reach: string;
+  engagement: string;
+  followers: string;
+  total_post: string;
+  conversions: string;
+}
+
+function mapRows(rows: TrendRow[]): TrendDataPoint[] {
+  return rows.map((row) => ({
     date: row.date,
     reach: Number(row.reach),
     engagement: Number(row.engagement),

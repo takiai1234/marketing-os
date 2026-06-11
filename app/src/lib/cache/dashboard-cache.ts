@@ -32,7 +32,10 @@ import {
   fetchKpiData,
   type DateRangeIso,
 } from '@/lib/queries/dashboard-kpi';
-import { fetchTrendData } from '@/lib/queries/dashboard-trend';
+import {
+  fetchTrendData,
+  type TrendDateRangeIso,
+} from '@/lib/queries/dashboard-trend';
 import { fetchRecentRevenue } from '@/lib/queries/revenue';
 
 /** Single shared tag — all dashboard data invalidates together. KISS first;
@@ -63,8 +66,12 @@ export const getKpiData = unstable_cache(
 );
 
 export const getTrendData = unstable_cache(
-  async (days: number, tagSlug?: string | null) => fetchTrendData(days, tagSlug ?? null),
-  ['trend-data-v2'],
+  async (
+    days: number,
+    tagSlug?: string | null,
+    range?: TrendDateRangeIso
+  ) => fetchTrendData(days, tagSlug ?? null, range),
+  ['trend-data-v3'],
   { tags: [DASHBOARD_TAG], revalidate: CACHE_TTL_SECONDS }
 );
 
