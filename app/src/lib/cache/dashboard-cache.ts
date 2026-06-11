@@ -28,7 +28,10 @@
 //   pass null → cache entry riêng từ ['kpi-data-v1', 'all'].
 
 import { unstable_cache, revalidateTag } from 'next/cache';
-import { fetchKpiData } from '@/lib/queries/dashboard-kpi';
+import {
+  fetchKpiData,
+  type DateRangeIso,
+} from '@/lib/queries/dashboard-kpi';
 import { fetchTrendData } from '@/lib/queries/dashboard-trend';
 import { fetchRecentRevenue } from '@/lib/queries/revenue';
 
@@ -46,9 +49,16 @@ function tagKey(tagSlug?: string | null): string {
   return tagSlug && tagSlug.trim() !== '' ? tagSlug : 'all';
 }
 
+// Cache key derive từ args hash. Khi pass range object → distinct entries
+// per (days, tagSlug, sinceIso, untilIso, prevSinceIso, prevUntilIso). Version
+// bump v2→v3 vì signature thêm range arg.
 export const getKpiData = unstable_cache(
-  async (days: number, tagSlug?: string | null) => fetchKpiData(days, tagSlug ?? null),
-  ['kpi-data-v2'],
+  async (
+    days: number,
+    tagSlug?: string | null,
+    range?: DateRangeIso
+  ) => fetchKpiData(days, tagSlug ?? null, range),
+  ['kpi-data-v3'],
   { tags: [DASHBOARD_TAG], revalidate: CACHE_TTL_SECONDS }
 );
 

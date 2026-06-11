@@ -6,7 +6,10 @@ import { fetchTopPerformers } from '@/lib/queries/dashboard-top-performers';
 import { fetchFollowersTrend } from '@/lib/queries/dashboard-followers-trend';
 import { fetchTopReachPosts } from '@/lib/queries/dashboard-top-reach-posts';
 import { listAllTags } from '@/lib/queries/channel-tags';
-import { parseRangeParam } from '@/lib/dashboard/time-range';
+import {
+  resolveRangeFromSearchParams,
+  previousPeriodOf,
+} from '@/lib/dashboard/time-range';
 import { KpiHeroGrid } from '@/components/dashboard/kpi-hero-grid';
 import { PerformanceTrendChart } from '@/components/dashboard/performance-trend-chart';
 import { ChannelsTable } from '@/components/dashboard/channels-table';
@@ -14,7 +17,7 @@ import { FollowersTrendChart } from '@/components/dashboard/followers-trend-char
 import { TopPerformersRankedList } from '@/components/dashboard/top-performers-ranked-list';
 import { TopReachPostsList } from '@/components/dashboard/top-reach-posts-list';
 import { AlertsFeed } from '@/components/dashboard/alerts-feed';
-import { TimeRangeSelector } from '@/components/dashboard/time-range-selector';
+import { DashboardDateRangePicker } from '@/components/dashboard/date-range-picker';
 import {
   ChannelTagTabs,
   type ChannelTagOption,
@@ -39,13 +42,32 @@ function parseTagParam(value: string | string[] | undefined): string | null {
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const params = await searchParams;
-  const days = parseRangeParam(params.range);
   const tagSlug = parseTagParam(params.tag);
 
-  // Tag scope: CHỈ bảng "Chanel" filter theo tag. KPI cards, trend chart,
-  // top performers, followers trend — VẪN hiển thị toàn hệ thống không bị
-  // filter (sếp muốn KPI tổng giữ nguyên, chỉ cần xem bảng channels per nhóm).
-  // → tagSlug truyền duy nhất vào fetchChannelsTable.
+  // Resolve date range từ URL (?range=7|14|30|90|custom + ?from=&to=)
+  const range = resolveRangeFromSearchParams({
+    range: params.range,
+    from: params.from,
+    to: params.to,
+  });
+  const { prevSinceIso, prevUntilIso } = previousPeriodOf(
+    range.sinceIso,
+    range.untilIso
+  );
+  const days = range.days;
+
+  // Step 1 (incremental rollout): chỉ KPI cards dùng dateRange explicit.
+  // 4 query khác (trend, channels-table, followers, top performers) vẫn dùng
+  // `days` legacy → window anchor về today. Khi custom range không phải today-
+  // anchored, các widget này sẽ vẫn show "N ngày qua" tính từ hôm nay.
+  // Step 2-5 sẽ refactor từng query một.
+  const kpiRange = {
+    sinceIso: range.sinceIso,
+    untilIso: range.untilIso,
+    prevSinceIso,
+    prevUntilIso,
+  };
+
   const [
     kpi,
     trend,
@@ -56,7 +78,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     topReachPosts,
     tags,
   ] = await Promise.all([
-    getKpiData(days),
+    getKpiData(days, null, kpiRange),
     getTrendData(days),
     fetchChannelsTable(days, tagSlug),
     fetchUnreadAlerts(10),
@@ -74,15 +96,27 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Page header — title + time range selector */}
+      {/* Page header — title + date range picker */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-zinc-900">Bảng điều khiển CEO</h2>
           <p className="text-sm text-zinc-500 mt-0.5">
-            Hiệu suất toàn hệ thống · {days} ngày qua (không tính hôm nay)
+            {range.mode === 'custom' ? (
+              <>
+                KPI: {range.sinceIso} → {range.untilIso} ({days} ngày) · Bảng &amp;
+                chart: {days} ngày qua
+              </>
+            ) : (
+              <>Hiệu suất toàn hệ thống · {days} ngày qua (không tính hôm nay)</>
+            )}
           </p>
         </div>
-        <TimeRangeSelector current={days} />
+        <DashboardDateRangePicker
+          currentMode={range.mode}
+          currentPreset={range.preset}
+          currentFromIso={range.sinceIso}
+          currentToIso={range.untilIso}
+        />
       </div>
 
       {/* Tier 1: 4 KPI cards with sparklines (Lead = Ladipage + tin nhắn) */}
