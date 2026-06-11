@@ -38,12 +38,19 @@ export interface FollowerTrendResponse {
   }>;
 }
 
+export interface FollowersTrendDateRangeIso {
+  sinceIso: string;
+  untilIso: string;
+}
+
 export async function fetchFollowersTrend(
   days: number,
-  tagSlug?: string | null
+  tagSlug?: string | null,
+  range?: FollowersTrendDateRangeIso
 ): Promise<FollowerTrendResponse> {
   // Tag filter — $2 = tagSlug khi active. Bước 1 dùng $1=TOP_N, nên tag pad
-  // sang $2 thẳng.
+  // sang $2 thẳng. Bước 1 không bị ảnh hưởng bởi range — top-N chọn theo
+  // current followers (latest snapshot) bất kể range.
   const tagFilter = tagSlug
     ? `AND sa.id IN (
         SELECT sat.account_id FROM social_account_tag sat
@@ -103,14 +110,38 @@ export async function fetchFollowersTrend(
   // hơn và dễ debug.
   const accountIds = channels.map((c) => c.accountId);
 
-  const trendRes = await db.query<{
-    date: string;
-    account_id: string;
-    name: string;
-    platform: string;
-    followers: string | null;
-  }>(
-    `
+  // Bước 2 SQL: date_axis generate_series từ sinceDate → untilDate.
+  // 2 path:
+  //   - range custom: $1=accountIds, $2=sinceIso, $3=untilIso (cast ::date)
+  //   - days legacy: $1=accountIds, $2=days (cast ::int, today-anchor)
+  // Cả 2 params đều reference trong query → không có position thừa (PG 42P18).
+  const trendSql = range
+    ? `
+    WITH date_axis AS (
+      SELECT generate_series(
+        $2::date,
+        $3::date,
+        '1 day'::INTERVAL
+      )::DATE AS date
+    ),
+    target_accounts AS (
+      SELECT sa.id, sa.name, sa.platform
+      FROM social_account sa
+      WHERE sa.id = ANY($1::UUID[])
+    )
+    SELECT
+      da.date::TEXT AS date,
+      ta.id::TEXT   AS account_id,
+      ta.name,
+      ta.platform,
+      amd.followers::TEXT AS followers
+    FROM date_axis da
+    CROSS JOIN target_accounts ta
+    LEFT JOIN account_metric_daily amd
+      ON amd.account_id = ta.id AND amd.date = da.date
+    ORDER BY ta.id, da.date ASC
+  `
+    : `
     WITH date_axis AS (
       SELECT generate_series(
         CURRENT_DATE - $2::INT,
@@ -123,10 +154,6 @@ export async function fetchFollowersTrend(
       FROM social_account sa
       WHERE sa.id = ANY($1::UUID[])
     )
-    -- Cartesian (date, account) → LEFT JOIN amd cho mỗi ngày. Followers có
-    -- thể NULL khi cron skip ngày đó. JS layer fill xuôi từ giá trị non-NULL
-    -- gần nhất TRƯỚC đó của cùng account.
-    -- ORDER BY (account_id, date) để JS pass duy nhất, forward-fill stateful.
     SELECT
       da.date::TEXT AS date,
       ta.id::TEXT   AS account_id,
@@ -138,9 +165,18 @@ export async function fetchFollowersTrend(
     LEFT JOIN account_metric_daily amd
       ON amd.account_id = ta.id AND amd.date = da.date
     ORDER BY ta.id, da.date ASC
-    `,
-    [accountIds, days]
-  );
+  `;
+  const trendParams = range
+    ? [accountIds, range.sinceIso, range.untilIso]
+    : [accountIds, days];
+
+  const trendRes = await db.query<{
+    date: string;
+    account_id: string;
+    name: string;
+    platform: string;
+    followers: string | null;
+  }>(trendSql, trendParams);
 
   // Forward-fill state per account. Pass 1 lần qua rows đã sort by
   // (account_id, date ASC) → giữ lastSeen per account, NULL → dùng lastSeen.

@@ -56,9 +56,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   );
   const days = range.days;
 
-  // Step 3 (incremental rollout): KPI + Trend + Channels table dùng dateRange.
-  // 2 query khác (followers, top performers) vẫn dùng `days` legacy.
-  // Step 4-5 sẽ refactor tiếp.
+  // Step 5 (final): TẤT CẢ 5 query dashboard support custom date range.
   const kpiRange = {
     sinceIso: range.sinceIso,
     untilIso: range.untilIso,
@@ -84,8 +82,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     getTrendData(days, null, simpleRange),
     fetchChannelsTable(days, tagSlug, simpleRange),
     fetchUnreadAlerts(10),
-    fetchTopPerformers(days, 5),
-    fetchFollowersTrend(days),
+    fetchTopPerformers(days, 5, null, simpleRange),
+    fetchFollowersTrend(days, null, simpleRange),
     fetchTopReachPosts(days, 5),
     listAllTags(),
   ]);
@@ -105,8 +103,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <p className="text-sm text-zinc-500 mt-0.5">
             {range.mode === 'custom' ? (
               <>
-                KPI + Trend + Bảng kênh: {range.sinceIso} → {range.untilIso} ({days}
-                ngày) · Followers/Top performers: {days} ngày qua
+                {range.sinceIso} → {range.untilIso} ({days} ngày)
               </>
             ) : (
               <>Hiệu suất toàn hệ thống · {days} ngày qua (không tính hôm nay)</>

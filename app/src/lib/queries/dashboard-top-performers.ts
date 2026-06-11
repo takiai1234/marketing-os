@@ -30,23 +30,42 @@ interface DbRow {
 //   social_post ⟕ post_metric_daily — LEFT vì post mới đăng có thể chưa có metric
 //
 // Score normalize qua window function MAX() OVER () — 1 query duy nhất, no second pass.
+export interface TopPerformersDateRangeIso {
+  sinceIso: string;
+  untilIso: string;
+}
+
 export async function fetchTopPerformers(
   days: number,
   limit = 5,
-  tagSlug?: string | null
+  tagSlug?: string | null,
+  range?: TopPerformersDateRangeIso
 ): Promise<TopPerformerRow[]> {
-  // Tag filter — params: $1=days, $2=limit, $3=tagSlug (if active).
+  // 2 path: range custom (date params) vs days legacy (int param).
+  // Cả 2 đều reference cả 2 date positions (sp.published_at + pmd.date) →
+  // PG infer type được cho mỗi param → tránh 42P18.
+  const params: unknown[] = range
+    ? tagSlug
+      ? [range.sinceIso, range.untilIso, limit, tagSlug]
+      : [range.sinceIso, range.untilIso, limit]
+    : tagSlug
+      ? [days, limit, tagSlug]
+      : [days, limit];
+
+  // Tag filter position khác nhau theo path:
+  //   range path: $4 (since $1, $2 = dates, $3 = limit)
+  //   days path: $3 (since $1 = days, $2 = limit)
+  const tagSlot = range ? '$4' : '$3';
   const tagFilter = tagSlug
     ? `AND sa.id IN (
         SELECT sat.account_id FROM social_account_tag sat
         INNER JOIN channel_tag ct ON ct.id = sat.tag_id
-        WHERE ct.slug = $3
+        WHERE ct.slug = ${tagSlot}
       )`
     : '';
-  const params: unknown[] = tagSlug ? [days, limit, tagSlug] : [days, limit];
 
-  const res = await db.query<DbRow>(
-    `
+  const sql = range
+    ? `
     WITH member_stats AS (
       SELECT
         tm.id,
@@ -54,8 +73,41 @@ export async function fetchTopPerformers(
         COUNT(DISTINCT sp.id) AS posts_count,
         COALESCE(SUM(pmd.reactions + pmd.comments + pmd.shares), 0) AS engagement
       FROM team_member tm
-      -- Filter sa.status != 'disconnected' để member chỉ tính điểm trên kênh
-      -- còn hoạt động. Kênh disconnected thì coi như không có data hôm nay.
+      INNER JOIN social_account sa ON sa.owner_member_id = tm.id
+        AND sa.status != 'disconnected'
+        ${tagFilter}
+      INNER JOIN social_post sp ON sp.account_id = sa.id
+        -- published_at timestamptz so sánh với $::date — auto coerce midnight.
+        AND sp.published_at >= $1::date
+        AND sp.published_at <  $2::date + INTERVAL '1 day'
+      LEFT JOIN post_metric_daily pmd ON pmd.post_id = sp.id
+        AND pmd.date >= $1::date
+        AND pmd.date <= $2::date
+      GROUP BY tm.id, tm.name
+      HAVING COUNT(DISTINCT sp.id) > 0
+    )
+    SELECT
+      id,
+      name,
+      posts_count,
+      engagement,
+      CASE
+        WHEN MAX(engagement) OVER () > 0
+        THEN ROUND(engagement::NUMERIC / MAX(engagement) OVER () * 100, 1)
+        ELSE 0
+      END AS score
+    FROM member_stats
+    ORDER BY engagement DESC, posts_count DESC
+    LIMIT $3
+    `
+    : `
+    WITH member_stats AS (
+      SELECT
+        tm.id,
+        tm.name,
+        COUNT(DISTINCT sp.id) AS posts_count,
+        COALESCE(SUM(pmd.reactions + pmd.comments + pmd.shares), 0) AS engagement
+      FROM team_member tm
       INNER JOIN social_account sa ON sa.owner_member_id = tm.id
         AND sa.status != 'disconnected'
         ${tagFilter}
@@ -81,9 +133,9 @@ export async function fetchTopPerformers(
     FROM member_stats
     ORDER BY engagement DESC, posts_count DESC
     LIMIT $2
-    `,
-    params
-  );
+    `;
+
+  const res = await db.query<DbRow>(sql, params);
 
   return res.rows.map((r, i) => ({
     id: r.id,
