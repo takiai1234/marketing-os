@@ -104,6 +104,9 @@ export const DEFAULT_TWITTER_ACTOR = 'apidojo/twitter-scraper-lite';
 /** Default Facebook posts actor — apify/facebook-posts-scraper. */
 export const DEFAULT_FACEBOOK_ACTOR = 'apify/facebook-posts-scraper';
 
+/** Default Facebook Ads Library scraper — apify/facebook-ads-scraper. */
+export const DEFAULT_FACEBOOK_ADS_ACTOR = 'apify/facebook-ads-scraper';
+
 /** Build input cho Twitter scraper từ list handle.
  *
  *  Mỗi actor có field name khác nhau cho input. Để work với nhiều actor
@@ -155,6 +158,38 @@ export function buildFacebookInput(
   return {
     startUrls,
     resultsLimit: pages.length * resultsLimitPerPage,
+  };
+}
+
+/** Build input cho Facebook Ads Library scraper từ 1 hoặc nhiều URL.
+ *
+ *  Input accept:
+ *    - Link Ads Library trực tiếp (https://www.facebook.com/ads/library/?...)
+ *    - Link/slug page (https://www.facebook.com/huanyoutube hoặc "huanyoutube")
+ *      → expand thành full URL; actor tự resolve sang ads của page đó.
+ *
+ *  Mỗi actor đặt tên field khác nhau (urls / startUrls; count / resultsLimit /
+ *  maxItems) → push hết các candidate, actor chỉ đọc field nó cần.
+ */
+export function buildFacebookAdsInput(
+  urls: string[],
+  count = 50
+): Record<string, unknown> {
+  const normalized = urls.map((u) => {
+    const trimmed = u.trim();
+    if (trimmed.startsWith('http')) return trimmed;
+    return `https://www.facebook.com/${trimmed}`;
+  });
+  const urlObjects = normalized.map((url) => ({ url }));
+  return {
+    urls: urlObjects,
+    startUrls: urlObjects,
+    count,
+    resultsLimit: count,
+    maxItems: count,
+    // Quét cả ad đang chạy lẫn đã ngừng — bức tranh đầy đủ hơn.
+    activeStatus: 'all',
+    'scrapePageAds.activeStatus': 'all',
   };
 }
 

@@ -14,7 +14,7 @@
 // Raw payload luôn lưu nguyên — nếu mapping sai field trong tương lai, vẫn
 // có thể re-process từ DB không cần re-scrape Apify.
 
-export type ApifySourceType = 'twitter' | 'facebook';
+export type ApifySourceType = 'twitter' | 'facebook' | 'facebook_ads';
 
 export interface MappedNewsArticle {
   source: string;          // news_article.source (vd "twitter:sama")
@@ -204,6 +204,97 @@ export function mapFacebookItem(
   };
 }
 
+// ─── Facebook Ads Library mapper ────────────────────────────────────────
+//
+// Khác mapFacebookItem (post trên page), đây là quảng cáo từ Ads Library.
+// Output shape phụ thuộc actor — phổ biến nhất:
+//   apify/facebook-ads-scraper, curious_coder/facebook-ads-library-scraper
+// Các actor này gói nội dung ad trong `snapshot` (body.text, images, videos,
+// cards, title, pageProfilePictureURL) + metadata phẳng (adArchiveID, pageName,
+// startDate, url). Field naming lẫn lộn camelCase/snake/UPPER → thử nhiều key.
+
+/** startDate của ad library thường là epoch (giây HOẶC ms) hoặc ISO string.
+ *  parseDate() coi number là ms → epoch giây sẽ ra 1970. Tự normalize giây→ms. */
+function parseAdDate(v: unknown): Date | null {
+  if (typeof v === 'number') {
+    // < 10^12 ≈ trước năm 2001 nếu tính bằng ms → chắc chắn là giây
+    const ms = v < 1e12 ? v * 1000 : v;
+    const d = new Date(ms);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return parseDate(v);
+}
+
+export function mapFacebookAdItem(
+  item: Record<string, unknown>
+): MappedNewsArticle | null {
+  const snapshot = (item.snapshot ?? {}) as Record<string, unknown>;
+
+  // Nội dung ad: snapshot.body.text → card đầu tiên → field phẳng
+  const text =
+    asString(getNested(snapshot, ['body', 'text'])) ??
+    asString(getNested(snapshot, ['cards', '0', 'body'])) ??
+    asString(snapshot.title) ??
+    coalesceField(item, ['adText', 'bodyText', 'text', 'body', 'title']);
+
+  // Link canonical: url trực tiếp → build từ ad archive id (dedupe key)
+  const archiveId = coalesceField(item, [
+    'adArchiveID', 'ad_archive_id', 'adArchiveId', 'adId', 'id',
+  ]);
+  const url =
+    coalesceField(item, ['url', 'adLibraryUrl', 'adUrl', 'snapshotUrl']) ??
+    (archiveId ? `https://www.facebook.com/ads/library/?id=${archiveId}` : null);
+
+  if (!url) return null; // không có link → không dedupe được, bỏ
+
+  const pageName =
+    coalesceField(item, ['pageName', 'page_name', 'pageTitle']) ??
+    asString(getNested(snapshot, ['page', 'name']));
+
+  const authorAvatar =
+    asString(getNested(snapshot, ['pageProfilePictureURL'])) ??
+    asString(getNested(snapshot, ['pageProfilePictureUrl'])) ??
+    coalesceField(item, ['pageProfilePictureUrl']);
+
+  const publishedAt = parseAdDate(
+    item.startDate ?? item.start_date ?? item.startDateFormatted ??
+      item.createdAt ?? item.deliveryStartTime
+  );
+
+  const coverImage =
+    asString(getNested(snapshot, ['images', '0', 'originalImageURL'])) ??
+    asString(getNested(snapshot, ['images', '0', 'resizedImageUrl'])) ??
+    asString(getNested(snapshot, ['images', '0', 'originalImageUrl'])) ??
+    asString(getNested(snapshot, ['videos', '0', 'videoPreviewImageURL'])) ??
+    asString(getNested(snapshot, ['videos', '0', 'videoPreviewImageUrl'])) ??
+    asString(getNested(snapshot, ['cards', '0', 'originalImageURL'])) ??
+    asString(getNested(snapshot, ['cards', '0', 'resizedImageUrl'])) ??
+    coalesceField(item, ['imageUrl', 'thumbnailUrl', 'previewImage']);
+
+  // Title: dùng text ad; nếu rỗng (ad chỉ có ảnh) → fallback theo page
+  const cleaned = (text ?? '').replace(/\s+/g, ' ').trim();
+  const title = cleaned
+    ? truncate(cleaned, 120)
+    : pageName
+      ? `Quảng cáo — ${pageName}`
+      : 'Quảng cáo Facebook';
+  const description = cleaned ? truncate(cleaned, 500) : null;
+
+  return {
+    source: pageName ? `facebook_ads:${pageName}` : 'facebook_ads:unknown',
+    sourceType: 'facebook_ads',
+    title,
+    link: url,
+    description,
+    coverImage,
+    publishedAt,
+    authorHandle: pageName,
+    authorName: pageName,
+    authorAvatar,
+    rawPayload: item,
+  };
+}
+
 /** Route mapper theo source type. */
 export function mapApifyItem(
   type: ApifySourceType,
@@ -211,5 +302,6 @@ export function mapApifyItem(
 ): MappedNewsArticle | null {
   if (type === 'twitter') return mapTwitterItem(item);
   if (type === 'facebook') return mapFacebookItem(item);
+  if (type === 'facebook_ads') return mapFacebookAdItem(item);
   return null;
 }

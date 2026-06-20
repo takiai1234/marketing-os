@@ -34,14 +34,24 @@ const FALLBACK_GRADIENT = 'from-zinc-400 to-zinc-600';
 const SOCIAL_GRADIENTS: Record<string, string> = {
   twitter: 'from-sky-400 to-blue-600',
   facebook: 'from-indigo-500 to-blue-700',
+  facebook_ads: 'from-rose-500 to-pink-600',
 };
 
 /** Resolve source → { name, gradient }.
  *  - RSS source: lookup từ NEWS_SOURCES registry
- *  - Social source format "twitter:sama" / "facebook:HoangChironCTO":
- *    - name = "Twitter @sama" / "Facebook HoangChironCTO"
- *    - gradient theo platform */
+ *  - Social source format "twitter:sama" / "facebook:HoangChironCTO" /
+ *    "facebook_ads:PageName":
+ *    - name = "X @sama" / "FB HoangChironCTO" / "FB Ads PageName"
+ *    - gradient theo platform
+ *  Lưu ý "facebook_ads" phải check TRƯỚC "facebook" vì cùng tiền tố. */
 function resolveSource(rawSource: string): { name: string; gradient: string } {
+  if (rawSource.startsWith('facebook_ads:')) {
+    const handle = rawSource.slice('facebook_ads:'.length);
+    return {
+      name: `FB Ads ${handle}`,
+      gradient: SOCIAL_GRADIENTS.facebook_ads!,
+    };
+  }
   if (rawSource.startsWith('twitter:') || rawSource.startsWith('facebook:')) {
     const [platform, handle] = rawSource.split(':');
     const platformLabel =
