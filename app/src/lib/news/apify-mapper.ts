@@ -254,20 +254,25 @@ export function mapFacebookAdItem(
   const authorAvatar =
     asString(getNested(snapshot, ['pageProfilePictureURL'])) ??
     asString(getNested(snapshot, ['pageProfilePictureUrl'])) ??
-    coalesceField(item, ['pageProfilePictureUrl']);
+    asString(getNested(snapshot, ['page_profile_picture_url'])) ??
+    coalesceField(item, ['pageProfilePictureUrl', 'page_profile_picture_url']);
 
   const publishedAt = parseAdDate(
     item.startDate ?? item.start_date ?? item.startDateFormatted ??
-      item.createdAt ?? item.deliveryStartTime
+      item.ad_delivery_start_time ?? item.createdAt ?? item.deliveryStartTime
   );
 
   const coverImage =
     asString(getNested(snapshot, ['images', '0', 'originalImageURL'])) ??
+    asString(getNested(snapshot, ['images', '0', 'original_image_url'])) ??
     asString(getNested(snapshot, ['images', '0', 'resizedImageUrl'])) ??
+    asString(getNested(snapshot, ['images', '0', 'resized_image_url'])) ??
     asString(getNested(snapshot, ['images', '0', 'originalImageUrl'])) ??
     asString(getNested(snapshot, ['videos', '0', 'videoPreviewImageURL'])) ??
+    asString(getNested(snapshot, ['videos', '0', 'video_preview_image_url'])) ??
     asString(getNested(snapshot, ['videos', '0', 'videoPreviewImageUrl'])) ??
     asString(getNested(snapshot, ['cards', '0', 'originalImageURL'])) ??
+    asString(getNested(snapshot, ['cards', '0', 'original_image_url'])) ??
     asString(getNested(snapshot, ['cards', '0', 'resizedImageUrl'])) ??
     coalesceField(item, ['imageUrl', 'thumbnailUrl', 'previewImage']);
 
