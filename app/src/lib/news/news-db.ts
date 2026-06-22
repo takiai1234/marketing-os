@@ -39,11 +39,12 @@ export async function listNewsArticles(
   offset: number = 0
 ): Promise<StoredNewsItem[]> {
   const params: (string | number)[] = [];
-  let where = '';
+  const conds: string[] = ['hidden = false']; // luôn ẩn bài đã bị admin ẩn
   if (sourceId) {
     params.push(sourceId);
-    where = `WHERE source = $1`;
+    conds.push(`source = $${params.length}`);
   }
+  const where = `WHERE ${conds.join(' AND ')}`;
   params.push(limit);
   const limitParam = `$${params.length}`;
   params.push(offset);
@@ -73,16 +74,26 @@ export async function listNewsArticles(
 /** Đếm tổng số tin (cho phân trang). Optional filter theo source. */
 export async function countNewsArticles(sourceId?: string): Promise<number> {
   const params: string[] = [];
-  let where = '';
+  const conds: string[] = ['hidden = false'];
   if (sourceId) {
     params.push(sourceId);
-    where = `WHERE source = $1`;
+    conds.push(`source = $${params.length}`);
   }
+  const where = `WHERE ${conds.join(' AND ')}`;
   const { rows } = await db.query<{ count: number }>(
     `SELECT COUNT(*)::int AS count FROM news_article ${where}`,
     params
   );
   return rows[0]?.count ?? 0;
+}
+
+/** Ẩn 1 bài khỏi danh sách (soft-hide). Trả về true nếu có row bị ẩn. */
+export async function hideNewsArticle(id: string): Promise<boolean> {
+  const { rowCount } = await db.query(
+    `UPDATE news_article SET hidden = true WHERE id = $1 AND hidden = false`,
+    [id]
+  );
+  return (rowCount ?? 0) > 0;
 }
 
 function rowToItem(row: NewsArticleRow): StoredNewsItem {

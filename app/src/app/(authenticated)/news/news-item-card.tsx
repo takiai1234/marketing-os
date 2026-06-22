@@ -8,6 +8,7 @@ import { getSourceById } from '@/lib/news/sources';
 import type { StoredNewsItem } from '@/lib/news/news-db';
 import { RewriteButton } from '@/components/rewrite/rewrite-button';
 import { NewsCoverImage } from './news-cover-image';
+import { NewsDeleteButton } from './news-delete-button';
 
 /** Format "Xh trước" / "Xd trước" / "DD/MM" — pattern giống library/post-card. */
 function formatRelativeDate(isoStr: string | null): string {
@@ -90,12 +91,15 @@ export function NewsItemCard({ item }: NewsItemCardProps) {
     : item.title;
 
   return (
-    <a
+    <div className="relative group">
+      {/* Nút ẩn bài — sibling của <a> (không lồng trong link) */}
+      <NewsDeleteButton id={item.id} />
+      <a
       href={item.link}
       target="_blank"
       // rel noopener: chống tab-nabbing
       rel="noopener noreferrer"
-      className="group flex flex-col rounded-xl bg-white ring-1 ring-zinc-200 overflow-hidden hover:ring-blue-400 hover:shadow-md transition-all"
+      className="flex flex-col rounded-xl bg-white ring-1 ring-zinc-200 overflow-hidden hover:ring-blue-400 hover:shadow-md transition-all"
     >
       {/* Cover image — aspect 16/9 cố định. Client subcomponent handle
           onError fallback (FB CDN expire token, image 404, CORS block...) */}
@@ -142,6 +146,7 @@ export function NewsItemCard({ item }: NewsItemCardProps) {
           />
         </div>
       </div>
-    </a>
+      </a>
+    </div>
   );
 }
