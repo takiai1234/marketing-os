@@ -85,6 +85,71 @@ function extractArticles() {
   return out;
 }
 
+// Chạy TRONG trang Facebook: dò theo TỪNG BÀI ĐĂNG (mỗi khối role="article" = 1
+// bài). Quan trọng: 1 bài nhiều ảnh vẫn tính LÀ 1 BÀI (lấy ảnh đầu làm bìa),
+// KHÔNG tách mỗi ảnh thành 1 mục. Dedupe theo permalink đã làm sạch tracking.
+function extractFacebookPosts() {
+  function cleanUrl(href) {
+    try {
+      const u = new URL(href, location.href);
+      const keep = new URLSearchParams();
+      ['story_fbid', 'id', 'v', 'fbid'].forEach((k) => {
+        const val = u.searchParams.get(k);
+        if (val) keep.set(k, val);
+      });
+      u.search = keep.toString(); // bỏ __cft__/__tn__... để dedupe ổn định
+      u.hash = '';
+      return u.toString();
+    } catch (_) {
+      return href;
+    }
+  }
+
+  const out = [];
+  const seen = new Set();
+  const articles = document.querySelectorAll('div[role="article"]');
+  for (const art of articles) {
+    // Permalink của bài: link bài/ảnh/video/reel
+    let url = '';
+    const links = art.querySelectorAll('a[href]');
+    for (const a of links) {
+      const href = a.href || '';
+      if (
+        /\/posts\/|\/permalink\/|\/videos\/|\/reel\/|\/photo/.test(href) ||
+        /story_fbid=|[?&]fbid=/.test(href)
+      ) {
+        url = cleanUrl(href);
+        break;
+      }
+    }
+    if (!url || seen.has(url)) continue;
+
+    // Nội dung bài
+    let text = '';
+    const msgEl =
+      art.querySelector('[data-ad-preview="message"]') ||
+      art.querySelector('[data-ad-comet-preview="message"]') ||
+      art.querySelector('div[dir="auto"]');
+    if (msgEl) text = msgEl.innerText || '';
+    text = String(text).replace(/\s+/g, ' ').trim();
+
+    // Ảnh ĐẦU TIÊN làm bìa (bài nhiều ảnh → vẫn 1 bài)
+    let img = '';
+    const im = art.querySelector('img[src*="scontent"]') || art.querySelector('img');
+    if (im) img = im.currentSrc || im.getAttribute('src') || '';
+
+    seen.add(url);
+    out.push({
+      url,
+      title: (text || 'Bài viết Facebook').slice(0, 200),
+      image: img || '',
+      text: text.slice(0, 600),
+    });
+    if (out.length >= 100) break;
+  }
+  return out;
+}
+
 function setStatus(msg, kind) {
   elStatus.textContent = msg;
   elStatus.className = kind || '';
@@ -274,13 +339,18 @@ elScanPage.addEventListener('click', async () => {
   }
 
   elScanPage.disabled = true;
-  setStatus('Đang dò bài viết trên trang…');
+
+  // Facebook → dò theo từng BÀI ĐĂNG (1 bài = 1 mục, nhiều ảnh vẫn 1 bài).
+  // Trang web thường → dò mọi link bài viết.
+  const isFb = /^https?:\/\/([a-z-]+\.)?facebook\.com\//.test(tab.url || '');
+  const extractor = isFb ? extractFacebookPosts : extractArticles;
+  setStatus(isFb ? 'Đang dò bài đăng Facebook…' : 'Đang dò bài viết trên trang…');
 
   let articles;
   try {
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      func: extractArticles,
+      func: extractor,
     });
     articles = (results && results[0] && results[0].result) || [];
   } catch (e) {
@@ -290,7 +360,12 @@ elScanPage.addEventListener('click', async () => {
   }
 
   if (!articles.length) {
-    setStatus('Không tìm thấy bài viết nào trên trang. Thử trang danh sách (trang chủ blog, chuyên mục).', 'err');
+    setStatus(
+      isFb
+        ? 'Chưa thấy bài đăng nào. Cuộn trang Facebook để nạp bài rồi Quét lại.'
+        : 'Không tìm thấy bài viết nào trên trang. Thử trang danh sách (trang chủ blog, chuyên mục).',
+      'err'
+    );
     elScanPage.disabled = false;
     return;
   }
