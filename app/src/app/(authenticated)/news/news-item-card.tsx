@@ -35,6 +35,7 @@ const SOCIAL_GRADIENTS: Record<string, string> = {
   twitter: 'from-sky-400 to-blue-600',
   facebook: 'from-indigo-500 to-blue-700',
   facebook_ads: 'from-rose-500 to-pink-600',
+  web: 'from-teal-400 to-emerald-600',
 };
 
 /** Resolve source → { name, gradient }.
@@ -50,6 +51,13 @@ function resolveSource(rawSource: string): { name: string; gradient: string } {
     return {
       name: `FB Ads ${handle}`,
       gradient: SOCIAL_GRADIENTS.facebook_ads!,
+    };
+  }
+  if (rawSource.startsWith('web:')) {
+    const domain = rawSource.slice('web:'.length);
+    return {
+      name: `Web · ${domain}`,
+      gradient: SOCIAL_GRADIENTS.web!,
     };
   }
   if (rawSource.startsWith('twitter:') || rawSource.startsWith('facebook:')) {

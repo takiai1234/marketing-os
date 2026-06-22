@@ -16,12 +16,13 @@ const SESSION_TTL = 60 * 60 * 24 * 7;
 // 10MB body (proxyClientMaxBodySize) — sẽ truncate file lớn. Route handler
 // tự check session bên trong nên không mất bảo mật.
 //
-// `api/news/ingest-ads` được loại trừ vì gọi từ Chrome extension (không có
-// session cookie) — route tự xác thực bằng bearer token ADS_INGEST_TOKEN.
-// Nếu không loại trừ, proxy redirect /login → extension không push được.
+// `api/news/ingest-ads` và `api/news/ingest-web` được loại trừ vì gọi từ
+// Chrome extension (không có session cookie) — route tự xác thực bằng bearer
+// token ADS_INGEST_TOKEN. Nếu không loại trừ, proxy redirect /login →
+// extension không push được.
 export const config = {
   matcher: [
-    '/((?!api/auth|api/skills/upload|api/news/ingest-ads|_next|favicon.ico|public|login).*)',
+    '/((?!api/auth|api/skills/upload|api/news/ingest-ads|api/news/ingest-web|_next|favicon.ico|public|login).*)',
   ],
 };
 

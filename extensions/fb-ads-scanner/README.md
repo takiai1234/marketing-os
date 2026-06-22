@@ -1,17 +1,18 @@
-# FB Ads → Marketing OS (Chrome extension)
+# FB Ads + Web Clip → Marketing OS (Chrome extension)
 
-Quét **Facebook Ads Library** ngay trên trình duyệt của bạn rồi đẩy ad về
-Marketing OS (hiện trong tab **Tin tức AI**). **Không cần Apify, không tốn phí.**
+Hai tính năng, đẩy thẳng về Marketing OS (tab **Tin tức AI**), **miễn phí**:
 
-Cách hoạt động: extension hook response GraphQL của trang Ads Library → lấy JSON
-ad có cấu trúc (id, page, nội dung, ảnh/video, ngày chạy) → POST về
-`/api/news/ingest-ads` của website. Server map + lưu (dedupe theo link).
+1. **Quét Facebook Ads Library** — hook GraphQL của trang Ads Library → lấy JSON
+   ad có cấu trúc → POST `/api/news/ingest-ads` (badge "FB Ads").
+2. **Clip trang web bất kỳ** — mở 1 trang bất kỳ, bấm Clip → lấy tiêu đề + ảnh +
+   nội dung → POST `/api/news/ingest-web` (badge "Web").
 
 ```
-Mở facebook.com/ads/library → cuộn nạp ad → bấm Scan
-   → extension gom ad → POST /api/news/ingest-ads (Bearer token)
-   → news_article → hiện ở Tin tức AI (badge "FB Ads")
+[FB Ads]  facebook.com/ads/library → cuộn nạp ad → Scan → badge "FB Ads"
+[Clip]    bất kỳ trang web nào → bấm "Clip trang đang mở" → badge "Web"
 ```
+
+Cả hai dùng chung 1 token (ADS_INGEST_TOKEN). Server dedupe theo link.
 
 ---
 

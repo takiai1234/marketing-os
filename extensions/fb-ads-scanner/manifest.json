@@ -3,7 +3,7 @@
   "name": "FB Ads → Marketing OS",
   "version": "1.0.0",
   "description": "Quét Facebook Ads Library và đẩy về Marketing OS (Tin tức AI). Không cần Apify.",
-  "permissions": ["storage", "activeTab", "tabs"],
+  "permissions": ["storage", "activeTab", "tabs", "scripting"],
   "host_permissions": [
     "https://www.facebook.com/*",
     "https://*/*",

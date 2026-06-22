@@ -79,19 +79,30 @@
     <input id="token" type="password" placeholder="dán token đã set trên server" />
 
     <div class="row">
-      <button id="scan" class="primary">Scan &amp; đẩy</button>
-      <button id="save" class="ghost">Lưu</button>
+      <button id="save" class="ghost">Lưu cấu hình</button>
     </div>
 
-    <div id="status">Chưa quét.</div>
+    <hr style="border: 0; border-top: 1px solid var(--border); margin: 14px 0 10px" />
 
-    <p class="hint">
+    <div style="font-size: 12px; font-weight: 600; margin-bottom: 6px">📡 Quét Facebook Ads</div>
+    <button id="scan" class="primary" style="width: 100%">Scan &amp; đẩy ad</button>
+    <p class="hint" style="margin-top: 6px">
       Mở
       <a href="https://www.facebook.com/ads/library/" target="_blank" rel="noopener"
         >Facebook Ads Library</a
-      >, tìm &amp; <b>cuộn để nạp thêm ad</b>, rồi bấm <b>Scan</b>. Extension gom
-      ad bạn đã cuộn qua và đẩy về website.
+      >, <b>cuộn để nạp ad</b>, rồi bấm Scan.
     </p>
+
+    <div style="font-size: 12px; font-weight: 600; margin: 14px 0 6px">📎 Clip trang web bất kỳ</div>
+    <button id="clip" class="primary" style="width: 100%; background: var(--ok)">
+      Clip trang đang mở
+    </button>
+    <p class="hint" style="margin-top: 6px">
+      Mở <b>bất kỳ trang web nào</b> (landing page, bài báo…) rồi bấm để lưu tiêu
+      đề + ảnh + nội dung vào Tin tức.
+    </p>
+
+    <div id="status">Sẵn sàng.</div>
 
     <script src="popup.js"></script>
   </body>

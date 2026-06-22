@@ -14,7 +14,10 @@
 // Raw payload luôn lưu nguyên — nếu mapping sai field trong tương lai, vẫn
 // có thể re-process từ DB không cần re-scrape Apify.
 
-export type ApifySourceType = 'twitter' | 'facebook' | 'facebook_ads';
+// Tập source_type đi qua upsertApifyArticles (khác 'rss' của RSS feed).
+// 'web' = clip trang web bất kỳ qua extension (không phải Apify, nhưng dùng
+// chung đường upsert nên gom vào đây).
+export type ApifySourceType = 'twitter' | 'facebook' | 'facebook_ads' | 'web';
 
 export interface MappedNewsArticle {
   source: string;          // news_article.source (vd "twitter:sama")
