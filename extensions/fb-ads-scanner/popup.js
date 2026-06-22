@@ -10,6 +10,7 @@ const elSite = $('siteUrl');
 const elToken = $('token');
 const elScan = $('scan');
 const elClip = $('clip');
+const elScanPage = $('scanpage');
 const elSave = $('save');
 const elStatus = $('status');
 
@@ -41,6 +42,47 @@ function extractPageContent() {
     image: image || '',
     text: String(text).slice(0, 600),
   };
+}
+
+// Chạy TRONG trang: dò mọi "bài viết" trên trang danh sách (blog, chuyên mục).
+// Heuristic: lấy các <a> có tiêu đề đủ dài, kèm ảnh gần đó; bỏ link nav/footer
+// ngắn; dedupe theo URL; tối đa 150 bài. Tự chứa, không tham chiếu ngoài.
+function extractArticles() {
+  const out = [];
+  const seen = new Set();
+  function abs(href) {
+    try {
+      return new URL(href, location.href).toString();
+    } catch (_) {
+      return null;
+    }
+  }
+  const anchors = Array.from(document.querySelectorAll('a[href]'));
+  for (const a of anchors) {
+    const href = a.getAttribute('href');
+    if (!href || href[0] === '#' || /^(javascript|mailto|tel):/i.test(href)) continue;
+    const url = abs(href);
+    if (!url || !/^https?:/i.test(url)) continue;
+    if (seen.has(url)) continue;
+
+    // Tiêu đề: heading bên trong link, hoặc text của link, hoặc aria-label
+    let title = '';
+    const h = a.querySelector('h1,h2,h3,h4');
+    if (h && h.innerText) title = h.innerText;
+    if (!title) title = a.getAttribute('aria-label') || a.innerText || a.textContent || '';
+    title = String(title).replace(/\s+/g, ' ').trim();
+    if (title.length < 18 || title.length > 300) continue; // lọc link nav/rác
+
+    // Ảnh gần đó: trong link, hoặc trong khối cha (article/li/card)
+    let img = '';
+    const im = a.querySelector('img') || (a.closest('article, li, .card, div') || document).querySelector('img');
+    if (im) img = im.currentSrc || im.getAttribute('src') || '';
+
+    seen.add(url);
+    out.push({ url, title, image: img || '', text: '' });
+    if (out.length >= 150) break;
+  }
+  return out;
 }
 
 function setStatus(msg, kind) {
@@ -215,5 +257,65 @@ elClip.addEventListener('click', async () => {
     setStatus('Không gọi được website. Kiểm tra URL/mạng.\n(' + e.message + ')', 'err');
   } finally {
     elClip.disabled = false;
+  }
+});
+
+// ─── Quét tất cả bài trên trang danh sách ───────────────────────────────
+elScanPage.addEventListener('click', async () => {
+  const { siteUrl, token } = await saveConfig();
+  if (!siteUrl || !token) {
+    setStatus('Nhập Website URL và token trước.', 'err');
+    return;
+  }
+  const tab = await getActiveTab();
+  if (!tab || !/^https?:\/\//.test(tab.url || '')) {
+    setStatus('Mở một trang web (http/https) rồi bấm Quét.', 'err');
+    return;
+  }
+
+  elScanPage.disabled = true;
+  setStatus('Đang dò bài viết trên trang…');
+
+  let articles;
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: extractArticles,
+    });
+    articles = (results && results[0] && results[0].result) || [];
+  } catch (e) {
+    setStatus('Không đọc được trang này (trang đặc biệt / bị chặn).\n(' + e.message + ')', 'err');
+    elScanPage.disabled = false;
+    return;
+  }
+
+  if (!articles.length) {
+    setStatus('Không tìm thấy bài viết nào trên trang. Thử trang danh sách (trang chủ blog, chuyên mục).', 'err');
+    elScanPage.disabled = false;
+    return;
+  }
+
+  setStatus('Tìm thấy ' + articles.length + ' bài — đang lưu…');
+  try {
+    const res = await fetch(siteUrl + '/api/news/ingest-web', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ items: articles }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setStatus('Lỗi server (' + res.status + '): ' + (data.error || ''), 'err');
+      return;
+    }
+    const inserted = data.inserted ?? 0;
+    if (inserted > 0) {
+      setStatus('✓ Đã lưu ' + inserted + ' bài mới (dò ' + articles.length + ' link).', 'ok');
+    } else {
+      setStatus('Dò ' + articles.length + ' link — tất cả đã có trong Tin tức.', 'ok');
+    }
+  } catch (e) {
+    setStatus('Không gọi được website. Kiểm tra URL/mạng.\n(' + e.message + ')', 'err');
+  } finally {
+    elScanPage.disabled = false;
   }
 });

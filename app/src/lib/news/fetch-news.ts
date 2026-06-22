@@ -11,28 +11,44 @@
 //   - 5 phút đủ để hấp thụ traffic spike, đủ tươi vì cron chạy 1h/lần
 
 import { unstable_cache } from 'next/cache';
-import { listNewsArticles, type StoredNewsItem } from './news-db';
+import { listNewsArticles, countNewsArticles, type StoredNewsItem } from './news-db';
 
 const CACHE_TTL_SECONDS = 300; // 5 phút
 
+/** Số tin mỗi trang. */
+export const NEWS_PAGE_SIZE = 60;
+
+export interface NewsPage {
+  items: StoredNewsItem[];
+  total: number;
+  pageSize: number;
+}
+
 /**
- * Lấy danh sách tin tức, optional filter theo source id.
+ * Lấy 1 trang tin tức, optional filter theo source id.
  *
  * @param sourceId — undefined: all sources. 'venturebeat-ai'|'techcrunch-ai'|...
+ * @param page — số trang (1-based). Offset = (page-1) * NEWS_PAGE_SIZE.
  *
- * Cache key tự động bao gồm sourceId (closure capture) → mỗi filter có
- * cache entry riêng, không bị nhiễm chéo.
+ * Cache key tự động bao gồm sourceId + page (closure capture) → mỗi (filter,
+ * trang) có cache entry riêng, không nhiễm chéo.
  */
 export const getAiNews = unstable_cache(
-  async (sourceId?: string): Promise<StoredNewsItem[]> => {
+  async (sourceId?: string, page: number = 1): Promise<NewsPage> => {
+    const safePage = Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1;
+    const offset = (safePage - 1) * NEWS_PAGE_SIZE;
     try {
-      return await listNewsArticles(sourceId);
+      const [items, total] = await Promise.all([
+        listNewsArticles(sourceId, NEWS_PAGE_SIZE, offset),
+        countNewsArticles(sourceId),
+      ]);
+      return { items, total, pageSize: NEWS_PAGE_SIZE };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'unknown';
       console.error('[news/fetch-news] DB query failed:', msg);
-      return [];
+      return { items: [], total: 0, pageSize: NEWS_PAGE_SIZE };
     }
   },
-  ['ai-news-list-v2'],
+  ['ai-news-list-v3'],
   { tags: ['news'], revalidate: CACHE_TTL_SECONDS }
 );

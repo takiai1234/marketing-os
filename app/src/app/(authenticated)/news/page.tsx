@@ -4,12 +4,14 @@
 // Filter theo source qua searchParams ?source=... (handled in NewsSourceTabs).
 
 import type { Metadata } from 'next';
+import type { StoredNewsItem } from '@/lib/news/news-db';
 import { getAiNews } from '@/lib/news/fetch-news';
 import { VALID_SOURCE_IDS } from '@/lib/news/sources';
 import { NewsItemCard } from './news-item-card';
 import { NewsSourceTabs } from './news-source-tabs';
 import { NewsFetchNowButton } from './news-fetch-now-button';
 import { NewsScanForm } from './news-scan-form';
+import { NewsPagination } from './news-pagination';
 
 export const metadata: Metadata = {
   title: 'Tin tức AI — Marketing OS',
@@ -28,10 +30,19 @@ function parseSourceFilter(raw: string | string[] | undefined): string | undefin
   return VALID_SOURCE_IDS.has(raw) ? raw : undefined;
 }
 
+/** Parse ?page= → số nguyên ≥ 1. Sai/thiếu → 1. */
+function parsePage(raw: string | string[] | undefined): number {
+  if (typeof raw !== 'string') return 1;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 1 ? n : 1;
+}
+
 export default async function NewsPage({ searchParams }: NewsPageProps) {
   const params = await searchParams;
   const sourceFilter = parseSourceFilter(params.source);
-  const items = await getAiNews(sourceFilter);
+  const page = parsePage(params.page);
+  const { items, total, pageSize } = await getAiNews(sourceFilter, page);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <div className="flex flex-col gap-6">
@@ -45,7 +56,10 @@ export default async function NewsPage({ searchParams }: NewsPageProps) {
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <p className="text-xs text-zinc-500">
-            {NUMBER_FMT.format(items.length)} bài
+            {NUMBER_FMT.format(total)} bài
+            {totalPages > 1 && (
+              <span className="text-zinc-400"> · trang {page}/{totalPages}</span>
+            )}
           </p>
           <NewsFetchNowButton />
         </div>
@@ -57,12 +71,19 @@ export default async function NewsPage({ searchParams }: NewsPageProps) {
       {/* Source tabs */}
       <NewsSourceTabs />
 
-      {items.length === 0 ? <EmptyState /> : <NewsGrid items={items} />}
+      {items.length === 0 ? (
+        <EmptyState />
+      ) : (
+        <>
+          <NewsGrid items={items} />
+          <NewsPagination page={page} totalPages={totalPages} />
+        </>
+      )}
     </div>
   );
 }
 
-function NewsGrid({ items }: { items: Awaited<ReturnType<typeof getAiNews>> }) {
+function NewsGrid({ items }: { items: StoredNewsItem[] }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       {items.map((item) => (

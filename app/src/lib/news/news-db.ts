@@ -35,7 +35,8 @@ const PRUNE_DAYS = 30;
  */
 export async function listNewsArticles(
   sourceId?: string,
-  limit: number = LIST_DEFAULT_LIMIT
+  limit: number = LIST_DEFAULT_LIMIT,
+  offset: number = 0
 ): Promise<StoredNewsItem[]> {
   const params: (string | number)[] = [];
   let where = '';
@@ -45,6 +46,8 @@ export async function listNewsArticles(
   }
   params.push(limit);
   const limitParam = `$${params.length}`;
+  params.push(offset);
+  const offsetParam = `$${params.length}`;
 
   // Sắp xếp: RSS/social theo ngày đăng (published_at). RIÊNG facebook_ads sắp
   // theo fetched_at (thời điểm quét) — vì ad có "ngày bắt đầu chạy" cũ, nếu
@@ -59,12 +62,27 @@ export async function listNewsArticles(
       (CASE WHEN source_type = 'facebook_ads' THEN fetched_at ELSE published_at END)
         DESC NULLS LAST,
       fetched_at DESC
-    LIMIT ${limitParam}
+    LIMIT ${limitParam} OFFSET ${offsetParam}
     `,
     params
   );
 
   return rows.map(rowToItem);
+}
+
+/** Đếm tổng số tin (cho phân trang). Optional filter theo source. */
+export async function countNewsArticles(sourceId?: string): Promise<number> {
+  const params: string[] = [];
+  let where = '';
+  if (sourceId) {
+    params.push(sourceId);
+    where = `WHERE source = $1`;
+  }
+  const { rows } = await db.query<{ count: number }>(
+    `SELECT COUNT(*)::int AS count FROM news_article ${where}`,
+    params
+  );
+  return rows[0]?.count ?? 0;
 }
 
 function rowToItem(row: NewsArticleRow): StoredNewsItem {

@@ -21,6 +21,8 @@ export function NewsSourceTabs() {
     } else {
       params.set('source', value);
     }
+    // Đổi nguồn → về trang 1 (số trang cũ có thể vượt phạm vi của filter mới).
+    params.delete('page');
     const qs = params.toString();
     router.push('/news' + (qs ? '?' + qs : ''));
   }
