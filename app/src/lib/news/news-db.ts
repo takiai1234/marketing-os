@@ -46,12 +46,19 @@ export async function listNewsArticles(
   params.push(limit);
   const limitParam = `$${params.length}`;
 
+  // Sắp xếp: RSS/social theo ngày đăng (published_at). RIÊNG facebook_ads sắp
+  // theo fetched_at (thời điểm quét) — vì ad có "ngày bắt đầu chạy" cũ, nếu
+  // dùng published_at sẽ bị chìm xuống dưới feed, vừa quét xong không thấy đâu.
+  // Dùng fetched_at để ad mới quét nổi lên đầu như "vừa thêm".
   const { rows } = await db.query<NewsArticleRow>(
     `
     SELECT id, source, title, link, description, cover_image, published_at, fetched_at
     FROM news_article
     ${where}
-    ORDER BY published_at DESC NULLS LAST, fetched_at DESC
+    ORDER BY
+      (CASE WHEN source_type = 'facebook_ads' THEN fetched_at ELSE published_at END)
+        DESC NULLS LAST,
+      fetched_at DESC
     LIMIT ${limitParam}
     `,
     params
