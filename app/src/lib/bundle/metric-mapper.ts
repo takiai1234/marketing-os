@@ -102,9 +102,10 @@ export function mapAccountAggregate(
 
   return {
     followers: agg.followers ?? 0,
-    // follower_growth requires diffing yesterday — leave 0 for Bundle path
-    // unless we wire a separate "diff vs last day" step. Acceptable since
-    // it's just for the dashboard sparkline (growth %s).
+    // follower_growth được TÍNH ở tầng upsert (upsertBundleAccountMetric) =
+    // diff followers vs ngày gần nhất trước đó. Giá trị 0 ở đây bị bỏ qua —
+    // giữ field cho đúng interface. (Trước đây để 0 cứng → KPI team thiếu
+    // follower growth của kênh Bundle.)
     follower_growth: 0,
     total_reach,
     total_reach_unique: agg.impressionsUnique ?? 0,

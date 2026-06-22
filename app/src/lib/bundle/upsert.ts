@@ -111,16 +111,30 @@ export async function upsertBundleAccountMetric(input: {
   metric: MappedAccountMetric;
 }): Promise<void> {
   const { accountId, date, metric } = input;
+  // follower_growth: Bundle KHÔNG trả growth (mapper để 0). Ta tự tính =
+  // followers hôm nay − followers ngày gần nhất trước đó (followers > 0).
+  // Lần đầu (chưa có ngày trước) hoặc followers=0 (Bundle lỗi tạm) → 0,
+  // tránh ra số âm khổng lồ. Tính trong SQL để truy được ngày trước.
   await db.query(
     `INSERT INTO account_metric_daily
        (account_id, date, followers, follower_growth,
         total_reach, total_reach_unique, total_engagement,
         total_actions, page_views, post_reactions_total,
         raw_metrics, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, NOW())
+     VALUES (
+       $1, $2, $3,
+       CASE WHEN $3 > 0 THEN $3 - COALESCE(
+         (SELECT p.followers FROM account_metric_daily p
+            WHERE p.account_id = $1 AND p.date < $2 AND p.followers > 0
+            ORDER BY p.date DESC LIMIT 1),
+         $3
+       ) ELSE 0 END,
+       $4, $5, $6, $7, $8, $9, $10::jsonb, NOW())
      ON CONFLICT (account_id, date) DO UPDATE SET
        followers            = COALESCE(NULLIF(EXCLUDED.followers, 0), account_metric_daily.followers),
-       follower_growth      = EXCLUDED.follower_growth,
+       follower_growth      = CASE WHEN EXCLUDED.followers > 0
+                                   THEN EXCLUDED.follower_growth
+                                   ELSE account_metric_daily.follower_growth END,
        total_reach          = COALESCE(NULLIF(EXCLUDED.total_reach, 0), account_metric_daily.total_reach),
        total_reach_unique   = COALESCE(NULLIF(EXCLUDED.total_reach_unique, 0), account_metric_daily.total_reach_unique),
        total_engagement     = COALESCE(NULLIF(EXCLUDED.total_engagement, 0), account_metric_daily.total_engagement),
@@ -133,7 +147,6 @@ export async function upsertBundleAccountMetric(input: {
       accountId,
       date,
       metric.followers,
-      metric.follower_growth,
       metric.total_reach,
       metric.total_reach_unique,
       metric.total_engagement,
