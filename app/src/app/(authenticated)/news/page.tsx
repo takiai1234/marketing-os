@@ -10,7 +10,6 @@ import { VALID_SOURCE_IDS } from '@/lib/news/sources';
 import { NewsItemCard } from './news-item-card';
 import { NewsSourceTabs } from './news-source-tabs';
 import { NewsFetchNowButton } from './news-fetch-now-button';
-import { NewsScanForm } from './news-scan-form';
 import { NewsPagination } from './news-pagination';
 
 export const metadata: Metadata = {
@@ -64,9 +63,6 @@ export default async function NewsPage({ searchParams }: NewsPageProps) {
           <NewsFetchNowButton />
         </div>
       </div>
-
-      {/* Quét Facebook Ads Library theo link */}
-      <NewsScanForm />
 
       {/* Source tabs */}
       <NewsSourceTabs />
