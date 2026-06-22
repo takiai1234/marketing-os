@@ -104,3 +104,42 @@ jobs:
           MCP_BEARER_TOKENS_JSON: ''
           SKILL_STORAGE_PATH: /tmp/ci-skills
         run: npm run build
+
+  # ───────────────────────────────────────────────────────────────────────
+  # Deploy — gọi webhook deploy của Coolify SAU KHI build pass.
+  #
+  # Chỉ chạy khi PUSH vào main (không chạy cho PR). Cần build xanh trước
+  # (needs: build) → không bao giờ deploy bản lỗi.
+  #
+  # Cấu hình 1 lần (Settings → Secrets and variables → Actions → New secret):
+  #   COOLIFY_WEBHOOK  (bắt buộc) — URL deploy của app trong Coolify, dạng
+  #       https://<coolify-host>/api/v1/deploy?uuid=<APP_UUID>&force=false
+  #       Lấy ở: Coolify → app → tab "Webhooks" (hoặc API → Deploy).
+  #   COOLIFY_TOKEN    (tuỳ chọn) — API token Bearer của Coolify, nếu webhook
+  #       cần xác thực. Lấy ở: Coolify → Keys & Tokens → API tokens.
+  #
+  # Nếu CHƯA set COOLIFY_WEBHOOK → job tự bỏ qua (không fail), nên thêm bước
+  # này an toàn kể cả khi bạn chưa kịp cấu hình secret.
+  deploy:
+    name: Deploy to Coolify
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger Coolify deploy
+        env:
+          WEBHOOK: ${{ secrets.COOLIFY_WEBHOOK }}
+          TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "⚠️  COOLIFY_WEBHOOK chưa được set — bỏ qua deploy."
+            echo "    Thêm secret COOLIFY_WEBHOOK để bật auto-deploy sau khi CI pass."
+            exit 0
+          fi
+          echo "🚀 Gọi Coolify deploy webhook…"
+          curl --fail-with-body --silent --show-error \
+            --request GET "$WEBHOOK" \
+            ${TOKEN:+--header "Authorization: Bearer $TOKEN"}
+          echo ""
+          echo "✅ Đã gửi yêu cầu deploy tới Coolify."
