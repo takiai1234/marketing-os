@@ -50,6 +50,7 @@ function extractPageContent() {
 function extractArticles() {
   const out = [];
   const seen = new Set();
+
   function abs(href) {
     try {
       return new URL(href, location.href).toString();
@@ -57,29 +58,67 @@ function extractArticles() {
       return null;
     }
   }
-  const anchors = Array.from(document.querySelectorAll('a[href]'));
-  for (const a of anchors) {
+  // Bỏ phần tử nằm trong menu/header/footer/sidebar → tránh vớ link điều hướng.
+  function inChrome(el) {
+    return !!el.closest(
+      'nav, header, footer, aside, [role="navigation"], [role="banner"], [role="contentinfo"], [role="complementary"], [role="search"]'
+    );
+  }
+  function imgIn(el) {
+    const im = el.querySelector('img');
+    if (!im) return '';
+    return (
+      im.currentSrc ||
+      im.src ||
+      im.getAttribute('data-src') ||
+      im.getAttribute('data-lazy-src') ||
+      ''
+    );
+  }
+
+  // Chiến lược 1: ƯU TIÊN khối bài viết thật (mỗi container = 1 bài).
+  let containers = Array.from(
+    document.querySelectorAll('article, [role="article"], [itemtype*="Article"]')
+  );
+  // Chiến lược 2 (fallback): trang không dùng <article> → lấy heading có link,
+  // coi mỗi tiêu đề-có-link là 1 bài; container = khối cha gần nhất.
+  if (containers.length < 3) {
+    const headingLinks = Array.from(
+      document.querySelectorAll('h1 a[href], h2 a[href], h3 a[href]')
+    );
+    containers = headingLinks.map((a) => a.closest('li, article, div, section') || a);
+  }
+
+  for (const c of containers) {
+    if (inChrome(c)) continue;
+
+    // Link chính của bài: ưu tiên link trong heading, rồi link bao ảnh, rồi link đầu.
+    let a = c.querySelector('h1 a[href], h2 a[href], h3 a[href], h4 a[href]');
+    if (!a) {
+      try {
+        a = c.querySelector('a[href]:has(img)');
+      } catch (_) {
+        a = null; // trình duyệt cũ không hỗ trợ :has()
+      }
+    }
+    if (!a) a = c.querySelector('a[href]');
+    if (!a) continue;
     const href = a.getAttribute('href');
     if (!href || href[0] === '#' || /^(javascript|mailto|tel):/i.test(href)) continue;
     const url = abs(href);
     if (!url || !/^https?:/i.test(url)) continue;
     if (seen.has(url)) continue;
 
-    // Tiêu đề: heading bên trong link, hoặc text của link, hoặc aria-label
+    // Tiêu đề: heading trong container > text link > aria-label.
     let title = '';
-    const h = a.querySelector('h1,h2,h3,h4');
+    const h = c.querySelector('h1, h2, h3, h4');
     if (h && h.innerText) title = h.innerText;
-    if (!title) title = a.getAttribute('aria-label') || a.innerText || a.textContent || '';
+    if (!title) title = a.innerText || a.getAttribute('aria-label') || a.textContent || '';
     title = String(title).replace(/\s+/g, ' ').trim();
-    if (title.length < 18 || title.length > 300) continue; // lọc link nav/rác
-
-    // Ảnh gần đó: trong link, hoặc trong khối cha (article/li/card)
-    let img = '';
-    const im = a.querySelector('img') || (a.closest('article, li, .card, div') || document).querySelector('img');
-    if (im) img = im.currentSrc || im.getAttribute('src') || '';
+    if (title.length < 12 || title.length > 300) continue; // bỏ link rác
 
     seen.add(url);
-    out.push({ url, title, image: img || '', text: '' });
+    out.push({ url, title, image: imgIn(c) || '', text: '' });
     if (out.length >= 150) break;
   }
   return out;
