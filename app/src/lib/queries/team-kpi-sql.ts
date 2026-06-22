@@ -31,7 +31,7 @@ export interface MemberAggregateRow {
   brief_actions_30d: number;
   brief_status_changes_30d: number;
 
-  // Top 3 active account names — used as tags
+  // Tất cả tên kênh active member phụ trách — dùng làm tags
   account_names: string[];
 
   // ─── GOAL TRACKING (migration 023) ─────────────────────────────
@@ -215,7 +215,8 @@ SELECT
   COALESCE(b30.briefs_published_30d, 0) AS briefs_published_30d,
   COALESCE(ba30.brief_actions_30d, 0) AS brief_actions_30d,
   COALESCE(ba30.brief_status_changes_30d, 0) AS brief_status_changes_30d,
-  COALESCE(at.names[1:3], ARRAY[]::TEXT[]) AS account_names,
+  -- Hiển thị TẤT CẢ kênh member phụ trách (trước đây cắt [1:3] → chỉ 3 kênh).
+  COALESCE(at.names, ARRAY[]::TEXT[]) AS account_names,
   -- Goal tracking
   COALESCE(cc.num_channels, 0) AS num_channels,
   COALESCE(fg.follow_growth_30d, 0) AS follow_growth_30d,
