@@ -62,7 +62,7 @@ elScan.addEventListener('click', async () => {
   }
 
   const tab = await getActiveTab();
-  if (!tab || !/^https:\/\/www\.facebook\.com\/ads\/library/.test(tab.url || '')) {
+  if (!tab || !/^https?:\/\/([a-z-]+\.)?facebook\.com\/ads\/library/.test(tab.url || '')) {
     setStatus(
       'Hãy mở tab Facebook Ads Library (facebook.com/ads/library) rồi Scan.',
       'err'
