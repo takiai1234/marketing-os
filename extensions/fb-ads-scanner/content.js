@@ -5,7 +5,7 @@
 // ad → interceptor bắt → buffer lớn dần. Bấm Scan đẩy toàn bộ buffer.
 
 (function () {
-  const buffer = new Map(); // id -> ad node
+  const buffer = new Map(); // id -> ad node (đã rút gọn)
 
   function idOf(ad) {
     return String(
@@ -18,12 +18,63 @@
     );
   }
 
+  // Ad node thô của FB rất nặng (vài trăm KB/ad, nhiều field thừa) → gửi cả
+  // sang server làm body phình to → Nginx/app ngắt giữa chừng → lỗi 502.
+  // Rút gọn còn ĐÚNG các field mà server mapFacebookAdItem cần đọc. Giữ cấu
+  // trúc snapshot tối thiểu để mapper hoạt động y nguyên.
+  function slimAd(ad) {
+    const s = (ad && ad.snapshot) || {};
+    const imgs = Array.isArray(s.images) ? s.images : [];
+    const vids = Array.isArray(s.videos) ? s.videos : [];
+    const cards = Array.isArray(s.cards) ? s.cards : [];
+    const img0 = imgs[0] || {};
+    const vid0 = vids[0] || {};
+    const card0 = cards[0] || {};
+    return {
+      ad_archive_id:
+        ad.ad_archive_id || ad.adArchiveID || ad.adArchiveId || ad.adId || ad.id,
+      page_name: ad.page_name || ad.pageName,
+      start_date: ad.start_date || ad.startDate,
+      ad_delivery_start_time: ad.ad_delivery_start_time,
+      url: ad.url || ad.adLibraryUrl || ad.snapshotUrl,
+      snapshot: {
+        body: { text: s.body && s.body.text },
+        title: s.title,
+        page_profile_picture_url:
+          s.page_profile_picture_url || s.pageProfilePictureURL,
+        images: [
+          {
+            original_image_url:
+              img0.original_image_url || img0.originalImageURL,
+            resized_image_url: img0.resized_image_url || img0.resizedImageUrl,
+          },
+        ],
+        videos: [
+          {
+            video_preview_image_url:
+              vid0.video_preview_image_url || vid0.videoPreviewImageURL,
+          },
+        ],
+        cards: [
+          {
+            body: card0.body,
+            original_image_url:
+              card0.original_image_url || card0.originalImageURL,
+          },
+        ],
+      },
+    };
+  }
+
   window.addEventListener('message', function (e) {
     if (e.source !== window) return;
     const d = e.data;
     if (!d || !d.__fbadsScan || !Array.isArray(d.ads)) return;
     for (const ad of d.ads) {
-      if (ad && typeof ad === 'object') buffer.set(idOf(ad), ad);
+      if (ad && typeof ad === 'object') {
+        const id = idOf(ad);
+        if (id) buffer.set(id, slimAd(ad));
+      }
     }
   });
 
