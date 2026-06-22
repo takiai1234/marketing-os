@@ -15,28 +15,29 @@ Mở facebook.com/ads/library → cuộn nạp ad → bấm Scan
 
 ---
 
-## 1. Cấu hình server (1 lần)
+## 1. Lấy token (1 lần)
 
-Đặt biến `ADS_INGEST_TOKEN` — chuỗi bí mật để xác thực extension. Hai cách:
+Cần một `ADS_INGEST_TOKEN` — chuỗi bí mật để xác thực extension.
 
-**a) Qua env** (`app/.env` hoặc `.env.production`):
+**Cách dễ nhất — qua giao diện web (khuyên dùng):**
+
+1. Đăng nhập website bằng tài khoản **admin**.
+2. Vào **Settings → Tích hợp API** (`/settings/integrations`).
+3. Tới khối **"Token quét FB Ads"** → bấm **Tạo token**.
+4. Bấm **Copy**. Xong — không cần đụng server, không cần restart.
+
+**Cách thủ công — qua env** (nếu không muốn dùng UI):
 
 ```bash
-ADS_INGEST_TOKEN="dán-một-chuỗi-ngẫu-nhiên-dài"
-```
-
-Sinh token nhanh:
-
-```bash
+# Sinh token:
 openssl rand -hex 24
+# Thêm vào app/.env (dev) hoặc .env.production (prod) rồi restart app:
+ADS_INGEST_TOKEN="...token..."
 ```
 
-**b) Hoặc qua DB** (`app_setting`, đã mã hoá) — dùng helper `setSetting('ADS_INGEST_TOKEN', '<token>', '<userId>')`.
-
-> Route `/api/news/ingest-ads` đã được loại trừ khỏi proxy auth nên gọi được
-> mà không cần đăng nhập; bảo mật dựa trên token này. Giữ token bí mật.
-
-Khởi động lại app sau khi set env.
+> Route `/api/news/ingest-ads` được loại trừ khỏi proxy auth nên gọi được mà
+> không cần đăng nhập; bảo mật dựa hoàn toàn vào token này. Giữ token bí mật,
+> không commit lên GitHub.
 
 ## 2. Cài extension (Developer mode)
 

@@ -12,6 +12,7 @@ import { OpenRouterKeyForm } from './openrouter-key-form';
 import { KieAiKeyForm } from './kieai-key-form';
 import { FacebookAppForm } from './facebook-app-form';
 import { ApifyForm } from './apify-form';
+import { AdsTokenForm } from './ads-token-form';
 
 export const metadata = {
   title: 'Tích hợp API — Marketing OS',
@@ -35,13 +36,14 @@ export default async function IntegrationsPage() {
     );
   }
 
-  const [orMeta, kieMeta, fbIdMeta, fbSecretMeta, apifyTokenMeta] =
+  const [orMeta, kieMeta, fbIdMeta, fbSecretMeta, apifyTokenMeta, adsTokenMeta] =
     await listSettingsMetadata([
       OPENROUTER_KEY_NAME,
       KIE_AI_KEY_NAME,
       FB_APP_ID_KEY,
       FB_APP_SECRET_KEY,
       'APIFY_API_TOKEN',
+      'ADS_INGEST_TOKEN',
     ]);
   // Load plaintext Apify lists (not secret — hiển thị OK trong UI)
   const [twitterHandles, facebookPages, twitterActor, facebookActor] = await Promise.all([
@@ -124,6 +126,13 @@ export default async function IntegrationsPage() {
         facebookActor={facebookActor ?? ''}
         updatedAt={apifyTokenMeta?.updatedAt ?? null}
         updatedByName={apifyTokenMeta?.updatedByName ?? null}
+      />
+
+      <AdsTokenForm
+        initialIsSet={adsTokenMeta?.isSet ?? false}
+        initialUpdatedAt={adsTokenMeta?.updatedAt ?? null}
+        initialUpdatedByName={adsTokenMeta?.updatedByName ?? null}
+        hasEnvFallback={Boolean(process.env.ADS_INGEST_TOKEN)}
       />
 
       <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 px-5 py-4 text-xs text-zinc-500 italic">
