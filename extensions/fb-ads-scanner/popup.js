@@ -64,61 +64,59 @@ function extractArticles() {
       'nav, header, footer, aside, [role="navigation"], [role="banner"], [role="contentinfo"], [role="complementary"], [role="search"]'
     );
   }
-  function imgIn(el) {
-    const im = el.querySelector('img');
-    if (!im) return '';
-    return (
-      im.currentSrc ||
-      im.src ||
-      im.getAttribute('data-src') ||
-      im.getAttribute('data-lazy-src') ||
-      ''
-    );
-  }
-
-  // Chiến lược 1: ƯU TIÊN khối bài viết thật (mỗi container = 1 bài).
-  let containers = Array.from(
-    document.querySelectorAll('article, [role="article"], [itemtype*="Article"]')
-  );
-  // Chiến lược 2 (fallback): trang không dùng <article> → lấy heading có link,
-  // coi mỗi tiêu đề-có-link là 1 bài; container = khối cha gần nhất.
-  if (containers.length < 3) {
-    const headingLinks = Array.from(
-      document.querySelectorAll('h1 a[href], h2 a[href], h3 a[href]')
-    );
-    containers = headingLinks.map((a) => a.closest('li, article, div, section') || a);
-  }
-
-  for (const c of containers) {
-    if (inChrome(c)) continue;
-
-    // Link chính của bài: ưu tiên link trong heading, rồi link bao ảnh, rồi link đầu.
-    let a = c.querySelector('h1 a[href], h2 a[href], h3 a[href], h4 a[href]');
-    if (!a) {
-      try {
-        a = c.querySelector('a[href]:has(img)');
-      } catch (_) {
-        a = null; // trình duyệt cũ không hỗ trợ :has()
-      }
+  // Ảnh trong phạm vi 1 link: <img> (kèm lazy) hoặc <source srcset> của <picture>.
+  function pickImage(scope) {
+    const im = scope.querySelector('img');
+    if (im) {
+      const s =
+        im.currentSrc ||
+        im.src ||
+        im.getAttribute('data-src') ||
+        im.getAttribute('data-lazy-src');
+      if (s) return s;
     }
-    if (!a) a = c.querySelector('a[href]');
-    if (!a) continue;
+    const src = scope.querySelector('source[srcset], img[srcset]');
+    if (src) {
+      const first = (src.getAttribute('srcset') || '').split(',')[0];
+      if (first) return first.trim().split(/\s+/)[0];
+    }
+    return '';
+  }
+
+  // Duyệt theo TỪNG LINK-BÀI: mỗi <a href> chứa heading và/hoặc ảnh = 1 bài.
+  // (Beehiiv/Ghost/Medium… đặt tiêu đề <hN> + ảnh BÊN TRONG link, không dùng
+  //  <article>.) Dedupe theo URL → 1 bài link nhiều lần vẫn 1 mục.
+  const anchors = Array.from(document.querySelectorAll('a[href]'));
+  for (const a of anchors) {
     const href = a.getAttribute('href');
     if (!href || href[0] === '#' || /^(javascript|mailto|tel):/i.test(href)) continue;
     const url = abs(href);
     if (!url || !/^https?:/i.test(url)) continue;
     if (seen.has(url)) continue;
+    if (inChrome(a)) continue;
 
-    // Tiêu đề: heading trong container > text link > aria-label.
-    let title = '';
-    const h = c.querySelector('h1, h2, h3, h4');
-    if (h && h.innerText) title = h.innerText;
-    if (!title) title = a.innerText || a.getAttribute('aria-label') || a.textContent || '';
+    // Tiêu đề: heading trong link (textContent = chỉ tiêu đề, sạch) > aria-label
+    // > text link. Dùng textContent thay innerText để ổn định mọi môi trường.
+    const h = a.querySelector('h1, h2, h3, h4, h5, h6');
+    let title = h ? h.textContent || '' : '';
+    if (!title) title = a.getAttribute('aria-label') || '';
+    if (!title) title = a.textContent || '';
     title = String(title).replace(/\s+/g, ' ').trim();
-    if (title.length < 12 || title.length > 300) continue; // bỏ link rác
+    if (title.length < 12 || title.length > 300) continue;
+
+    // Ảnh trong link, hoặc trong khối cha gần nhất.
+    let img = pickImage(a);
+    if (!img) {
+      const box = a.closest('li, article, div, section');
+      if (box) img = pickImage(box);
+    }
+
+    // Lọc rác: link-bài thật thường có ẢNH hoặc HEADING. Link nav thuần text
+    // (không ảnh, không heading) bị loại.
+    if (!img && !h) continue;
 
     seen.add(url);
-    out.push({ url, title, image: imgIn(c) || '', text: '' });
+    out.push({ url, title, image: img || '', text: '' });
     if (out.length >= 150) break;
   }
   return out;
