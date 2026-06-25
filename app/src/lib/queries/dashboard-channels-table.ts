@@ -100,25 +100,11 @@ async function fetchWithDays(
       -- KHÔNG được COALESCE(_,0) TRƯỚC phép trừ — sẽ ra (end - 0) = lifetime.
       CASE
         WHEN sa.platform = 'facebook' THEN COALESCE(agg.reach, 0)
-        ELSE GREATEST(
-          0,
-          COALESCE(
-            f_end.total_reach - f_start.total_reach,
-            f_end.total_reach - f_start_in_range.total_reach,
-            0
-          )
-        )
+        ELSE COALESCE(f_end.total_reach, 0)
       END::TEXT          AS reach,
       CASE
         WHEN sa.platform = 'facebook' THEN COALESCE(agg.engagement, 0)
-        ELSE GREATEST(
-          0,
-          COALESCE(
-            f_end.total_engagement - f_start.total_engagement,
-            f_end.total_engagement - f_start_in_range.total_engagement,
-            0
-          )
-        )
+        ELSE COALESCE(f_end.total_engagement, 0)
       END::TEXT          AS engagement,
       COALESCE(p.posts_count, 0)::TEXT AS posts_count,
       lc.leads,
@@ -193,14 +179,7 @@ async function fetchWithDays(
     ORDER BY
       CASE
         WHEN sa.platform = 'facebook' THEN COALESCE(agg.reach, 0)
-        ELSE GREATEST(
-          0,
-          COALESCE(
-            f_end.total_reach - f_start.total_reach,
-            f_end.total_reach - f_start_in_range.total_reach,
-            0
-          )
-        )
+        ELSE COALESCE(f_end.total_reach, 0)
       END DESC,
       sa.name ASC
     `,
@@ -258,25 +237,11 @@ async function fetchWithDateRange(
       sa.kpi_posts_per_day,
       CASE
         WHEN sa.platform = 'facebook' THEN COALESCE(agg.reach, 0)
-        ELSE GREATEST(
-          0,
-          COALESCE(
-            f_end.total_reach - f_start.total_reach,
-            f_end.total_reach - f_start_in_range.total_reach,
-            0
-          )
-        )
+        ELSE COALESCE(f_end.total_reach, 0)
       END::TEXT          AS reach,
       CASE
         WHEN sa.platform = 'facebook' THEN COALESCE(agg.engagement, 0)
-        ELSE GREATEST(
-          0,
-          COALESCE(
-            f_end.total_engagement - f_start.total_engagement,
-            f_end.total_engagement - f_start_in_range.total_engagement,
-            0
-          )
-        )
+        ELSE COALESCE(f_end.total_engagement, 0)
       END::TEXT          AS engagement,
       COALESCE(p.posts_count, 0)::TEXT AS posts_count,
       lc.leads,
@@ -343,14 +308,7 @@ async function fetchWithDateRange(
     ORDER BY
       CASE
         WHEN sa.platform = 'facebook' THEN COALESCE(agg.reach, 0)
-        ELSE GREATEST(
-          0,
-          COALESCE(
-            f_end.total_reach - f_start.total_reach,
-            f_end.total_reach - f_start_in_range.total_reach,
-            0
-          )
-        )
+        ELSE COALESCE(f_end.total_reach, 0)
       END DESC,
       sa.name ASC
     `,
