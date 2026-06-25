@@ -80,6 +80,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
 
+    // Team KPI tính qua social_account_member (không qua owner_member_id) → tạo
+    // dòng member primary để bài viết của kênh được cộng. Chỉ tạo khi chưa có
+    // primary (tránh đè assignment thủ công).
+    await db.query(
+      `INSERT INTO social_account_member (account_id, member_id, role)
+       SELECT $1, $2, 'primary'
+       WHERE NOT EXISTS (
+         SELECT 1 FROM social_account_member WHERE account_id = $1 AND role = 'primary'
+       )
+       ON CONFLICT DO NOTHING`,
+      [accountId, user.userId]
+    );
+
     try {
       await syncFacebookChannelToBundle({
         userId: user.userId,

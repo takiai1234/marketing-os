@@ -195,6 +195,20 @@ async function upsertSocialAccountFromBundle(input: UpsertInput): Promise<string
   );
   const id = rows[0]?.id;
   if (!id) throw new Error('UPSERT social_account returned no id');
+
+  // Team KPI tính qua social_account_member (không qua owner_member_id) → phải
+  // tạo dòng member primary, nếu không bài viết của kênh này KHÔNG được cộng.
+  // Chỉ tạo khi kênh chưa có primary (tránh đè assignment thủ công đã có).
+  await db.query(
+    `INSERT INTO social_account_member (account_id, member_id, role)
+     SELECT $1, $2, 'primary'
+     WHERE NOT EXISTS (
+       SELECT 1 FROM social_account_member WHERE account_id = $1 AND role = 'primary'
+     )
+     ON CONFLICT DO NOTHING`,
+    [id, input.ownerMemberId]
+  );
+
   return id;
 }
 
