@@ -71,16 +71,12 @@ export async function fetchChannelsList(
        SELECT health_score FROM channel_health_daily
        WHERE account_id = sa.id ORDER BY date DESC LIMIT 1
      ) ch ON TRUE
-     -- Tổng reach 7 ngày gần nhất TÍNH CẢ ngày hiện tại.
-     -- Bundle channels (TikTok/YT/IG) lấy data realtime ngay khi sync, today's
-     -- row đầy đủ — loại trừ today sẽ ra NULL ngay sau khi connect. FB có 1-2
-     -- ngày lag nhưng row today vẫn có followers carry-forward + 0 reach, SUM
-     -- không bị skew đáng kể. NULL khi không có row → render '—' trên UI.
-     -- PLATFORM-AWARE reach 7d (xem dashboard-channels-table.ts):
-     --   • Facebook: total_reach = daily delta → SUM hợp lệ.
-     --   • Bundle (TikTok/YT/IG): total_reach = snapshot cumulative lifetime
-     --     → reach 7d = (snapshot mới nhất − snapshot trước window 7d),
-     --     fallback (mới nhất − sớm nhất trong window). NULL khi chưa có data.
+     -- Cột "Reach" trên card kênh:
+     --   • Facebook: total_reach lưu daily delta → SUM 7 ngày = reach gần đây.
+     --   • Bundle (TikTok/YT/IG): total_reach là snapshot cumulative (views/
+     --     impressions lũy kế). Hiển thị TUYỆT ĐỐI = snapshot mới nhất (khớp
+     --     trang chi tiết kênh), không lấy delta — để người dùng thấy đúng tổng
+     --     views thay vì "tăng thêm trong kỳ". NULL khi chưa có data → '—'.
      LEFT JOIN LATERAL (
        SELECT CASE
          WHEN sa.platform = 'facebook' THEN (
@@ -88,23 +84,10 @@ export async function fetchChannelsList(
            WHERE account_id = sa.id
              AND date >= CURRENT_DATE - INTERVAL '7 days'
          )
-         WHEN (SELECT total_reach FROM account_metric_daily
-                 WHERE account_id = sa.id ORDER BY date DESC LIMIT 1) IS NULL
-           THEN NULL
-         ELSE GREATEST(0, COALESCE(
-           (SELECT total_reach FROM account_metric_daily
-              WHERE account_id = sa.id ORDER BY date DESC LIMIT 1)
-         - (SELECT total_reach FROM account_metric_daily
-              WHERE account_id = sa.id
-                AND date < CURRENT_DATE - INTERVAL '7 days'
-              ORDER BY date DESC LIMIT 1),
-           (SELECT total_reach FROM account_metric_daily
-              WHERE account_id = sa.id ORDER BY date DESC LIMIT 1)
-         - (SELECT total_reach FROM account_metric_daily
-              WHERE account_id = sa.id
-                AND date >= CURRENT_DATE - INTERVAL '7 days'
-              ORDER BY date ASC LIMIT 1),
-           0))
+         ELSE (
+           SELECT total_reach FROM account_metric_daily
+           WHERE account_id = sa.id ORDER BY date DESC LIMIT 1
+         )
        END::BIGINT AS reach_7d
      ) rch ON TRUE
      -- ER trung bình: latest metric per post, filter theo NGÀY METRIC (không phải
