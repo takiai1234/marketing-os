@@ -182,7 +182,9 @@ function buildGoals(row: MemberAggregateRow): MemberGoals {
         label: 'Bài viết / kênh (30d)',
         actual: actualPostsPerChannel,
         goal: row.goal_posts_per_channel_30d,
-        actualLabel: `${actualPostsPerChannel}`,
+        // Hiện CẢ HAI: tổng bài toàn bộ kênh + trung bình/kênh. Goal & % vẫn
+        // theo per-channel (đồng bộ với cách admin đặt mục tiêu 150/kênh).
+        actualLabel: `${actualPostsPerChannel} (tổng ${Math.round(row.posts_30d)})`,
         goalLabel: row.goal_posts_per_channel_30d > 0
           ? String(row.goal_posts_per_channel_30d)
           : '—',
