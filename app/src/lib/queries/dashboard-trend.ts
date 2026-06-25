@@ -51,17 +51,36 @@ async function fetchWithDays(
 
   const res = await db.query<TrendRow>(
     `
-    WITH metric_agg AS (
+    -- PLATFORM-AWARE daily reach/engagement (xem dashboard-channels-table.ts):
+    --   • Facebook: total_reach lưu daily delta → dùng trực tiếp.
+    --   • Bundle (TikTok/YT/IG): total_reach là snapshot cumulative lifetime
+    --     → reach của 1 ngày = delta so với ngày trước (LAG). GREATEST(0,…)
+    --     bỏ qua NULL (ngày đầu range không có LAG) → ra 0, và chặn delta âm
+    --     khi snapshot tụt. Followers vẫn SUM snapshot (đúng vì là số tuyệt đối).
+    WITH per_account AS (
       SELECT amd.date,
-             SUM(amd.total_reach)      AS reach,
-             SUM(amd.total_engagement) AS engagement,
-             SUM(amd.followers)        AS followers
+             amd.followers,
+             CASE WHEN sa.platform = 'facebook' THEN amd.total_reach
+                  ELSE GREATEST(0, amd.total_reach
+                       - LAG(amd.total_reach) OVER (PARTITION BY amd.account_id ORDER BY amd.date))
+             END AS reach,
+             CASE WHEN sa.platform = 'facebook' THEN amd.total_engagement
+                  ELSE GREATEST(0, amd.total_engagement
+                       - LAG(amd.total_engagement) OVER (PARTITION BY amd.account_id ORDER BY amd.date))
+             END AS engagement
       FROM account_metric_daily amd
       INNER JOIN social_account sa ON sa.id = amd.account_id
       WHERE amd.date >= CURRENT_DATE - $1::int AND amd.date < CURRENT_DATE
         AND sa.status != 'disconnected'
         ${tagFilter}
-      GROUP BY amd.date
+    ),
+    metric_agg AS (
+      SELECT date,
+             SUM(reach)      AS reach,
+             SUM(engagement) AS engagement,
+             SUM(followers)  AS followers
+      FROM per_account
+      GROUP BY date
     ),
     post_agg AS (
       SELECT (sp.published_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date AS date,
@@ -140,17 +159,32 @@ async function fetchWithDateRange(
 
   const res = await db.query<TrendRow>(
     `
-    WITH metric_agg AS (
+    -- PLATFORM-AWARE daily reach/engagement (xem note ở fetchWithDays +
+    -- dashboard-channels-table.ts). FB = daily delta; Bundle = LAG delta.
+    WITH per_account AS (
       SELECT amd.date,
-             SUM(amd.total_reach)      AS reach,
-             SUM(amd.total_engagement) AS engagement,
-             SUM(amd.followers)        AS followers
+             amd.followers,
+             CASE WHEN sa.platform = 'facebook' THEN amd.total_reach
+                  ELSE GREATEST(0, amd.total_reach
+                       - LAG(amd.total_reach) OVER (PARTITION BY amd.account_id ORDER BY amd.date))
+             END AS reach,
+             CASE WHEN sa.platform = 'facebook' THEN amd.total_engagement
+                  ELSE GREATEST(0, amd.total_engagement
+                       - LAG(amd.total_engagement) OVER (PARTITION BY amd.account_id ORDER BY amd.date))
+             END AS engagement
       FROM account_metric_daily amd
       INNER JOIN social_account sa ON sa.id = amd.account_id
       WHERE amd.date >= $1::date AND amd.date <= $2::date
         AND sa.status != 'disconnected'
         ${tagFilter}
-      GROUP BY amd.date
+    ),
+    metric_agg AS (
+      SELECT date,
+             SUM(reach)      AS reach,
+             SUM(engagement) AS engagement,
+             SUM(followers)  AS followers
+      FROM per_account
+      GROUP BY date
     ),
     post_agg AS (
       SELECT (sp.published_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date AS date,
