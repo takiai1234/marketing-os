@@ -20,6 +20,7 @@ export function redactChannelListItem(c: ChannelListItem): ChannelListItem {
     reach7d: c.reach7d,
     avgEngagementRate: c.avgEngagementRate,
     ownerName: c.ownerName,
+    memberCount: c.memberCount,
     lead30d: c.lead30d,
   };
 }

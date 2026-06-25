@@ -120,6 +120,21 @@ export function ChannelCard({ channel, isAdmin = false }: Props) {
           <span className="text-xs font-medium text-zinc-700 truncate">
             {channel.ownerName ?? 'Chưa gán'}
           </span>
+          {/* "+N" cho các thành viên ngoài primary (N = tổng - 1). Khi chưa có
+              primary nhưng vẫn có member thì hiện "+toàn bộ". */}
+          {(() => {
+            const extra = channel.ownerName
+              ? channel.memberCount - 1
+              : channel.memberCount;
+            return extra > 0 ? (
+              <span
+                className="shrink-0 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-500"
+                title={`Còn ${extra} thành viên khác — xem chi tiết kênh`}
+              >
+                +{extra}
+              </span>
+            ) : null;
+          })()}
         </div>
 
         {/* Hard delete chỉ available khi:
