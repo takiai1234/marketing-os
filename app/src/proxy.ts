@@ -20,9 +20,13 @@ const SESSION_TTL = 60 * 60 * 24 * 7;
 // Chrome extension (không có session cookie) — route tự xác thực bằng bearer
 // token ADS_INGEST_TOKEN. Nếu không loại trừ, proxy redirect /login →
 // extension không push được.
+//
+// `api/admin/run-job` được loại trừ vì scheduler ngoài (Coolify Scheduled Task)
+// gọi bằng bearer CRON_TRIGGER_TOKEN, không có session cookie. Route tự xác
+// thực (token HOẶC session admin) nên không mất bảo mật.
 export const config = {
   matcher: [
-    '/((?!api/auth|api/skills/upload|api/news/ingest-ads|api/news/ingest-web|_next|favicon.ico|public|login).*)',
+    '/((?!api/auth|api/skills/upload|api/news/ingest-ads|api/news/ingest-web|api/admin/run-job|_next|favicon.ico|public|login).*)',
   ],
 };
 
