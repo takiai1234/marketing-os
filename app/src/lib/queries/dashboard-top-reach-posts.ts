@@ -50,13 +50,21 @@ export async function fetchTopReachPosts(
   // KHÔNG dùng alias casted TEXT.
   const res = await db.query<DbRow>(
     `
+    -- PLATFORM-AWARE per-post reach:
+    --   • Facebook: pmd.reach là daily delta → SUM trong window = reach lũy kế.
+    --   • Bundle (TikTok/YT/IG): pmd.reach là snapshot cumulative lifetime của
+    --     post → SUM nhiều ngày = inflate. Dùng MAX = snapshot mới nhất (vì
+    --     cumulative đơn điệu tăng) = tổng reach thật của post.
     SELECT
       sp.id::TEXT             AS post_id,
       sp.content,
       sp.permalink,
       sp.post_type::TEXT      AS post_type,
       sp.published_at,
-      COALESCE(SUM(pmd.reach), 0)::TEXT AS total_reach,
+      (CASE WHEN sa.platform = 'facebook'
+            THEN COALESCE(SUM(pmd.reach), 0)
+            ELSE COALESCE(MAX(pmd.reach), 0)
+       END)::TEXT AS total_reach,
       sa.id::TEXT             AS account_id,
       sa.name                 AS account_name,
       sa.platform::TEXT       AS platform
@@ -68,8 +76,12 @@ export async function fetchTopReachPosts(
     WHERE sa.status != 'disconnected'
     GROUP BY sp.id, sp.content, sp.permalink, sp.post_type, sp.published_at,
              sa.id, sa.name, sa.platform
-    HAVING COALESCE(SUM(pmd.reach), 0) > 0
-    ORDER BY COALESCE(SUM(pmd.reach), 0) DESC, sp.published_at DESC
+    HAVING (CASE WHEN sa.platform = 'facebook'
+                 THEN COALESCE(SUM(pmd.reach), 0)
+                 ELSE COALESCE(MAX(pmd.reach), 0) END) > 0
+    ORDER BY (CASE WHEN sa.platform = 'facebook'
+                   THEN COALESCE(SUM(pmd.reach), 0)
+                   ELSE COALESCE(MAX(pmd.reach), 0) END) DESC, sp.published_at DESC
     LIMIT $2::INT
     `,
     [days, limit]

@@ -53,21 +53,61 @@ export async function fetchTopReachLeaderboard(): Promise<TopReachLeaderboard> {
     ),
     metrics_by_window AS (
       -- Một row cho mỗi (account, window). Window = 7|14|30.
+      -- PLATFORM-AWARE (xem dashboard-channels-table.ts):
+      --   • Facebook: total_reach lưu daily delta → SUM = reach window,
+      --     MAX = peak 1 ngày, peak_date = ngày reach cao nhất.
+      --   • Bundle (TikTok/YT/IG): total_reach là snapshot cumulative lifetime
+      --     → reach window = (snapshot mới nhất − snapshot trước window),
+      --     fallback (MAX − MIN trong window). Peak = max daily delta (LAG),
+      --     peak_date = ngày có delta lớn nhất.
       SELECT ac.id           AS account_id,
              ac.external_id  AS external_id,
              ac.name         AS name,
              ac.platform     AS platform,
              w.period_days   AS period_days,
-             COALESCE(SUM(amd.total_reach), 0)::BIGINT AS total_reach,
-             COALESCE(MAX(amd.total_reach), 0)::BIGINT AS peak_day_reach,
-             (SELECT amd2.date::text
-                FROM account_metric_daily amd2
-               WHERE amd2.account_id = ac.id
-                 AND amd2.date >= CURRENT_DATE - (w.period_days || ' days')::interval
-                 AND amd2.total_reach IS NOT NULL
-               ORDER BY amd2.total_reach DESC NULLS LAST,
-                        amd2.date DESC
-               LIMIT 1)                                AS peak_date
+             CASE WHEN ac.platform = 'facebook'
+               THEN COALESCE(SUM(amd.total_reach), 0)
+               ELSE GREATEST(0, COALESCE(
+                      MAX(amd.total_reach) - (
+                        SELECT b.total_reach FROM account_metric_daily b
+                         WHERE b.account_id = ac.id
+                           AND b.date < CURRENT_DATE - (w.period_days || ' days')::interval
+                         ORDER BY b.date DESC LIMIT 1),
+                      MAX(amd.total_reach) - MIN(amd.total_reach),
+                      0))
+             END::BIGINT AS total_reach,
+             CASE WHEN ac.platform = 'facebook'
+               THEN COALESCE(MAX(amd.total_reach), 0)
+               ELSE COALESCE((
+                      SELECT GREATEST(0, MAX(dd.delta)) FROM (
+                        SELECT amd2.total_reach
+                             - LAG(amd2.total_reach) OVER (ORDER BY amd2.date) AS delta
+                          FROM account_metric_daily amd2
+                         WHERE amd2.account_id = ac.id
+                           AND amd2.date >= CURRENT_DATE - (w.period_days || ' days')::interval
+                      ) dd), 0)
+             END::BIGINT AS peak_day_reach,
+             CASE WHEN ac.platform = 'facebook'
+               THEN (SELECT amd2.date::text
+                       FROM account_metric_daily amd2
+                      WHERE amd2.account_id = ac.id
+                        AND amd2.date >= CURRENT_DATE - (w.period_days || ' days')::interval
+                        AND amd2.total_reach IS NOT NULL
+                      ORDER BY amd2.total_reach DESC NULLS LAST,
+                               amd2.date DESC
+                      LIMIT 1)
+               ELSE (SELECT dd.d::text FROM (
+                        SELECT amd2.date AS d,
+                               amd2.total_reach
+                             - LAG(amd2.total_reach) OVER (ORDER BY amd2.date) AS delta
+                          FROM account_metric_daily amd2
+                         WHERE amd2.account_id = ac.id
+                           AND amd2.date >= CURRENT_DATE - (w.period_days || ' days')::interval
+                      ) dd
+                      WHERE dd.delta IS NOT NULL
+                      ORDER BY dd.delta DESC, dd.d DESC
+                      LIMIT 1)
+             END                                       AS peak_date
         FROM active_channels ac
         CROSS JOIN (VALUES (7), (14), (30)) AS w(period_days)
         LEFT JOIN account_metric_daily amd

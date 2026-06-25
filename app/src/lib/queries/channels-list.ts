@@ -70,11 +70,36 @@ export async function fetchChannelsList(
      -- row đầy đủ — loại trừ today sẽ ra NULL ngay sau khi connect. FB có 1-2
      -- ngày lag nhưng row today vẫn có followers carry-forward + 0 reach, SUM
      -- không bị skew đáng kể. NULL khi không có row → render '—' trên UI.
+     -- PLATFORM-AWARE reach 7d (xem dashboard-channels-table.ts):
+     --   • Facebook: total_reach = daily delta → SUM hợp lệ.
+     --   • Bundle (TikTok/YT/IG): total_reach = snapshot cumulative lifetime
+     --     → reach 7d = (snapshot mới nhất − snapshot trước window 7d),
+     --     fallback (mới nhất − sớm nhất trong window). NULL khi chưa có data.
      LEFT JOIN LATERAL (
-       SELECT SUM(total_reach)::BIGINT AS reach_7d
-       FROM account_metric_daily
-       WHERE account_id = sa.id
-         AND date >= CURRENT_DATE - INTERVAL '7 days'
+       SELECT CASE
+         WHEN sa.platform = 'facebook' THEN (
+           SELECT SUM(total_reach) FROM account_metric_daily
+           WHERE account_id = sa.id
+             AND date >= CURRENT_DATE - INTERVAL '7 days'
+         )
+         WHEN (SELECT total_reach FROM account_metric_daily
+                 WHERE account_id = sa.id ORDER BY date DESC LIMIT 1) IS NULL
+           THEN NULL
+         ELSE GREATEST(0, COALESCE(
+           (SELECT total_reach FROM account_metric_daily
+              WHERE account_id = sa.id ORDER BY date DESC LIMIT 1)
+         - (SELECT total_reach FROM account_metric_daily
+              WHERE account_id = sa.id
+                AND date < CURRENT_DATE - INTERVAL '7 days'
+              ORDER BY date DESC LIMIT 1),
+           (SELECT total_reach FROM account_metric_daily
+              WHERE account_id = sa.id ORDER BY date DESC LIMIT 1)
+         - (SELECT total_reach FROM account_metric_daily
+              WHERE account_id = sa.id
+                AND date >= CURRENT_DATE - INTERVAL '7 days'
+              ORDER BY date ASC LIMIT 1),
+           0))
+       END::BIGINT AS reach_7d
      ) rch ON TRUE
      -- ER trung bình: latest metric per post, filter theo NGÀY METRIC (không phải
      -- ngày publish). Cho FB → "recent ER" như cũ. Cho YT/Bundle imports nơi
