@@ -14,8 +14,12 @@ export interface ChannelListItem {
   reach7d: number | null;
   // Engagement rate trung bình (đơn vị: tỉ lệ — render UI nhân 100 thành %)
   avgEngagementRate: number | null;
-  // Tên người quản lý kênh (team_member.name) — null nếu chưa gán
+  // Tên người quản lý kênh (team_member.name) — null nếu chưa gán.
+  // Đây là PRIMARY (owner_member_id). Các thành viên khác xem ở memberCount.
   ownerName: string | null;
+  // Tổng số thành viên của kênh (primary + editor) từ social_account_member.
+  // UI hiển thị "ownerName +N" với N = memberCount - 1.
+  memberCount: number;
   // Tổng lead 30 ngày qua từ manual_conversion (mặc định 0 nếu chưa có)
   lead30d: number;
 }
@@ -49,12 +53,14 @@ export async function fetchChannelsList(
     reach_7d: string | null;
     avg_engagement_rate: string | null;
     owner_name: string | null;
+    member_count: string;
     lead_30d: string;
   }>(
     `SELECT sa.id, sa.external_id, sa.name, sa.platform, sa.status, sa.last_synced_at,
             am.followers, ch.health_score,
             rch.reach_7d, pm.avg_engagement_rate,
             tm.name AS owner_name,
+            COALESCE(mcnt.member_count, 0) AS member_count,
             lc.lead_30d
      FROM social_account sa
      LEFT JOIN LATERAL (
@@ -125,6 +131,12 @@ export async function fetchChannelsList(
        WHERE account_id = sa.id
          AND occurred_date >= CURRENT_DATE - INTERVAL '30 days'
      ) lc ON TRUE
+     -- Tổng số thành viên của kênh (primary + editor) để hiển thị "+N".
+     LEFT JOIN LATERAL (
+       SELECT COUNT(*)::int AS member_count
+       FROM social_account_member
+       WHERE account_id = sa.id
+     ) mcnt ON TRUE
      LEFT JOIN team_member tm ON tm.id = sa.owner_member_id
      WHERE ($1::text IS NULL OR sa.platform = $1::platform_t)
        AND (
@@ -151,6 +163,7 @@ export async function fetchChannelsList(
     avgEngagementRate:
       row.avg_engagement_rate !== null ? Number(row.avg_engagement_rate) : null,
     ownerName: row.owner_name,
+    memberCount: Number(row.member_count),
     lead30d: Number(row.lead_30d),
   }));
 }

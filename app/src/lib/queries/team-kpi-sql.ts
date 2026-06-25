@@ -48,13 +48,14 @@ export interface MemberAggregateRow {
 // Why one big CTE: a single roundtrip is cheaper than 5 sequential queries
 // and keeps "viral baseline" derivation (median × 3) consistent within one snapshot.
 //
-// Multi-owner KPI rule (Cách A + B2 chốt trong chat):
-//   primary role → 100% KPI credit (max 1 primary per channel enforced ở API)
-//   editor role  → 0 KPI credit nhưng vẫn hiện trong account_tags với suffix
-//
-// Vì max 1 primary, JOIN trực tiếp = same math như single-owner cũ.
-// Team total = sum channels (no inflation). Editor chỉ recognition, không
-// ảnh hưởng aggregate.
+// Multi-owner KPI rule (Cách "chia đều" — chốt trong chat):
+//   KPI TỔNG của 1 kênh chia ĐỀU cho MỌI thành viên (primary + editor).
+//   Trọng số mỗi thành viên = 1 / (số thành viên của kênh).
+//   - Totals (posts, reach, follower-growth, viral) → nhân weight (chia ra).
+//   - Rates (avg_reach, median, engagement, top_platform, reel-share) → KHÔNG
+//     chia: đây là đặc tính nội dung của kênh, mọi thành viên chia sẻ như nhau.
+// Lý do không chia theo "ai đăng bài": social_post thuộc về KÊNH và được import
+// từ nền tảng (Bundle/FB) nên không có thông tin tác giả là thành viên nào.
 const TEAM_KPI_SQL = `
 WITH windows AS (
   SELECT NOW() - INTERVAL '7 days'  AS w7,
@@ -70,8 +71,15 @@ latest_metric AS (
   ORDER BY post_id, date DESC
 ),
 
--- member_posts: 1 row per (post, primary_member). Editor không tham gia.
--- Filter sam.role = 'primary' — chỉ primary nhận KPI credit.
+-- Số thành viên / kênh → trọng số chia đều (1/n).
+channel_member_count AS (
+  SELECT account_id, COUNT(*)::NUMERIC AS n
+  FROM social_account_member
+  GROUP BY account_id
+),
+
+-- member_posts: 1 row per (post, MỌI thành viên của kênh) + weight = 1/n.
+-- Cả primary lẫn editor đều tham gia (chia đều).
 member_posts AS (
   SELECT
     sam.member_id                           AS member_id,
@@ -79,21 +87,22 @@ member_posts AS (
     sp.post_type::TEXT                      AS post_type,
     sp.published_at,
     COALESCE(lm.reach, 0)::INT              AS reach,
-    COALESCE(lm.engagement_rate, 0)::FLOAT  AS engagement_rate
+    COALESCE(lm.engagement_rate, 0)::FLOAT  AS engagement_rate,
+    (1.0 / cmc.n)::FLOAT                     AS weight
   FROM social_account_member sam
+  JOIN channel_member_count cmc ON cmc.account_id = sam.account_id
   JOIN social_account sa ON sa.id = sam.account_id
   JOIN social_post    sp ON sp.account_id = sa.id
   LEFT JOIN latest_metric lm ON lm.post_id = sp.id
-  WHERE sam.role = 'primary'  -- editor không tham gia KPI math
 ),
 
--- Math giống single-owner cũ — không split vì max 1 primary per channel.
+-- Totals nhân weight (chia đều); rates dùng AVG/MODE/percentile KHÔNG weight.
 agg_30d AS (
   SELECT
     mp.member_id,
-    COUNT(*)::INT                           AS posts_30d,
-    COALESCE(SUM(mp.reach), 0)::INT         AS reach_30d,
-    COALESCE(AVG(mp.reach), 0)::FLOAT       AS avg_reach_30d,
+    ROUND(COALESCE(SUM(mp.weight), 0)::NUMERIC, 1)::FLOAT AS posts_30d,
+    COALESCE(SUM(mp.reach * mp.weight), 0)::FLOAT         AS reach_30d,
+    COALESCE(AVG(mp.reach), 0)::FLOAT                     AS avg_reach_30d,
     percentile_cont(0.5) WITHIN GROUP (ORDER BY mp.reach) AS median_reach_30d,
     AVG(
       (mp.platform IN ('facebook','instagram')
@@ -106,10 +115,11 @@ agg_30d AS (
 ),
 
 -- Viral count needs the median computed in agg_30d, hence a 2nd pass.
+-- Cũng nhân weight để tỷ lệ viral/posts giữ nhất quán.
 viral_30d AS (
   SELECT
     mp.member_id,
-    COUNT(*)::INT AS viral_hits_30d
+    ROUND(COALESCE(SUM(mp.weight), 0)::NUMERIC, 1)::FLOAT AS viral_hits_30d
   FROM member_posts mp
   JOIN agg_30d a USING (member_id), windows w
   WHERE mp.published_at >= w.w30
@@ -122,10 +132,10 @@ viral_30d AS (
 agg_7d AS (
   SELECT
     mp.member_id,
-    COUNT(*)::INT                                AS posts_7d,
-    COALESCE(SUM(mp.reach), 0)::INT              AS reach_7d,
-    COALESCE(AVG(mp.reach), 0)::FLOAT            AS avg_reach_7d,
-    COALESCE(AVG(mp.engagement_rate), 0)::FLOAT  AS avg_er_7d
+    ROUND(COALESCE(SUM(mp.weight), 0)::NUMERIC, 1)::FLOAT AS posts_7d,
+    COALESCE(SUM(mp.reach * mp.weight), 0)::FLOAT         AS reach_7d,
+    COALESCE(AVG(mp.reach), 0)::FLOAT                     AS avg_reach_7d,
+    COALESCE(AVG(mp.engagement_rate), 0)::FLOAT           AS avg_er_7d
   FROM member_posts mp, windows w
   WHERE mp.published_at >= w.w7
   GROUP BY mp.member_id
@@ -169,30 +179,29 @@ account_tags AS (
   GROUP BY sam.member_id
 ),
 
--- Đếm số kênh active member quản (CHỈ primary, vì editor không tính KPI →
--- không dùng làm denominator cho posts_per_channel goal). Loại disconnected.
+-- Đếm số kênh active member tham gia (MỌI vai trò — editor giờ cũng tính KPI).
+-- Dùng làm denominator cho posts_per_channel goal. Loại disconnected.
 channel_count AS (
   SELECT
     sam.member_id,
     COUNT(*)::INT AS num_channels
   FROM social_account_member sam
   JOIN social_account sa ON sa.id = sam.account_id
-  WHERE sam.role = 'primary'
-    AND sa.status != 'disconnected'
+  WHERE sa.status != 'disconnected'
   GROUP BY sam.member_id
 ),
 
--- Follower growth 30d: SUM(follower_growth) cho mọi kênh primary của member.
--- Editor không count (sam.role = 'primary' filter).
+-- Follower growth 30d: chia đều theo số thành viên của kênh (weight 1/n).
+-- Cả primary lẫn editor đều nhận phần.
 follow_growth AS (
   SELECT
     sam.member_id,
-    COALESCE(SUM(amd.follower_growth), 0)::INT AS follow_growth_30d
+    COALESCE(SUM(amd.follower_growth / cmc.n), 0)::FLOAT AS follow_growth_30d
   FROM social_account_member sam
+  JOIN channel_member_count cmc ON cmc.account_id = sam.account_id
   JOIN social_account sa ON sa.id = sam.account_id
   JOIN account_metric_daily amd ON amd.account_id = sa.id
-  WHERE sam.role = 'primary'
-    AND amd.date >= CURRENT_DATE - INTERVAL '30 days'
+  WHERE amd.date >= CURRENT_DATE - INTERVAL '30 days'
   GROUP BY sam.member_id
 )
 

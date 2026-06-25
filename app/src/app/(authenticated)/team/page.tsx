@@ -8,6 +8,7 @@ import { AddMemberDialog } from './add-member-dialog';
 import { DeleteMemberButton } from './delete-member-button';
 import { ResetPasswordDialog } from './reset-password-dialog';
 import { GoalEditorDialog } from './goal-editor-dialog';
+import { EditMemberDialog } from './edit-member-dialog';
 
 export const metadata: Metadata = {
   title: 'Team — Marketing OS',
@@ -55,6 +56,13 @@ export default async function TeamPage() {
                     initialFollowGrowth={m.goals.goalFollowGrowth30d}
                     initialReach={m.goals.goalReach30d}
                     initialPostsPerChannel={m.goals.goalPostsPerChannel30d}
+                  />
+                  <EditMemberDialog
+                    id={m.id}
+                    initialName={m.name}
+                    initialEmail={m.email}
+                    initialRole={m.role}
+                    isSelf={m.id === currentUserId}
                   />
                   {m.id !== currentUserId && (
                     <>
