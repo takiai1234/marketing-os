@@ -145,12 +145,12 @@ export function GoalEditorDialog({
 
           <GoalField
             id="goal-posts"
-            label="Bài viết / kênh"
-            hint="Số bài đăng trên MỖI kênh trong 30 ngày (chia đều cho mọi kênh đang quản)"
-            unit="bài / kênh"
+            label="Bài viết (tổng)"
+            hint="TỔNG số bài đăng 30 ngày qua mọi kênh đang quản (không phải mỗi kênh)"
+            unit="bài"
             value={posts}
             onChange={setPosts}
-            placeholder="VD: 30"
+            placeholder="VD: 240"
             disabled={submitting}
           />
 
