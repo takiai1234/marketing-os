@@ -89,15 +89,14 @@ export function mapAccountAggregate(
   agg: AccountAggregate,
   platform: string
 ): MappedAccountMetric {
-  // TikTok's account-level aggregate returns impressions/views = 0 (Bundle
-  // doesn't expose them at account scope — only per-post). The only
-  // reach-shaped field with a real value is `likes`, so we use it as the
-  // reach proxy for the channel card. Other platforms (FB/IG/YT) keep the
-  // impressions→views fallback so YouTube Shorts (impressions = 0, views > 0)
-  // still produce a sensible number.
+  // TikTok account aggregate giờ ĐÃ trả views (verified 2026-06-25 qua
+  // raw_metrics: views = impressions, vd 3.26M). Comment cũ "views=0 nên dùng
+  // likes" đã lỗi thời → likes (80K) thấp ~20× so với views (1.6M). Dùng views
+  // làm reach headline cho TikTok (đúng metric người dùng cần). Các nền tảng
+  // khác (FB/IG/YT) giữ fallback impressions→views như cũ.
   const total_reach =
     platform === 'tiktok'
-      ? (agg.likes ?? 0)
+      ? (agg.views || agg.impressions || 0)
       : (agg.impressions || agg.views || 0);
 
   return {
