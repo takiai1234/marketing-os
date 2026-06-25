@@ -136,18 +136,17 @@ function isEmptyMember(row: MemberAggregateRow): boolean {
 
 /**
  * Build MemberGoals từ raw aggregate row. 3 metric: follow growth, reach,
- * posts per channel. Mỗi metric: actual + goal + progress %.
+ * bài viết. Mỗi metric: actual + goal + progress %. Cả 3 đều theo TỔNG toàn
+ * bộ kênh member quản (đồng nhất).
  *
  * Quy ước:
  *   - goal = 0 → "chưa đặt mục tiêu" → progressPct = null (UI dùng để
  *     toggle giữa progress bar và placeholder "Chưa đặt")
- *   - actualPostsPerChannel = posts_30d / num_channels (round 1 decimal)
- *     khi num_channels > 0; = 0 khi member chưa quản kênh nào
+ *   - totalPosts = posts_30d (tổng bài, đã chia đều theo số thành viên kênh)
  */
 function buildGoals(row: MemberAggregateRow): MemberGoals {
-  const actualPostsPerChannel = row.num_channels > 0
-    ? Math.round((row.posts_30d / row.num_channels) * 10) / 10
-    : 0;
+  // Mục tiêu bài viết tính theo TỔNG toàn bộ kênh member quản (không /kênh).
+  const totalPosts = Math.round(row.posts_30d);
 
   const pct = (actual: number, goal: number): number | null =>
     goal > 0 ? Math.round((actual / goal) * 100) : null;
@@ -179,16 +178,15 @@ function buildGoals(row: MemberAggregateRow): MemberGoals {
         progressPct: pct(row.reach_30d, row.goal_reach_30d),
       },
       postsPerChannel: {
-        label: 'Bài viết / kênh (30d)',
-        actual: actualPostsPerChannel,
+        label: 'Bài viết (30d)',
+        actual: totalPosts,
         goal: row.goal_posts_per_channel_30d,
-        // Hiện CẢ HAI: tổng bài toàn bộ kênh + trung bình/kênh. Goal & % vẫn
-        // theo per-channel (đồng bộ với cách admin đặt mục tiêu 150/kênh).
-        actualLabel: `${actualPostsPerChannel} (tổng ${Math.round(row.posts_30d)})`,
+        // Chỉ hiện TỔNG bài toàn bộ kênh; goal & % cũng theo tổng.
+        actualLabel: `${totalPosts}`,
         goalLabel: row.goal_posts_per_channel_30d > 0
           ? String(row.goal_posts_per_channel_30d)
           : '—',
-        progressPct: pct(actualPostsPerChannel, row.goal_posts_per_channel_30d),
+        progressPct: pct(totalPosts, row.goal_posts_per_channel_30d),
       },
     },
   };
