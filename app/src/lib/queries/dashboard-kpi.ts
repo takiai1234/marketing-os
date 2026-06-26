@@ -92,35 +92,18 @@ async function fetchWithDays(days: number, tagSlug: string | null): Promise<KpiD
             THEN COALESCE((SELECT SUM(total_reach) FROM account_metric_daily
                            WHERE account_id = sa.id
                              AND date >= CURRENT_DATE - $1::int AND date < CURRENT_DATE), 0)
-            ELSE GREATEST(0, COALESCE(
-                   (SELECT total_reach FROM account_metric_daily
-                      WHERE account_id = sa.id AND date < CURRENT_DATE
-                      ORDER BY date DESC LIMIT 1)
-                 - (SELECT total_reach FROM account_metric_daily
-                      WHERE account_id = sa.id AND date <= CURRENT_DATE - $1::int
-                      ORDER BY date DESC LIMIT 1),
-                   (SELECT total_reach FROM account_metric_daily
-                      WHERE account_id = sa.id AND date < CURRENT_DATE
-                      ORDER BY date DESC LIMIT 1)
-                 - (SELECT total_reach FROM account_metric_daily
-                      WHERE account_id = sa.id
-                        AND date > CURRENT_DATE - $1::int AND date < CURRENT_DATE
-                      ORDER BY date ASC LIMIT 1),
-                   0))
+            ELSE COALESCE((SELECT total_reach FROM account_metric_daily
+                           WHERE account_id = sa.id AND date < CURRENT_DATE
+                           ORDER BY date DESC LIMIT 1), 0)
           END AS reach_cur,
           CASE WHEN sa.platform = 'facebook'
             THEN COALESCE((SELECT SUM(total_reach) FROM account_metric_daily
                            WHERE account_id = sa.id
                              AND date >= CURRENT_DATE - ($1::int * 2)
                              AND date < CURRENT_DATE - $1::int), 0)
-            ELSE GREATEST(0, COALESCE(
-                   (SELECT total_reach FROM account_metric_daily
-                      WHERE account_id = sa.id AND date < CURRENT_DATE - $1::int
-                      ORDER BY date DESC LIMIT 1)
-                 - (SELECT total_reach FROM account_metric_daily
-                      WHERE account_id = sa.id AND date <= CURRENT_DATE - ($1::int * 2)
-                      ORDER BY date DESC LIMIT 1),
-                   0))
+            ELSE COALESCE((SELECT total_reach FROM account_metric_daily
+                           WHERE account_id = sa.id AND date < CURRENT_DATE - $1::int
+                           ORDER BY date DESC LIMIT 1), 0)
           END AS reach_prev
       ) r ON TRUE
       WHERE sa.status != 'disconnected'
@@ -254,9 +237,11 @@ async function fetchWithDateRange(
   const [reachRes, erRes, convRes, revenueRes, followersRes] = await Promise.all([
     db.query<{ reach: string; reach_prev: string }>(
       `
-      -- PLATFORM-AWARE reach (xem note ở fetchWithDays). FB = SUM daily delta;
-      -- Bundle = (snapshot cuối window − snapshot trước window), per-account rồi SUM.
-      -- Current window = [$1,$2]; previous window = [$3,$4].
+      -- Total Reach = TỔNG reach mọi nền tảng (per-account rồi SUM):
+      --   • Facebook: total_reach = daily delta → SUM trong window [$1,$2].
+      --   • Bundle (TikTok = views, YT/IG…): total_reach = snapshot cumulative
+      --     → lấy GIÁ TRỊ TUYỆT ĐỐI mới nhất (views lũy kế), khớp với card kênh,
+      --     KHÔNG lấy delta. prev = snapshot tại cuối kỳ trước để so %.
       SELECT
         COALESCE(SUM(r.reach_cur), 0)::text  AS reach,
         COALESCE(SUM(r.reach_prev), 0)::text AS reach_prev
@@ -266,27 +251,16 @@ async function fetchWithDateRange(
           CASE WHEN sa.platform = 'facebook'
             THEN COALESCE((SELECT SUM(total_reach) FROM account_metric_daily
                            WHERE account_id = sa.id AND date >= $1::date AND date <= $2::date), 0)
-            ELSE GREATEST(0, COALESCE(
-                   (SELECT total_reach FROM account_metric_daily
-                      WHERE account_id = sa.id AND date <= $2::date ORDER BY date DESC LIMIT 1)
-                 - (SELECT total_reach FROM account_metric_daily
-                      WHERE account_id = sa.id AND date < $1::date ORDER BY date DESC LIMIT 1),
-                   (SELECT total_reach FROM account_metric_daily
-                      WHERE account_id = sa.id AND date <= $2::date ORDER BY date DESC LIMIT 1)
-                 - (SELECT total_reach FROM account_metric_daily
-                      WHERE account_id = sa.id AND date >= $1::date AND date <= $2::date
-                      ORDER BY date ASC LIMIT 1),
-                   0))
+            ELSE COALESCE((SELECT total_reach FROM account_metric_daily
+                           WHERE account_id = sa.id AND date <= $2::date
+                           ORDER BY date DESC LIMIT 1), 0)
           END AS reach_cur,
           CASE WHEN sa.platform = 'facebook'
             THEN COALESCE((SELECT SUM(total_reach) FROM account_metric_daily
                            WHERE account_id = sa.id AND date >= $3::date AND date <= $4::date), 0)
-            ELSE GREATEST(0, COALESCE(
-                   (SELECT total_reach FROM account_metric_daily
-                      WHERE account_id = sa.id AND date <= $4::date ORDER BY date DESC LIMIT 1)
-                 - (SELECT total_reach FROM account_metric_daily
-                      WHERE account_id = sa.id AND date < $3::date ORDER BY date DESC LIMIT 1),
-                   0))
+            ELSE COALESCE((SELECT total_reach FROM account_metric_daily
+                           WHERE account_id = sa.id AND date <= $4::date
+                           ORDER BY date DESC LIMIT 1), 0)
           END AS reach_prev
       ) r ON TRUE
       WHERE sa.status != 'disconnected'
