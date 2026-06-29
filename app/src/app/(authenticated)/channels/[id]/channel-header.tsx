@@ -16,6 +16,7 @@ import { ChannelMembersEditor } from './channel-members-editor';
 import type { ChannelMember } from './channel-members-editor';
 import { KpiEditor } from './kpi-editor';
 import { UpdateTokenDialog } from './update-token-dialog';
+import { ManualMetricDialog } from './manual-metric-dialog';
 import { StatusDot } from '../_components/status-dot';
 import { CopyIdButton } from '../_components/copy-id-button';
 import { PlatformIcon } from '../_components/platform-icon';
@@ -43,6 +44,8 @@ interface Props {
   // Quyền admin → mới được sửa member list & hủy kết nối kênh.
   // Non-admin chỉ thấy chips read-only, không thấy nút Hủy kết nối.
   isAdmin: boolean;
+  // Kênh thủ công → thay nút "Đồng bộ/Token" bằng "Nhập số liệu".
+  isManual: boolean;
 }
 
 export function ChannelHeader({
@@ -56,6 +59,7 @@ export function ChannelHeader({
   allTeamMembers,
   kpiPostsPerDay,
   isAdmin,
+  isManual,
 }: Props) {
   const router = useRouter();
   const [syncing, setSyncing] = useState(false);
@@ -177,20 +181,33 @@ export function ChannelHeader({
       </div>
 
       <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-        <Button
-          onClick={handleSync}
-          disabled={syncing || isCoolingDown}
-          variant="default"
-          size="sm"
-        >
-          {syncing ? 'Đang đồng bộ…' : 'Đồng bộ ngay'}
-        </Button>
-        {isAdmin && (
-          <UpdateTokenDialog
-            accountId={accountId}
-            channelName={name}
-            externalId={externalId}
-          />
+        {isManual ? (
+          // Kênh thủ công: không sync tự động → nút nhập số liệu (admin).
+          isAdmin && (
+            <ManualMetricDialog
+              accountId={accountId}
+              channelName={name}
+              platform={platform}
+            />
+          )
+        ) : (
+          <>
+            <Button
+              onClick={handleSync}
+              disabled={syncing || isCoolingDown}
+              variant="default"
+              size="sm"
+            >
+              {syncing ? 'Đang đồng bộ…' : 'Đồng bộ ngay'}
+            </Button>
+            {isAdmin && (
+              <UpdateTokenDialog
+                accountId={accountId}
+                channelName={name}
+                externalId={externalId}
+              />
+            )}
+          </>
         )}
         {isAdmin && (
           <Button onClick={handleDisconnect} variant="destructive" size="sm">

@@ -27,6 +27,8 @@ export interface ChannelAccount {
   // list card hiển thị tên primary). Sau migration 024 đây là denormalized
   // "primary member" — chỉ 1 primary per channel (Rule A enforced).
   ownerId: string | null;
+  // Kênh nhập số liệu thủ công (migration 048) — UI hiện form nhập tay.
+  isManual: boolean;
 }
 
 export interface ChannelMetricDay {
@@ -99,9 +101,10 @@ export async function fetchChannel(id: string): Promise<ChannelAccount | null> {
     owner_name: string | null;
     owner_email: string | null;
     owner_role: string | null;
+    is_manual: boolean;
   }>(
     `SELECT sa.id, sa.external_id, sa.name, sa.platform, sa.status, sa.last_synced_at, sa.persona_json,
-            sa.owner_member_id, sa.kpi_posts_per_day,
+            sa.owner_member_id, sa.kpi_posts_per_day, sa.is_manual,
             am.followers, ch.health_score,
             tm.name AS owner_name, tm.email AS owner_email, tm.role AS owner_role
      FROM social_account sa
@@ -133,6 +136,7 @@ export async function fetchChannel(id: string): Promise<ChannelAccount | null> {
     healthScore: row.health_score !== null ? Number(row.health_score) : null,
     kpiPostsPerDay: Number(row.kpi_posts_per_day),
     ownerId: row.owner_member_id,
+    isManual: row.is_manual,
     owner:
       row.owner_member_id && row.owner_name && row.owner_email && row.owner_role
         ? {

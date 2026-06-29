@@ -60,11 +60,11 @@ async function fetchWithDays(
     WITH per_account AS (
       SELECT amd.date,
              amd.followers,
-             CASE WHEN sa.platform = 'facebook' THEN amd.total_reach
+             CASE WHEN (sa.platform = 'facebook' AND NOT sa.is_manual) THEN amd.total_reach
                   ELSE GREATEST(0, amd.total_reach
                        - LAG(amd.total_reach) OVER (PARTITION BY amd.account_id ORDER BY amd.date))
              END AS reach,
-             CASE WHEN sa.platform = 'facebook' THEN amd.total_engagement
+             CASE WHEN (sa.platform = 'facebook' AND NOT sa.is_manual) THEN amd.total_engagement
                   ELSE GREATEST(0, amd.total_engagement
                        - LAG(amd.total_engagement) OVER (PARTITION BY amd.account_id ORDER BY amd.date))
              END AS engagement
@@ -164,11 +164,11 @@ async function fetchWithDateRange(
     WITH per_account AS (
       SELECT amd.date,
              amd.followers,
-             CASE WHEN sa.platform = 'facebook' THEN amd.total_reach
+             CASE WHEN (sa.platform = 'facebook' AND NOT sa.is_manual) THEN amd.total_reach
                   ELSE GREATEST(0, amd.total_reach
                        - LAG(amd.total_reach) OVER (PARTITION BY amd.account_id ORDER BY amd.date))
              END AS reach,
-             CASE WHEN sa.platform = 'facebook' THEN amd.total_engagement
+             CASE WHEN (sa.platform = 'facebook' AND NOT sa.is_manual) THEN amd.total_engagement
                   ELSE GREATEST(0, amd.total_engagement
                        - LAG(amd.total_engagement) OVER (PARTITION BY amd.account_id ORDER BY amd.date))
              END AS engagement

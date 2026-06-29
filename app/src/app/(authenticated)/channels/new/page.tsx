@@ -54,6 +54,22 @@ export default async function ChannelsNewPage() {
         </section>
       )}
 
+      {/* Nguồn không có API (vd Facebook cá nhân) → nhập số liệu thủ công */}
+      <section className="flex flex-col gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+          Khác
+        </h3>
+        <Link
+          href="/channels/new/manual"
+          className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 p-4 text-sm text-zinc-600 hover:border-zinc-400 hover:bg-zinc-50 transition-colors"
+        >
+          <span className="font-medium text-zinc-800">✍️ Kênh thủ công</span>
+          <span className="block text-xs text-zinc-500 mt-0.5">
+            Nguồn không có API (Facebook cá nhân…) — tự nhập followers / reach / engagement.
+          </span>
+        </Link>
+      </section>
+
       <p className="text-center text-sm text-zinc-400 pt-2">
         <Link href="/channels" className="hover:underline">
           ← Quay lại danh sách kênh

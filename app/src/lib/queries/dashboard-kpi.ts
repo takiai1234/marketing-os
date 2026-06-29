@@ -88,7 +88,7 @@ async function fetchWithDays(days: number, tagSlug: string | null): Promise<KpiD
       FROM social_account sa
       LEFT JOIN LATERAL (
         SELECT
-          CASE WHEN sa.platform = 'facebook'
+          CASE WHEN (sa.platform = 'facebook' AND NOT sa.is_manual)
             THEN COALESCE((SELECT SUM(total_reach) FROM account_metric_daily
                            WHERE account_id = sa.id
                              AND date >= CURRENT_DATE - $1::int AND date < CURRENT_DATE), 0)
@@ -96,7 +96,7 @@ async function fetchWithDays(days: number, tagSlug: string | null): Promise<KpiD
                            WHERE account_id = sa.id AND date < CURRENT_DATE
                            ORDER BY date DESC LIMIT 1), 0)
           END AS reach_cur,
-          CASE WHEN sa.platform = 'facebook'
+          CASE WHEN (sa.platform = 'facebook' AND NOT sa.is_manual)
             THEN COALESCE((SELECT SUM(total_reach) FROM account_metric_daily
                            WHERE account_id = sa.id
                              AND date >= CURRENT_DATE - ($1::int * 2)
@@ -248,14 +248,14 @@ async function fetchWithDateRange(
       FROM social_account sa
       LEFT JOIN LATERAL (
         SELECT
-          CASE WHEN sa.platform = 'facebook'
+          CASE WHEN (sa.platform = 'facebook' AND NOT sa.is_manual)
             THEN COALESCE((SELECT SUM(total_reach) FROM account_metric_daily
                            WHERE account_id = sa.id AND date >= $1::date AND date <= $2::date), 0)
             ELSE COALESCE((SELECT total_reach FROM account_metric_daily
                            WHERE account_id = sa.id AND date <= $2::date
                            ORDER BY date DESC LIMIT 1), 0)
           END AS reach_cur,
-          CASE WHEN sa.platform = 'facebook'
+          CASE WHEN (sa.platform = 'facebook' AND NOT sa.is_manual)
             THEN COALESCE((SELECT SUM(total_reach) FROM account_metric_daily
                            WHERE account_id = sa.id AND date >= $3::date AND date <= $4::date), 0)
             ELSE COALESCE((SELECT total_reach FROM account_metric_daily
