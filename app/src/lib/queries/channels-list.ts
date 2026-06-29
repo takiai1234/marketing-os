@@ -79,7 +79,7 @@ export async function fetchChannelsList(
      --     views thay vì "tăng thêm trong kỳ". NULL khi chưa có data → '—'.
      LEFT JOIN LATERAL (
        SELECT CASE
-         WHEN sa.platform = 'facebook' THEN (
+         WHEN (sa.platform = 'facebook' AND NOT sa.is_manual) THEN (
            SELECT SUM(total_reach) FROM account_metric_daily
            WHERE account_id = sa.id
              AND date >= CURRENT_DATE - INTERVAL '7 days'

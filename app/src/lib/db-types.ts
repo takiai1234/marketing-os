@@ -78,6 +78,8 @@ export interface SocialAccount {
   // cleared by the poller cron when the import finalizes (COMPLETED or FAILED).
   pending_bundle_import_id: string | null;
   pending_bundle_import_at: Date | null;
+  // Kênh nhập số liệu thủ công (migration 048) — không token/Bundle, cron bỏ qua.
+  is_manual: boolean;
 }
 
 export interface SocialPost {

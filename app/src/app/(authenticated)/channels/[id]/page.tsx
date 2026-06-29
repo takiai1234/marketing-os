@@ -88,6 +88,7 @@ export default async function ChannelDetailPage({ params }: PageProps) {
         allTeamMembers={allTeamMembers}
         kpiPostsPerDay={account.kpiPostsPerDay}
         isAdmin={isAdmin}
+        isManual={account.isManual}
       />
 
       

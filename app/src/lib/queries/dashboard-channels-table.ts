@@ -99,11 +99,11 @@ async function fetchWithDays(
       -- range). Nếu cả 2 anchor đều NULL (account chưa có data) → 0.
       -- KHÔNG được COALESCE(_,0) TRƯỚC phép trừ — sẽ ra (end - 0) = lifetime.
       CASE
-        WHEN sa.platform = 'facebook' THEN COALESCE(agg.reach, 0)
+        WHEN (sa.platform = 'facebook' AND NOT sa.is_manual) THEN COALESCE(agg.reach, 0)
         ELSE COALESCE(f_end.total_reach, 0)
       END::TEXT          AS reach,
       CASE
-        WHEN sa.platform = 'facebook' THEN COALESCE(agg.engagement, 0)
+        WHEN (sa.platform = 'facebook' AND NOT sa.is_manual) THEN COALESCE(agg.engagement, 0)
         ELSE COALESCE(f_end.total_engagement, 0)
       END::TEXT          AS engagement,
       COALESCE(p.posts_count, 0)::TEXT AS posts_count,
@@ -178,7 +178,7 @@ async function fetchWithDays(
       ${tagFilter}
     ORDER BY
       CASE
-        WHEN sa.platform = 'facebook' THEN COALESCE(agg.reach, 0)
+        WHEN (sa.platform = 'facebook' AND NOT sa.is_manual) THEN COALESCE(agg.reach, 0)
         ELSE COALESCE(f_end.total_reach, 0)
       END DESC,
       sa.name ASC
@@ -236,11 +236,11 @@ async function fetchWithDateRange(
       sa.platform,
       sa.kpi_posts_per_day,
       CASE
-        WHEN sa.platform = 'facebook' THEN COALESCE(agg.reach, 0)
+        WHEN (sa.platform = 'facebook' AND NOT sa.is_manual) THEN COALESCE(agg.reach, 0)
         ELSE COALESCE(f_end.total_reach, 0)
       END::TEXT          AS reach,
       CASE
-        WHEN sa.platform = 'facebook' THEN COALESCE(agg.engagement, 0)
+        WHEN (sa.platform = 'facebook' AND NOT sa.is_manual) THEN COALESCE(agg.engagement, 0)
         ELSE COALESCE(f_end.total_engagement, 0)
       END::TEXT          AS engagement,
       COALESCE(p.posts_count, 0)::TEXT AS posts_count,
@@ -307,7 +307,7 @@ async function fetchWithDateRange(
       ${tagFilter}
     ORDER BY
       CASE
-        WHEN sa.platform = 'facebook' THEN COALESCE(agg.reach, 0)
+        WHEN (sa.platform = 'facebook' AND NOT sa.is_manual) THEN COALESCE(agg.reach, 0)
         ELSE COALESCE(f_end.total_reach, 0)
       END DESC,
       sa.name ASC
