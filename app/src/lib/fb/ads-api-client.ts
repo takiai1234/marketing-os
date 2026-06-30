@@ -39,11 +39,14 @@ export async function fetchAdAccounts(token: string): Promise<FBAdAccount[]> {
       // thuộc 1 BM. Personal account → field absent.
       fields:
         'id,account_id,name,currency,timezone_name,account_status,amount_spent,business{id,name}',
-      limit: '100',
+      limit: '200',
     },
     token
   );
-  return res.data ?? [];
+  // account_status: 1=active, 2=disabled, 3=unsettled, 7=pending_review, 9=in_grace_period
+  // Chỉ lấy active (1) và pending_review (7) — bỏ disabled/unsettled
+  const USABLE_STATUSES = new Set([1, 7, 9]);
+  return (res.data ?? []).filter((a) => USABLE_STATUSES.has(a.account_status));
 }
 
 // ─── Campaign list ───────────────────────────────────────────────────────

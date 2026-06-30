@@ -35,7 +35,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   await session.save();
 
   try {
-    const authUrl = await buildAuthUrl(state);
+    // Ads flow: force rerequest ads_read vì user có thể đã authorize app trước
+    // đó (khi kết nối Pages) mà không có scope này. Nếu không có auth_type=rerequest,
+    // FB silently skip dialog và token trả về không có ads_read.
+    const authUrl = await buildAuthUrl(
+      state,
+      returnTo === 'ads' ? { rerequestScope: 'ads_read' } : undefined
+    );
     return NextResponse.redirect(authUrl);
   } catch (err) {
     // FB_APP_ID chưa cấu hình — redirect về /ads/connect với hint rõ ràng

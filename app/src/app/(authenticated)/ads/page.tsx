@@ -52,6 +52,8 @@ export default async function AdsPage({ searchParams }: AdsPageProps) {
 
   const sp = await searchParams;
   const range = parseRangeFromSearchParams(sp);
+  const discoveryError = typeof sp.discovery_error === 'string' ? sp.discovery_error : null;
+  const discoveryEmpty = sp.discovery_empty === '1';
 
   const [accounts, summaries] = await Promise.all([
     listAdAccountsForUser(user.userId),
@@ -91,6 +93,29 @@ export default async function AdsPage({ searchParams }: AdsPageProps) {
           <span className="text-[11px] text-zinc-500">
             {range.from} → {range.to} ({range.days} ngày)
           </span>
+        </div>
+      )}
+
+      {discoveryError && (
+        <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 px-4 py-3 text-sm text-rose-900">
+          <strong>Lỗi khi tìm Ad Accounts:</strong> {discoveryError}
+          <div className="mt-1 text-xs text-rose-700">
+            Nguyên nhân thường gặp: (1) scope <code>ads_read</code> chưa được Meta cấp cho token này — thử kết nối lại và đảm bảo bạn approve đủ quyền; (2) tài khoản quảng cáo thuộc BM nhưng user chưa được grant quyền cá nhân trong BM đó.
+          </div>
+        </div>
+      )}
+
+      {discoveryEmpty && !discoveryError && (
+        <div className="rounded-xl bg-amber-50 ring-1 ring-amber-200 px-4 py-3 text-sm text-amber-900">
+          <strong>Không tìm thấy Ad Account nào</strong> sau khi kết nối Facebook.
+          <div className="mt-1 text-xs text-amber-800 space-y-0.5">
+            <p>Kiểm tra các nguyên nhân sau:</p>
+            <ul className="list-disc list-inside ml-1 space-y-0.5">
+              <li>Scope <code>ads_read</code> chưa được Meta approve — hiện chỉ admin của FB App mới dùng được. <a href="/ads/connect" className="underline font-semibold">Thử kết nối lại</a></li>
+              <li>Tài khoản quảng cáo trong BM: vào <strong>Business Manager → People</strong>, đảm bảo user này được <strong>assign quyền vào Ad Account</strong> (không chỉ vào BM)</li>
+              <li>Tài khoản đang ở status disabled/unsettled — không xuất hiện trong danh sách</li>
+            </ul>
+          </div>
         </div>
       )}
 

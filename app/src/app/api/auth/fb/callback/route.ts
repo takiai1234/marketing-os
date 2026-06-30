@@ -79,6 +79,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     // ─── Ad accounts: discover qua /me/adaccounts (cần scope ads_read) ──
     // Best-effort cho cả 2 flow. Cron sẽ dùng encrypted_token sync sau.
+    let adDiscoveryError: string | null = null;
+    let adDiscoveryCount = 0;
     try {
       const adAccounts = await fetchAdAccounts(userToken);
       console.log(
@@ -102,6 +104,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
             [dbAccount.id, encryptedToken]
           );
         }
+        adDiscoveryCount = adAccounts.length;
         console.log(
           `[fb/callback] Discovered ${adAccounts.length} ad accounts for user ${user.userId}`
         );
@@ -123,8 +126,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      adDiscoveryError = msg.slice(0, 300);
       console.warn(
-        `[fb/callback] Ad accounts discovery skipped: ${msg.slice(0, 200)}`
+        `[fb/callback] Ad accounts discovery failed: ${adDiscoveryError}`
       );
     }
 
@@ -133,7 +137,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       // Chỉ save (để clear fb_oauth_state + return_to) rồi redirect.
       session.fb_oauth_pages = undefined;
       await session.save();
-      return NextResponse.redirect(new URL('/ads', origin));
+      const adsUrl = new URL('/ads', origin);
+      if (adDiscoveryError) {
+        adsUrl.searchParams.set('discovery_error', adDiscoveryError);
+      } else if (adDiscoveryCount === 0) {
+        adsUrl.searchParams.set('discovery_empty', '1');
+      }
+      return NextResponse.redirect(adsUrl);
     }
 
     // Channels flow: cần pages để picker render. Giới hạn slice cứng để
