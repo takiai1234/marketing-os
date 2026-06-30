@@ -93,7 +93,7 @@ async function fetchWithDays(days: number, tagSlug: string | null): Promise<KpiD
                            WHERE account_id = sa.id
                              AND date >= CURRENT_DATE - $1::int AND date < CURRENT_DATE), 0)
             ELSE COALESCE((SELECT total_reach FROM account_metric_daily
-                           WHERE account_id = sa.id AND date < CURRENT_DATE
+                           WHERE account_id = sa.id AND (date < CURRENT_DATE OR sa.is_manual)
                            ORDER BY date DESC LIMIT 1), 0)
           END AS reach_cur,
           CASE WHEN (sa.platform = 'facebook' AND NOT sa.is_manual)
@@ -187,7 +187,7 @@ async function fetchWithDays(days: number, tagSlug: string | null): Promise<KpiD
         SELECT DISTINCT ON (amd.account_id) amd.account_id, amd.followers
         FROM account_metric_daily amd
         INNER JOIN social_account sa ON sa.id = amd.account_id
-        WHERE amd.date < CURRENT_DATE AND sa.status != 'disconnected'
+        WHERE (amd.date < CURRENT_DATE OR sa.is_manual) AND sa.status != 'disconnected'
           ${tagFilter}
         ORDER BY amd.account_id, amd.date DESC
       ),
@@ -252,7 +252,7 @@ async function fetchWithDateRange(
             THEN COALESCE((SELECT SUM(total_reach) FROM account_metric_daily
                            WHERE account_id = sa.id AND date >= $1::date AND date <= $2::date), 0)
             ELSE COALESCE((SELECT total_reach FROM account_metric_daily
-                           WHERE account_id = sa.id AND date <= $2::date
+                           WHERE account_id = sa.id AND (date <= $2::date OR sa.is_manual)
                            ORDER BY date DESC LIMIT 1), 0)
           END AS reach_cur,
           CASE WHEN (sa.platform = 'facebook' AND NOT sa.is_manual)
@@ -360,7 +360,7 @@ async function fetchWithDateRange(
           SELECT DISTINCT ON (amd.account_id) amd.account_id, amd.followers
           FROM account_metric_daily amd
           INNER JOIN social_account sa ON sa.id = amd.account_id
-          WHERE amd.date <= $1::date AND sa.status != 'disconnected'
+          WHERE (amd.date <= $1::date OR sa.is_manual) AND sa.status != 'disconnected'
             ${followersTagFilter}
           ORDER BY amd.account_id, amd.date DESC
         ),
