@@ -147,11 +147,12 @@ async function fetchWithDays(
       WHERE account_id = sa.id AND date <= CURRENT_DATE - $1::INT
       ORDER BY date DESC LIMIT 1
     ) f_start ON TRUE
-    -- Snapshot CUỐI range (gần hôm nay nhất, không bao gồm hôm nay)
+    -- Snapshot CUỐI range (gần hôm nay nhất). Kênh thủ công: gồm CẢ hôm nay
+    -- (số nhập tay đã hoàn chỉnh) để hiện ngay, không bị loại như kênh sync thật.
     LEFT JOIN LATERAL (
       SELECT followers, total_reach, total_engagement
       FROM account_metric_daily
-      WHERE account_id = sa.id AND date < CURRENT_DATE
+      WHERE account_id = sa.id AND (date < CURRENT_DATE OR sa.is_manual)
       ORDER BY date DESC LIMIT 1
     ) f_end ON TRUE
     -- FALLBACK start anchor cho non-FB: snapshot SỚM NHẤT trong range.
@@ -280,11 +281,12 @@ async function fetchWithDateRange(
       WHERE account_id = sa.id AND date < $1::date
       ORDER BY date DESC LIMIT 1
     ) f_start ON TRUE
-    -- Snapshot CUỐI range = snapshot mới nhất TẠI/TRƯỚC untilIso ($2).
+    -- Snapshot CUỐI range = mới nhất TẠI/TRƯỚC untilIso ($2). Kênh thủ công:
+    -- gồm cả hôm nay (số nhập tay hoàn chỉnh) để hiện ngay.
     LEFT JOIN LATERAL (
       SELECT followers, total_reach, total_engagement
       FROM account_metric_daily
-      WHERE account_id = sa.id AND date <= $2::date
+      WHERE account_id = sa.id AND (date <= $2::date OR sa.is_manual)
       ORDER BY date DESC LIMIT 1
     ) f_end ON TRUE
     -- FALLBACK start anchor: snapshot SỚM NHẤT trong range.
