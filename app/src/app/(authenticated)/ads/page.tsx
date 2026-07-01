@@ -267,7 +267,7 @@ function TopKpiSummary({
       <KpiCard label="Impressions" value={NUMBER_FMT.format(totalImpressions)} />
       <KpiCard label="Clicks" value={NUMBER_FMT.format(totalClicks)} />
       <KpiCard label="CTR" value={`${ctr.toFixed(2)}%`} />
-      <KpiCard label="Conversions" value={NUMBER_FMT.format(totalConversions)} />
+      <KpiCard label="Kết quả" value={NUMBER_FMT.format(totalConversions)} />
       {!allSameCurrency && (
         <div className="col-span-full text-[11px] text-zinc-500 italic">
           ⚠️ Các ad accounts có currency khác nhau — spend không cộng được, hiện

@@ -269,7 +269,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
         <KpiCard label="CTR" value={`${(kpiCurrent.ctr * 100).toFixed(2)}%`} delta={dCtr} unit="percent" />
         <KpiCard label="CPM" value={microsToDisplay(kpiCurrent.cpmMicros, currency)} delta={dCpm} unit="currency" currency={currency} invertTrend />
         <KpiCard label="CPC" value={microsToDisplay(kpiCurrent.cpcMicros, currency)} delta={null} unit="currency" currency={currency} invertTrend />
-        <KpiCard label="Conversions" value={NUMBER_FMT.format(kpiCurrent.conversions)} delta={dConversions} unit="count" />
+        <KpiCard label="Kết quả" value={NUMBER_FMT.format(kpiCurrent.conversions)} delta={dConversions} unit="count" />
         <KpiCard label="CPA" value={kpiCurrent.cpaMicros > 0 ? microsToDisplay(kpiCurrent.cpaMicros, currency) : '—'} delta={null} unit="currency" currency={currency} invertTrend hint="Cost per acquisition" />
         <KpiCard label="ROAS" value={kpiCurrent.roas !== null ? `${kpiCurrent.roas.toFixed(2)}×` : '—'} delta={null} unit="number" hint="Revenue/Spend" />
       </div>

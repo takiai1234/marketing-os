@@ -184,7 +184,7 @@ export default async function AdAccountDetailPage({ params, searchParams }: Page
           <KpiCard label="Impressions" value={NUMBER_FMT.format(totalImpressions)} />
           <KpiCard label="Clicks" value={NUMBER_FMT.format(totalClicks)} />
           <KpiCard label="CTR" value={`${(avgCtr * 100).toFixed(2)}%`} />
-          <KpiCard label="Conversions" value={NUMBER_FMT.format(totalConversions)} sub={avgCpc > 0 ? `Avg CPC: ${microsToDisplay(avgCpc, account.currency)}` : undefined} />
+          <KpiCard label="Kết quả" value={NUMBER_FMT.format(totalConversions)} sub={avgCpc > 0 ? `Avg CPC: ${microsToDisplay(avgCpc, account.currency)}` : undefined} />
         </div>
       ) : account.status === 'active' ? (
         <div className="rounded-xl bg-blue-50 ring-1 ring-blue-200 px-4 py-3 text-sm text-blue-900 flex items-start gap-2">

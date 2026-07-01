@@ -33,7 +33,7 @@ function microsToDisplay(micros: number, currency: string): string {
 const SERIES = {
   spend: { label: 'Spend', color: '#3B82F6' },
   impressions: { label: 'Impressions', color: '#A855F7' },
-  conversions: { label: 'Conversions', color: '#10B981' },
+  conversions: { label: 'Kết quả', color: '#10B981' },
 } as const;
 
 type SeriesKey = keyof typeof SERIES;
@@ -179,7 +179,7 @@ export function CampaignTrendChart({ data, currency }: Props) {
                   return [v.toLocaleString('vi-VN'), 'Impressions'];
                 }
                 if (n === 'conversions') {
-                  return [v.toLocaleString('vi-VN'), 'Conversions'];
+                  return [v.toLocaleString('vi-VN'), 'Kết quả'];
                 }
                 return [String(v), n];
               }}
