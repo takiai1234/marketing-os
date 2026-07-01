@@ -1,23 +1,27 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { SparklesIcon, XIcon, RefreshCwIcon, ChevronRightIcon } from 'lucide-react';
+import { SparklesIcon, XIcon, RefreshCwIcon, ChevronRightIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 
 interface AdsAiAnalystProps {
   endpoint: string;
   queryString?: string;
 }
 
-interface UnitEcon {
-  aov: string;
-  closeRate: string;
-  grossMargin: string;
-  profitMargin: string;
+interface ProductCpl {
+  id: number;
+  name: string;
+  cplTarget: string;   // CPL trần (mục tiêu lời)
+  cplBreakeven: string; // CPL hòa vốn (optional)
 }
+
+let nextId = 1;
 
 export function AdsAiAnalyst({ endpoint, queryString }: AdsAiAnalystProps) {
   const [step, setStep] = useState<'idle' | 'setup' | 'analyzing'>('idle');
-  const [econ, setEcon] = useState<UnitEcon>({ aov: '', closeRate: '', grossMargin: '', profitMargin: '30' });
+  const [products, setProducts] = useState<ProductCpl[]>([
+    { id: nextId++, name: '', cplTarget: '', cplBreakeven: '' },
+  ]);
   const [loading, setLoading] = useState(false);
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +31,18 @@ export function AdsAiAnalyst({ endpoint, queryString }: AdsAiAnalystProps) {
     setStep('setup');
     setText('');
     setError(null);
+  }
+
+  function addProduct() {
+    setProducts((p) => [...p, { id: nextId++, name: '', cplTarget: '', cplBreakeven: '' }]);
+  }
+
+  function removeProduct(id: number) {
+    setProducts((p) => p.filter((x) => x.id !== id));
+  }
+
+  function updateProduct(id: number, field: keyof Omit<ProductCpl, 'id'>, value: string) {
+    setProducts((p) => p.map((x) => x.id === id ? { ...x, [field]: value } : x));
   }
 
   async function runAnalysis() {
@@ -41,19 +57,19 @@ export function AdsAiAnalyst({ endpoint, queryString }: AdsAiAnalystProps) {
 
     const url = queryString ? `${endpoint}?${queryString}` : endpoint;
 
-    // Parse unit economics — send null if blank (AI will use benchmark fallback)
-    const body: Record<string, number | null> = {
-      aov: econ.aov ? Number(econ.aov.replace(/\D/g, '')) : null,
-      closeRate: econ.closeRate ? Number(econ.closeRate) / 100 : null,
-      grossMargin: econ.grossMargin ? Number(econ.grossMargin) / 100 : null,
-      profitMargin: econ.profitMargin ? Number(econ.profitMargin) / 100 : 0.3,
-    };
+    const validProducts = products
+      .filter((p) => p.name.trim() && p.cplTarget.trim())
+      .map((p) => ({
+        name: p.name.trim(),
+        cplTarget: Number(p.cplTarget.replace(/\D/g, '')),
+        cplBreakeven: p.cplBreakeven ? Number(p.cplBreakeven.replace(/\D/g, '')) : null,
+      }));
 
     try {
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ products: validProducts }),
         signal: ctrl.signal,
       });
 
@@ -86,7 +102,7 @@ export function AdsAiAnalyst({ endpoint, queryString }: AdsAiAnalystProps) {
     setError(null);
   }
 
-  const inputCls = 'h-9 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/15';
+  const inputCls = 'h-9 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/15';
 
   return (
     <div className="flex flex-col gap-3">
@@ -105,58 +121,70 @@ export function AdsAiAnalyst({ endpoint, queryString }: AdsAiAnalystProps) {
           <div className="flex items-center justify-between px-4 py-2.5 bg-violet-50 border-b border-violet-100">
             <div className="flex items-center gap-2">
               <SparklesIcon className="size-4 text-violet-600" />
-              <span className="text-sm font-semibold text-violet-900">Phân tích AI — Nhập kinh tế đơn vị</span>
+              <span className="text-sm font-semibold text-violet-900">Phân tích AI — Nhập CPL trần theo sản phẩm</span>
             </div>
             <button onClick={close} className="p-1.5 rounded hover:bg-violet-100 text-violet-600">
               <XIcon className="size-3.5" />
             </button>
           </div>
+
           <div className="px-4 py-4 flex flex-col gap-4">
             <p className="text-xs text-zinc-500">
-              Nhập để tính <strong>CPL trần</strong> (ngưỡng lời). Để trống → AI dùng benchmark ngành.
+              Nhập tên sản phẩm và <strong>CPL trần</strong> (ngưỡng có lời).
+              AI sẽ match campaign với sản phẩm để đánh giá đúng ngưỡng.
+              Để trống → AI dùng benchmark ngành.
             </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-zinc-700">AOV — giá đơn TB (VNĐ)</label>
-                <input
-                  className={inputCls}
-                  inputMode="numeric"
-                  placeholder="VD: 500000"
-                  value={econ.aov}
-                  onChange={(e) => setEcon((p) => ({ ...p, aov: e.target.value }))}
-                />
+
+            <div className="flex flex-col gap-2">
+              {/* Header */}
+              <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 px-0.5">
+                <span className="text-xs font-medium text-zinc-500">Tên sản phẩm</span>
+                <span className="text-xs font-medium text-zinc-500">CPL trần (lời)</span>
+                <span className="text-xs font-medium text-zinc-500">CPL hòa vốn</span>
+                <span className="w-7" />
               </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-zinc-700">Tỷ lệ chốt đơn (%)</label>
-                <input
-                  className={inputCls}
-                  inputMode="numeric"
-                  placeholder="VD: 20"
-                  value={econ.closeRate}
-                  onChange={(e) => setEcon((p) => ({ ...p, closeRate: e.target.value }))}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-zinc-700">Biên lợi nhuận gộp (%)</label>
-                <input
-                  className={inputCls}
-                  inputMode="numeric"
-                  placeholder="VD: 40"
-                  value={econ.grossMargin}
-                  onChange={(e) => setEcon((p) => ({ ...p, grossMargin: e.target.value }))}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-zinc-700">Biên lời muốn giữ lại (%)</label>
-                <input
-                  className={inputCls}
-                  inputMode="numeric"
-                  placeholder="VD: 30"
-                  value={econ.profitMargin}
-                  onChange={(e) => setEcon((p) => ({ ...p, profitMargin: e.target.value }))}
-                />
-              </div>
+
+              {products.map((p) => (
+                <div key={p.id} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center">
+                  <input
+                    className={inputCls}
+                    placeholder="VD: AI Power"
+                    value={p.name}
+                    onChange={(e) => updateProduct(p.id, 'name', e.target.value)}
+                  />
+                  <input
+                    className={inputCls}
+                    inputMode="numeric"
+                    placeholder="VD: 150000"
+                    value={p.cplTarget}
+                    onChange={(e) => updateProduct(p.id, 'cplTarget', e.target.value)}
+                  />
+                  <input
+                    className={inputCls}
+                    inputMode="numeric"
+                    placeholder="Tuỳ chọn"
+                    value={p.cplBreakeven}
+                    onChange={(e) => updateProduct(p.id, 'cplBreakeven', e.target.value)}
+                  />
+                  <button
+                    onClick={() => removeProduct(p.id)}
+                    className="p-1.5 rounded text-zinc-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-30"
+                    disabled={products.length === 1}
+                  >
+                    <Trash2Icon className="size-4" />
+                  </button>
+                </div>
+              ))}
+
+              <button
+                onClick={addProduct}
+                className="inline-flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-800 mt-1 self-start"
+              >
+                <PlusIcon className="size-3.5" />
+                Thêm sản phẩm
+              </button>
             </div>
+
             <div className="flex justify-end">
               <button
                 onClick={runAnalysis}
@@ -226,7 +254,7 @@ function MarkdownText({ text }: { text: string }) {
           );
         }
         if (line.startsWith('| ')) {
-          return <p key={i} className="font-mono text-xs text-zinc-600">{line}</p>;
+          return <p key={i} className="font-mono text-xs text-zinc-600 whitespace-pre">{line}</p>;
         }
         if (line.startsWith('- ') || line.startsWith('* ')) {
           return (

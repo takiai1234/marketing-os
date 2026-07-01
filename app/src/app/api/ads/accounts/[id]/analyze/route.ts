@@ -23,41 +23,14 @@ interface Ctx { params: Promise<{ id: string }> }
 
 const MODEL = 'anthropic/claude-sonnet-4.6';
 
-interface UnitEcon {
-  aov: number | null;
-  closeRate: number | null;
-  grossMargin: number | null;
-  profitMargin: number | null;
+interface ProductCpl {
+  name: string;
+  cplTarget: number;       // VNĐ
+  cplBreakeven: number | null; // VNĐ, optional
 }
 
-function formatMicro(micros: number, currency: string): string {
-  return microsToDisplay(micros, currency);
-}
-
-function buildCplSection(econ: UnitEcon, currency: string): { section: string; cplBreakeven: number | null; cplTarget: number | null } {
-  if (econ.aov && econ.closeRate && econ.grossMargin) {
-    const pm = econ.profitMargin ?? 0.3;
-    const leadValue = econ.aov * econ.closeRate * econ.grossMargin;
-    const cplBreakeven = leadValue;
-    const cplTarget = leadValue * (1 - pm);
-    const cplBreakevenMicros = cplBreakeven * 1_000_000;
-    const cplTargetMicros = cplTarget * 1_000_000;
-    const section = `## Kinh tế đơn vị
-- AOV: ${econ.aov.toLocaleString('vi-VN')}đ
-- Tỷ lệ chốt: ${(econ.closeRate * 100).toFixed(0)}%
-- Biên gộp: ${(econ.grossMargin * 100).toFixed(0)}%
-- Biên lời giữ lại: ${(pm * 100).toFixed(0)}%
-- **Giá trị mỗi lead = ${cplBreakeven.toLocaleString('vi-VN', { maximumFractionDigits: 0 })}đ**
-- **CPL hòa vốn = ${cplBreakeven.toLocaleString('vi-VN', { maximumFractionDigits: 0 })}đ** (chi đúng mức này thì huề)
-- **CPL trần (mục tiêu) = ${cplTarget.toLocaleString('vi-VN', { maximumFractionDigits: 0 })}đ** (đây là mốc 🟢 thật)`;
-    return { section, cplBreakeven: cplBreakevenMicros, cplTarget: cplTargetMicros };
-  }
-  return {
-    section: `## Kinh tế đơn vị
-_(Chưa nhập — sẽ dùng benchmark ngành để đánh giá)_`,
-    cplBreakeven: null,
-    cplTarget: null,
-  };
+function fmt(n: number): string {
+  return n.toLocaleString('vi-VN', { maximumFractionDigits: 0 }) + 'đ';
 }
 
 export async function POST(req: NextRequest, { params }: Ctx): Promise<NextResponse> {
@@ -71,10 +44,10 @@ export async function POST(req: NextRequest, { params }: Ctx): Promise<NextRespo
   const account = await getAdAccountForUser(id, user.userId);
   if (!account) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  let econ: UnitEcon = { aov: null, closeRate: null, grossMargin: null, profitMargin: 0.3 };
+  let products: ProductCpl[] = [];
   try {
     const body = await req.json();
-    econ = { aov: body.aov ?? null, closeRate: body.closeRate ?? null, grossMargin: body.grossMargin ?? null, profitMargin: body.profitMargin ?? 0.3 };
+    if (Array.isArray(body.products)) products = body.products;
   } catch { /* body optional */ }
 
   const [dailyMetrics, campaigns] = await Promise.all([
@@ -92,7 +65,7 @@ export async function POST(req: NextRequest, { params }: Ctx): Promise<NextRespo
     totalConversions += d.conversions;
     const dayCtr = d.impressions > 0 ? (d.clicks / d.impressions * 100).toFixed(2) : '0';
     const dayCpm = d.impressions > 0 ? (d.spendMicros / d.impressions * 1000 / 1_000_000).toFixed(0) : '0';
-    dailyLines.push(`  ${d.date}: spend ${formatMicro(d.spendMicros, account.currency)}, CTR ${dayCtr}%, CPM ${dayCpm}đ, kết quả ${d.conversions}`);
+    dailyLines.push(`  ${d.date}: spend ${microsToDisplay(d.spendMicros, account.currency)}, CTR ${dayCtr}%, CPM ${dayCpm}đ, kết quả ${d.conversions}`);
   }
 
   const ctr = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
@@ -100,8 +73,25 @@ export async function POST(req: NextRequest, { params }: Ctx): Promise<NextRespo
   const cpm = totalImpressions > 0 ? (totalSpend / totalImpressions) * 1000 : 0;
   const cpl = totalConversions > 0 ? totalSpend / totalConversions : 0;
 
-  // Kinh tế đơn vị
-  const { section: econSection, cplBreakeven, cplTarget } = buildCplSection(econ, account.currency);
+  // Bảng sản phẩm + CPL trần
+  const productSection = products.length > 0
+    ? `## CPL trần theo sản phẩm\n` + products.map((p) =>
+        `- **${p.name}**: CPL trần = ${fmt(p.cplTarget)}` +
+        (p.cplBreakeven ? ` | CPL hòa vốn = ${fmt(p.cplBreakeven)}` : '')
+      ).join('\n')
+    : `## CPL trần theo sản phẩm\n_(Chưa nhập — AI dùng benchmark ngành)_`;
+
+  // Helper: tìm sản phẩm match campaign name
+  function matchProduct(campaignName: string): ProductCpl | null {
+    if (products.length === 0) return null;
+    const lower = campaignName.toLowerCase();
+    for (const p of products) {
+      if (lower.includes(p.name.toLowerCase())) return p;
+    }
+    // fallback: nếu chỉ có 1 sản phẩm → dùng luôn
+    if (products.length === 1) return products[0]!;
+    return null;
+  }
 
   // Campaign detail + significance check
   const campaignLines: string[] = [];
@@ -109,33 +99,42 @@ export async function POST(req: NextRequest, { params }: Ctx): Promise<NextRespo
     const s = c.summary30d;
     if (!s) { campaignLines.push(`- [${c.status}] ${c.name} (${c.objective}): chưa có data`); continue; }
 
-    const campCpl = s.conversions > 0 ? s.spendMicros / s.conversions : null;
+    const prod = matchProduct(c.name);
+    const cplTargetMicros = prod ? prod.cplTarget * 1_000_000 : null;
+    const cplBreakevenMicros = prod?.cplBreakeven ? prod.cplBreakeven * 1_000_000 : cplTargetMicros ? cplTargetMicros / 0.7 : null;
+
+    const campCplMicros = s.conversions > 0 ? s.spendMicros / s.conversions : null;
     const campCtr = s.impressions > 0 ? (s.clicks / s.impressions * 100).toFixed(2) : '0';
     const campCpm = s.impressions > 0 ? (s.spendMicros / s.impressions * 1000 / 1_000_000).toFixed(0) : '0';
-    const campBudget = c.dailyBudgetMicros ? `budget/ngày ${formatMicro(c.dailyBudgetMicros, account.currency)}` : c.lifetimeBudgetMicros ? `budget trọn đời ${formatMicro(c.lifetimeBudgetMicros, account.currency)}` : 'budget không rõ';
+    const campBudget = c.dailyBudgetMicros
+      ? `budget/ngày ${microsToDisplay(c.dailyBudgetMicros, account.currency)}`
+      : c.lifetimeBudgetMicros
+      ? `budget trọn đời ${microsToDisplay(c.lifetimeBudgetMicros, account.currency)}`
+      : 'budget không rõ';
 
     // Significance check
-    let sig = '⚪ CHƯA ĐỦ DATA';
-    if (cplTarget !== null && s.conversions >= 30) sig = 'ĐỦ DATA';
-    else if (cplTarget !== null && s.spendMicros >= 3 * cplTarget) sig = 'ĐỦ DATA';
-    else if (cplTarget === null && s.conversions >= 30) sig = 'ĐỦ DATA';
+    const sigThreshold = cplTargetMicros ?? 0;
+    const hasSig = s.conversions >= 30 || (sigThreshold > 0 && s.spendMicros >= 3 * sigThreshold);
+    const sig = hasSig ? 'ĐỦ DATA' : '⚪ CHƯA ĐỦ DATA';
 
-    // CPL vs target
+    // CPL flag
     let cplFlag = '';
-    if (campCpl !== null && cplTarget !== null && cplBreakeven !== null && sig === 'ĐỦ DATA') {
-      if (campCpl < cplTarget) cplFlag = '🟢';
-      else if (campCpl <= cplBreakeven) cplFlag = '🟡';
+    if (campCplMicros !== null && cplTargetMicros !== null && cplBreakevenMicros !== null && hasSig) {
+      if (campCplMicros < cplTargetMicros) cplFlag = '🟢';
+      else if (campCplMicros <= cplBreakevenMicros) cplFlag = '🟡';
       else cplFlag = '🔴';
-    } else if (sig === 'ĐỦ DATA') {
-      cplFlag = '(chưa có CPL trần)';
+    } else if (hasSig) {
+      cplFlag = '';
     }
 
-    const cplStr = campCpl !== null ? formatMicro(campCpl, account.currency) : 'N/A (0 kết quả)';
-    const nameTag = c.name.match(/retar|warm|rt\b|rtg/i) ? '[RT]' : '[Cold?]';
+    const cplStr = campCplMicros !== null ? microsToDisplay(campCplMicros, account.currency) : 'N/A (0 kết quả)';
+    const prodTag = prod ? `[${prod.name}]` : '[sản phẩm?]';
+    const rtTag = c.name.match(/retar|warm|\brt\b|rtg/i) ? '[RT]' : '[Cold?]';
+    const cplTargetStr = prod ? ` | CPL trần: ${fmt(prod.cplTarget)}` : '';
 
     campaignLines.push(
-      `- ${cplFlag || ''}${sig === '⚪ CHƯA ĐỦ DATA' ? '⚪' : ''} [${c.status}] ${nameTag} ${c.name} | Mục tiêu: ${c.objective} | ${campBudget}` +
-      `\n  Spend: ${formatMicro(s.spendMicros, account.currency)} | Kết quả: ${s.conversions} | CPL: ${cplStr} | CTR: ${campCtr}% | CPM: ${campCpm}đ | Significance: ${sig}`
+      `- ${cplFlag}${sig === '⚪ CHƯA ĐỦ DATA' ? '⚪' : ''} [${c.status}] ${rtTag}${prodTag} ${c.name} | ${c.objective} | ${campBudget}${cplTargetStr}` +
+      `\n  Spend: ${microsToDisplay(s.spendMicros, account.currency)} | Kết quả: ${s.conversions} | CPL: ${cplStr} | CTR: ${campCtr}% | CPM: ${campCpm}đ | ${sig}`
     );
   }
 
@@ -147,19 +146,19 @@ export async function POST(req: NextRequest, { params }: Ctx): Promise<NextRespo
 - Kỳ: ${range.from} → ${range.to} (${range.days} ngày)
 - Tiền tệ: ${account.currency}
 
-${econSection}
+${productSection}
 
 ## KPI tổng hợp kỳ này
 | Chỉ số | Giá trị |
 |--------|---------|
-| Tổng chi tiêu | ${formatMicro(totalSpend, account.currency)} |
+| Tổng chi tiêu | ${microsToDisplay(totalSpend, account.currency)} |
 | Impressions | ${totalImpressions.toLocaleString('vi-VN')} |
 | Clicks | ${totalClicks.toLocaleString('vi-VN')} |
 | CTR | ${ctr.toFixed(2)}% |
-| CPM | ${formatMicro(cpm, account.currency)} |
-| CPC | ${formatMicro(cpc, account.currency)} |
+| CPM | ${microsToDisplay(cpm, account.currency)} |
+| CPC | ${microsToDisplay(cpc, account.currency)} |
 | Tổng kết quả | ${totalConversions} |
-| CPL (kết quả/chi tiêu) | ${cpl > 0 ? formatMicro(cpl, account.currency) : 'N/A'} |
+| CPL (kết quả/chi tiêu) | ${cpl > 0 ? microsToDisplay(cpl, account.currency) : 'N/A'} |
 
 ## Xu hướng theo ngày (phát hiện fatigue: CPM tăng + CTR giảm = fatigue)
 ${dailyLines.join('\n') || 'Không có data ngày'}

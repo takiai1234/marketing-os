@@ -16,11 +16,14 @@ export const maxDuration = 60;
 
 const MODEL = 'anthropic/claude-sonnet-4.6';
 
-interface UnitEcon {
-  aov: number | null;
-  closeRate: number | null;
-  grossMargin: number | null;
-  profitMargin: number | null;
+interface ProductCpl {
+  name: string;
+  cplTarget: number;
+  cplBreakeven: number | null;
+}
+
+function fmt(n: number): string {
+  return n.toLocaleString('vi-VN', { maximumFractionDigits: 0 }) + 'đ';
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -30,10 +33,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const sp = Object.fromEntries(req.nextUrl.searchParams.entries());
   const range = parseRangeFromSearchParams(sp);
 
-  let econ: UnitEcon = { aov: null, closeRate: null, grossMargin: null, profitMargin: 0.3 };
+  let products: ProductCpl[] = [];
   try {
     const body = await req.json();
-    econ = { aov: body.aov ?? null, closeRate: body.closeRate ?? null, grossMargin: body.grossMargin ?? null, profitMargin: body.profitMargin ?? 0.3 };
+    if (Array.isArray(body.products)) products = body.products;
   } catch { /* body optional */ }
 
   const [accounts, summaries] = await Promise.all([
@@ -46,22 +49,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Không có ad account active nào để phân tích.' }, { status: 400 });
   }
 
-  // Tính CPL trần nếu có kinh tế đơn vị
-  let cplBreakevenMicros: number | null = null;
-  let cplTargetMicros: number | null = null;
-  let econSection = '';
-  if (econ.aov && econ.closeRate && econ.grossMargin) {
-    const pm = econ.profitMargin ?? 0.3;
-    const leadValue = econ.aov * econ.closeRate * econ.grossMargin;
-    cplBreakevenMicros = leadValue * 1_000_000;
-    cplTargetMicros = leadValue * (1 - pm) * 1_000_000;
-    econSection = `## Kinh tế đơn vị
-- AOV: ${econ.aov.toLocaleString('vi-VN')}đ | Chốt: ${(econ.closeRate * 100).toFixed(0)}% | Biên gộp: ${(econ.grossMargin * 100).toFixed(0)}%
-- **CPL hòa vốn: ${leadValue.toLocaleString('vi-VN', { maximumFractionDigits: 0 })}đ**
-- **CPL trần (mục tiêu): ${(leadValue * (1 - pm)).toLocaleString('vi-VN', { maximumFractionDigits: 0 })}đ** ← mốc 🟢`;
-  } else {
-    econSection = `## Kinh tế đơn vị\n_(Chưa nhập — dùng benchmark ngành)_`;
-  }
+  const productSection = products.length > 0
+    ? `## CPL trần theo sản phẩm\n` + products.map((p) =>
+        `- **${p.name}**: CPL trần = ${fmt(p.cplTarget)}` +
+        (p.cplBreakeven ? ` | CPL hòa vốn = ${fmt(p.cplBreakeven)}` : '')
+      ).join('\n')
+    : `## CPL trần theo sản phẩm\n_(Chưa nhập — AI dùng benchmark ngành)_`;
+
+  // Dùng CPL trần của sản phẩm đầu tiên làm baseline cross-account
+  const defaultCplTarget = products[0]?.cplTarget ?? null;
+  const defaultCplBreakeven = products[0]?.cplBreakeven ?? (defaultCplTarget ? defaultCplTarget / 0.7 : null);
 
   // Tổng KPI + từng account
   let totalSpend = 0, totalImpressions = 0, totalClicks = 0, totalConversions = 0;
@@ -82,16 +79,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const accCpl = s.totalConversions > 0 ? s.totalSpendMicros / s.totalConversions : null;
 
     // Significance
-    let sig = '⚪';
-    if (cplTargetMicros !== null && s.totalConversions >= 30) sig = '✓';
-    else if (cplTargetMicros !== null && s.totalSpendMicros >= 3 * cplTargetMicros) sig = '✓';
-    else if (cplTargetMicros === null && s.totalConversions >= 30) sig = '✓';
+    const cplTgtMicros = defaultCplTarget ? defaultCplTarget * 1_000_000 : null;
+    const cplBevMicros = defaultCplBreakeven ? defaultCplBreakeven * 1_000_000 : null;
+    const hasSig = s.totalConversions >= 30 || (cplTgtMicros !== null && s.totalSpendMicros >= 3 * cplTgtMicros);
+    const sig = hasSig ? '✓' : '⚪';
 
     // CPL flag
     let flag = '';
-    if (accCpl !== null && cplTargetMicros !== null && cplBreakevenMicros !== null && sig === '✓') {
-      if (accCpl < cplTargetMicros) flag = '🟢';
-      else if (accCpl <= cplBreakevenMicros) flag = '🟡';
+    if (accCpl !== null && cplTgtMicros !== null && cplBevMicros !== null && hasSig) {
+      if (accCpl < cplTgtMicros) flag = '🟢';
+      else if (accCpl <= cplBevMicros) flag = '🟡';
       else flag = '🔴';
     }
 
@@ -112,7 +109,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 ## Tổng quan danh mục — ${activeAccounts.length} tài khoản active
 - Kỳ: ${range.from} → ${range.to} (${range.days} ngày)
 
-${econSection}
+${productSection}
 
 ## KPI tổng hợp toàn danh mục
 | Chỉ số | Giá trị |
