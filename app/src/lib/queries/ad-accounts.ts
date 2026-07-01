@@ -433,11 +433,13 @@ export async function getAccountSummaries(
         COALESCE(SUM(m.impressions), 0)::TEXT   AS total_impressions,
         COALESCE(SUM(m.clicks), 0)::TEXT        AS total_clicks,
         COALESCE(SUM(m.conversions), 0)::TEXT   AS total_conversions,
-        AVG(m.ctr)::TEXT                         AS avg_ctr,
-        AVG(m.cpm_micros)::TEXT                  AS avg_cpm,
+        (CASE WHEN SUM(m.impressions) > 0
+              THEN SUM(m.clicks)::FLOAT / SUM(m.impressions) END)::TEXT AS avg_ctr,
+        (CASE WHEN SUM(m.impressions) > 0
+              THEN SUM(m.spend_micros)::FLOAT / SUM(m.impressions) * 1000 END)::TEXT AS avg_cpm,
         COUNT(DISTINCT m.date)::TEXT             AS days
       FROM ad_metric_daily m
-     WHERE m.campaign_id IS NULL  -- account-level rows only
+     WHERE m.campaign_id IS NOT NULL  -- aggregate từ campaign-level để conversions đúng theo objective
        AND m.date >= $1::DATE
        AND m.date <= $2::DATE
      GROUP BY m.ad_account_id`,
@@ -471,7 +473,8 @@ export interface DailyMetricPoint {
   conversions: number;
 }
 
-/** Daily metrics — account-level only (campaign_id IS NULL).
+/** Daily metrics — aggregate từ campaign-level (campaign_id IS NOT NULL).
+ *  Dùng campaign rows để conversions/kết quả đúng theo objective từng campaign.
  *  Used for trend chart trên /ads/[id]. Nhận since/until ISO dates. */
 export async function getAccountMetricsDaily(
   adAccountId: string,
@@ -488,16 +491,17 @@ export async function getAccountMetricsDaily(
   }>(
     `SELECT
         m.date::TEXT,
-        m.spend_micros::TEXT,
-        m.impressions::TEXT,
-        m.reach::TEXT,
-        m.clicks::TEXT,
-        m.conversions::TEXT
+        SUM(m.spend_micros)::TEXT   AS spend_micros,
+        SUM(m.impressions)::TEXT    AS impressions,
+        SUM(m.reach)::TEXT          AS reach,
+        SUM(m.clicks)::TEXT         AS clicks,
+        SUM(m.conversions)::TEXT    AS conversions
       FROM ad_metric_daily m
      WHERE m.ad_account_id = $1
-       AND m.campaign_id IS NULL
+       AND m.campaign_id IS NOT NULL
        AND m.date >= $2::DATE
        AND m.date <= $3::DATE
+     GROUP BY m.date
      ORDER BY m.date ASC`,
     [adAccountId, options.sinceDate, options.untilDate]
   );
