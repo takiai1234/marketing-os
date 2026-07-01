@@ -65,29 +65,27 @@ function mapAdAccount(row: AdAccountRow): AdAccount {
 
 // ─── CRUD ────────────────────────────────────────────────────────────────
 
-export async function listAdAccountsForUser(userId: string): Promise<AdAccount[]> {
+export async function listAdAccountsForUser(_userId: string): Promise<AdAccount[]> {
   const res = await db.query<AdAccountRow>(
     `SELECT id, owner_id, platform, external_id, name, currency, timezone,
             status, connected_at::TEXT, disconnected_at::TEXT,
             last_synced_at::TEXT, last_error, created_at::TEXT,
             business_manager_id, business_manager_name
        FROM ad_account
-      WHERE owner_id = $1
       ORDER BY CASE status
                  WHEN 'active' THEN 1
                  WHEN 'pending' THEN 2
                  WHEN 'error' THEN 3
                  ELSE 4
                END,
-              created_at DESC`,
-    [userId]
+              created_at DESC`
   );
   return res.rows.map(mapAdAccount);
 }
 
 export async function getAdAccountForUser(
   id: string,
-  userId: string
+  _userId: string
 ): Promise<AdAccount | null> {
   const res = await db.query<AdAccountRow>(
     `SELECT id, owner_id, platform, external_id, name, currency, timezone,
@@ -95,8 +93,8 @@ export async function getAdAccountForUser(
             last_synced_at::TEXT, last_error, created_at::TEXT,
             business_manager_id, business_manager_name
        FROM ad_account
-      WHERE id = $1 AND owner_id = $2`,
-    [id, userId]
+      WHERE id = $1`,
+    [id]
   );
   return res.rows[0] ? mapAdAccount(res.rows[0]) : null;
 }
@@ -246,7 +244,7 @@ export interface AdCampaign {
 
 export async function listCampaignsForAccount(
   adAccountId: string,
-  userId: string
+  _userId: string
 ): Promise<AdCampaign[]> {
   const res = await db.query<{
     id: string;
@@ -266,9 +264,9 @@ export async function listCampaignsForAccount(
             c.start_time::TEXT, c.end_time::TEXT, c.created_at::TEXT
        FROM ad_campaign c
        JOIN ad_account a ON a.id = c.ad_account_id
-      WHERE c.ad_account_id = $1 AND a.owner_id = $2
+      WHERE c.ad_account_id = $1
       ORDER BY c.created_at DESC`,
-    [adAccountId, userId]
+    [adAccountId]
   );
   return res.rows.map((r) => ({
     id: r.id,
@@ -416,7 +414,7 @@ export interface AccountSummary {
 }
 
 export async function getAccountSummaries(
-  userId: string,
+  _userId: string,
   options: { sinceDate: string; untilDate: string }
 ): Promise<Record<string, AccountSummary>> {
   const res = await db.query<{
@@ -439,13 +437,11 @@ export async function getAccountSummaries(
         AVG(m.cpm_micros)::TEXT                  AS avg_cpm,
         COUNT(DISTINCT m.date)::TEXT             AS days
       FROM ad_metric_daily m
-      JOIN ad_account a ON a.id = m.ad_account_id
-     WHERE a.owner_id = $1
-       AND m.campaign_id IS NULL  -- account-level rows only
-       AND m.date >= $2::DATE
-       AND m.date <= $3::DATE
+     WHERE m.campaign_id IS NULL  -- account-level rows only
+       AND m.date >= $1::DATE
+       AND m.date <= $2::DATE
      GROUP BY m.ad_account_id`,
-    [userId, options.sinceDate, options.untilDate]
+    [options.sinceDate, options.untilDate]
   );
 
   const map: Record<string, AccountSummary> = {};
@@ -479,7 +475,7 @@ export interface DailyMetricPoint {
  *  Used for trend chart trên /ads/[id]. Nhận since/until ISO dates. */
 export async function getAccountMetricsDaily(
   adAccountId: string,
-  userId: string,
+  _userId: string,
   options: { sinceDate: string; untilDate: string }
 ): Promise<DailyMetricPoint[]> {
   const res = await db.query<{
@@ -498,14 +494,12 @@ export async function getAccountMetricsDaily(
         m.clicks::TEXT,
         m.conversions::TEXT
       FROM ad_metric_daily m
-      JOIN ad_account a ON a.id = m.ad_account_id
      WHERE m.ad_account_id = $1
-       AND a.owner_id = $2
        AND m.campaign_id IS NULL
-       AND m.date >= $3::DATE
-       AND m.date <= $4::DATE
+       AND m.date >= $2::DATE
+       AND m.date <= $3::DATE
      ORDER BY m.date ASC`,
-    [adAccountId, userId, options.sinceDate, options.untilDate]
+    [adAccountId, options.sinceDate, options.untilDate]
   );
   return res.rows.map((r) => ({
     date: r.date,
@@ -530,7 +524,7 @@ export interface CampaignWithSummary extends AdCampaign {
 /** Campaign list + totals trong date range — table /ads/[id]. */
 export async function listCampaignsWithSummary(
   adAccountId: string,
-  userId: string,
+  _userId: string,
   options: { sinceDate: string; untilDate: string }
 ): Promise<CampaignWithSummary[]> {
   const res = await db.query<{
@@ -559,15 +553,14 @@ export async function listCampaignsWithSummary(
         COALESCE(SUM(m.clicks), 0)::TEXT        AS total_clicks,
         COALESCE(SUM(m.conversions), 0)::TEXT   AS total_conversions
       FROM ad_campaign c
-      JOIN ad_account a ON a.id = c.ad_account_id
       LEFT JOIN ad_metric_daily m
         ON m.campaign_id = c.id
-       AND m.date >= $3::DATE
-       AND m.date <= $4::DATE
-     WHERE c.ad_account_id = $1 AND a.owner_id = $2
+       AND m.date >= $2::DATE
+       AND m.date <= $3::DATE
+     WHERE c.ad_account_id = $1
      GROUP BY c.id
      ORDER BY COALESCE(SUM(m.spend_micros), 0) DESC, c.created_at DESC`,
-    [adAccountId, userId, options.sinceDate, options.untilDate]
+    [adAccountId, options.sinceDate, options.untilDate]
   );
 
   return res.rows.map((r) => {
@@ -690,10 +683,9 @@ export interface CampaignDetail {
 
 export async function getCampaignDetail(
   campaignId: string,
-  userId: string,
+  _userId: string,
   options: { sinceDate: string; untilDate: string; prevSinceDate: string; prevUntilDate: string }
 ): Promise<CampaignDetail | null> {
-  // 1. Fetch campaign + account info — verify ownership
   const campRes = await db.query<{
     id: string;
     ad_account_id: string;
@@ -715,8 +707,8 @@ export async function getCampaignDetail(
             a.name AS account_name, a.currency AS account_currency
        FROM ad_campaign c
        JOIN ad_account a ON a.id = c.ad_account_id
-      WHERE c.id = $1 AND a.owner_id = $2`,
-    [campaignId, userId]
+      WHERE c.id = $1`,
+    [campaignId]
   );
   const c = campRes.rows[0];
   if (!c) return null;
