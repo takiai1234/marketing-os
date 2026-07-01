@@ -36,6 +36,7 @@ export function ManualMetricDialog({ accountId, channelName, platform }: Props) 
   const [followers, setFollowers] = useState('');
   const [reach, setReach] = useState('');
   const [engagement, setEngagement] = useState('');
+  const [leads, setLeads] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,7 +46,7 @@ export function ManualMetricDialog({ accountId, channelName, platform }: Props) 
     setOpen(next);
     if (next) {
       setDate(todayIso());
-      setFollowers(''); setReach(''); setEngagement(''); setError(null);
+      setFollowers(''); setReach(''); setEngagement(''); setLeads(''); setError(null);
     }
     if (!next) setLoading(false);
   }
@@ -66,8 +67,9 @@ export function ManualMetricDialog({ accountId, channelName, platform }: Props) 
       followers: numOrNull(followers),
       reach: numOrNull(reach),
       engagement: numOrNull(engagement),
+      leads: numOrNull(leads),
     };
-    if (body.followers == null && body.reach == null && body.engagement == null) {
+    if (body.followers == null && body.reach == null && body.engagement == null && body.leads == null) {
       setError('Nhập ít nhất 1 chỉ số.');
       return;
     }
@@ -126,6 +128,11 @@ export function ManualMetricDialog({ accountId, channelName, platform }: Props) 
               <label htmlFor="mm-eng" className="text-xs font-medium text-zinc-700">Engagement (like+comment+share)</label>
               <input id="mm-eng" inputMode="numeric" value={engagement}
                 onChange={(e) => setEngagement(e.target.value)} placeholder="VD: 8000" disabled={loading} className={inputCls} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="mm-leads" className="text-xs font-medium text-zinc-700">Lead (số đơn / khách hàng tiềm năng)</label>
+              <input id="mm-leads" inputMode="numeric" value={leads}
+                onChange={(e) => setLeads(e.target.value)} placeholder="VD: 45" disabled={loading} className={inputCls} />
             </div>
           </div>
           <p className="text-[11px] text-zinc-500">

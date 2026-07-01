@@ -20,6 +20,7 @@ const schema = z.object({
   followers: z.number().int().min(0).nullable().optional(),
   reach: z.number().int().min(0).nullable().optional(),
   engagement: z.number().int().min(0).nullable().optional(),
+  leads: z.number().int().min(0).nullable().optional(),
 });
 
 interface Ctx { params: Promise<{ id: string }> }
@@ -49,10 +50,10 @@ export async function POST(req: NextRequest, { params }: Ctx): Promise<NextRespo
       { status: 400 }
     );
   }
-  const { date, followers, reach, engagement } = parsed.data;
-  if (followers == null && reach == null && engagement == null) {
+  const { date, followers, reach, engagement, leads } = parsed.data;
+  if (followers == null && reach == null && engagement == null && leads == null) {
     return NextResponse.json(
-      { error: 'Nhập ít nhất 1 chỉ số (followers / reach / engagement).' },
+      { error: 'Nhập ít nhất 1 chỉ số (followers / reach / engagement / leads).' },
       { status: 400 }
     );
   }
@@ -75,15 +76,14 @@ export async function POST(req: NextRequest, { params }: Ctx): Promise<NextRespo
   const f = followers ?? null;
   const r = reach ?? null;
   const e = engagement ?? null;
+  const l = leads ?? null;
 
   try {
     await db.query(
       `INSERT INTO account_metric_daily
-         (account_id, date, followers, follower_growth, total_reach, total_engagement, raw_metrics, updated_at)
+         (account_id, date, followers, follower_growth, total_reach, total_engagement, manual_leads, raw_metrics, updated_at)
        VALUES (
          $1, $2::date,
-         -- Carry-forward: để trống ô nào thì lấy giá trị mới nhất trước đó (số
-         -- tuyệt đối lũy kế), tránh dòng mới bị 0 làm tụt snapshot.
          COALESCE($3, (SELECT p.followers FROM account_metric_daily p
                          WHERE p.account_id = $1 AND p.date < $2::date
                          ORDER BY p.date DESC LIMIT 1), 0),
@@ -98,11 +98,13 @@ export async function POST(req: NextRequest, { params }: Ctx): Promise<NextRespo
          COALESCE($5, (SELECT p.total_engagement FROM account_metric_daily p
                          WHERE p.account_id = $1 AND p.date < $2::date
                          ORDER BY p.date DESC LIMIT 1), 0),
+         COALESCE($6, 0),
          '{"source":"manual"}'::jsonb, NOW())
        ON CONFLICT (account_id, date) DO UPDATE SET
          followers        = COALESCE($3, account_metric_daily.followers),
          total_reach      = COALESCE($4, account_metric_daily.total_reach),
          total_engagement = COALESCE($5, account_metric_daily.total_engagement),
+         manual_leads     = COALESCE($6, account_metric_daily.manual_leads),
          follower_growth  = CASE WHEN $3 IS NOT NULL AND $3 > 0
               THEN $3 - COALESCE((SELECT p.followers FROM account_metric_daily p
                                     WHERE p.account_id = $1 AND p.date < $2::date AND p.followers > 0
@@ -110,7 +112,7 @@ export async function POST(req: NextRequest, { params }: Ctx): Promise<NextRespo
               ELSE account_metric_daily.follower_growth END,
          raw_metrics      = '{"source":"manual"}'::jsonb,
          updated_at       = NOW()`,
-      [id, date, f, r, e]
+      [id, date, f, r, e, l]
     );
     await db.query(`UPDATE social_account SET last_synced_at = NOW() WHERE id = $1`, [id]);
     return NextResponse.json({ ok: true });

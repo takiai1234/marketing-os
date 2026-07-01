@@ -105,14 +105,24 @@ export async function fetchChannelsList(
        ) p
        WHERE p.metric_date >= CURRENT_DATE - INTERVAL '30 days'
      ) pm ON TRUE
-     -- Tổng lead 30 ngày từ landing_page_conversion (Ladipage sync cron).
-     -- Bảng cũ manual_conversion đã bị migration 015 drop và thay bằng bảng này.
-     -- COALESCE → 0 nếu không có row.
+     -- Tổng lead 30 ngày:
+     -- - Kênh thường: landing_page_conversion (Ladipage sync cron)
+     -- - Kênh is_manual: SUM(manual_leads) từ account_metric_daily
      LEFT JOIN LATERAL (
-       SELECT COALESCE(SUM(conversion_count), 0)::INT AS lead_30d
-       FROM landing_page_conversion
-       WHERE account_id = sa.id
-         AND occurred_date >= CURRENT_DATE - INTERVAL '30 days'
+       SELECT CASE
+         WHEN sa.is_manual THEN (
+           SELECT COALESCE(SUM(manual_leads), 0)::INT
+           FROM account_metric_daily
+           WHERE account_id = sa.id
+             AND date >= CURRENT_DATE - INTERVAL '30 days'
+         )
+         ELSE (
+           SELECT COALESCE(SUM(conversion_count), 0)::INT
+           FROM landing_page_conversion
+           WHERE account_id = sa.id
+             AND occurred_date >= CURRENT_DATE - INTERVAL '30 days'
+         )
+       END AS lead_30d
      ) lc ON TRUE
      -- Tổng số thành viên của kênh (primary + editor) để hiển thị "+N".
      LEFT JOIN LATERAL (
