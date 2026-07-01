@@ -16,6 +16,7 @@ import { parseRangeFromSearchParams, rangeToQueryString } from '@/lib/ads/date-r
 import { DateRangePicker } from '@/components/ads/date-range-picker';
 import { cn } from '@/lib/utils';
 import { AdsTrendChart } from './ads-trend-chart';
+import { AdsAiAnalyst } from '@/components/ads/ads-ai-analyst';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -139,21 +140,27 @@ export default async function AdAccountDetailPage({ params, searchParams }: Page
         </div>
       </div>
 
-      {/* Date range picker + Export */}
+      {/* Date range picker + Export + AI */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <DateRangePicker
           currentPreset={range.preset}
           currentFrom={range.from}
           currentTo={range.to}
         />
-        <a
-          href={`/api/ads/accounts/${id}/export?${rangeToQueryString(range)}`}
-          download
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-white ring-1 ring-zinc-200 text-zinc-700 hover:bg-zinc-50"
-        >
-          <DownloadIcon className="size-3.5" />
-          Export CSV
-        </a>
+        <div className="flex items-center gap-2">
+          <AdsAiAnalyst
+            endpoint={`/api/ads/accounts/${id}/analyze`}
+            queryString={rangeToQueryString(range)}
+          />
+          <a
+            href={`/api/ads/accounts/${id}/export?${rangeToQueryString(range)}`}
+            download
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-white ring-1 ring-zinc-200 text-zinc-700 hover:bg-zinc-50"
+          >
+            <DownloadIcon className="size-3.5" />
+            Export CSV
+          </a>
+        </div>
       </div>
 
       {/* Error banner */}

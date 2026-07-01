@@ -24,6 +24,7 @@ import { DateRangePicker } from '@/components/ads/date-range-picker';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { AdsAccountActions } from './ads-account-actions';
+import { AdsAiAnalyst } from '@/components/ads/ads-ai-analyst';
 
 export const metadata = { title: 'Quảng cáo — Marketing OS' };
 
@@ -82,7 +83,7 @@ export default async function AdsPage({ searchParams }: AdsPageProps) {
         </Link>
       </div>
 
-      {/* Date range picker */}
+      {/* Date range picker + AI analyst */}
       {accounts.length > 0 && (
         <div className="flex items-center justify-between flex-wrap gap-2">
           <DateRangePicker
@@ -90,9 +91,15 @@ export default async function AdsPage({ searchParams }: AdsPageProps) {
             currentFrom={range.from}
             currentTo={range.to}
           />
-          <span className="text-[11px] text-zinc-500">
-            {range.from} → {range.to} ({range.days} ngày)
-          </span>
+          <div className="flex items-center gap-3">
+            <AdsAiAnalyst
+              endpoint="/api/ads/analyze"
+              queryString={`from=${range.from}&to=${range.to}&preset=${range.preset}`}
+            />
+            <span className="text-[11px] text-zinc-500">
+              {range.from} → {range.to} ({range.days} ngày)
+            </span>
+          </div>
         </div>
       )}
 
