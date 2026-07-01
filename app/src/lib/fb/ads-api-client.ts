@@ -206,6 +206,36 @@ export function microsToDisplay(micros: number, currency: string): string {
   }).format(amount);
 }
 
+// Mapping objective → action_types FB trả về là "kết quả chính" của campaign.
+const OBJECTIVE_RESULT_TYPES: Record<string, string[]> = {
+  traffic:        ['link_click', 'outbound_click'],
+  leads:          ['lead', 'omni_complete_registration', 'complete_registration', 'onsite_conversion.lead_grouped'],
+  sales:          ['purchase', 'omni_purchase', 'offsite_conversion.fb_pixel_purchase', 'omni_app_install'],
+  engagement:     ['post_engagement', 'page_engagement', 'like'],
+  video_views:    ['video_view', 'thruplay'],
+  messages:       ['onsite_conversion.messaging_conversation_started_7d', 'onsite_conversion.messaging_first_reply'],
+  app_promotion:  ['omni_app_install', 'mobile_app_install'],
+  awareness:      ['reach'],
+};
+
+/**
+ * Tính "Kết quả" theo objective của campaign — giống cách FB Ads Manager hiển thị.
+ * Fallback về sumConversions nếu objective không xác định.
+ */
+export function getResultCount(
+  actions: FBInsightAction[] | undefined,
+  objective: string | undefined
+): number {
+  if (!actions || actions.length === 0) return 0;
+  const types = objective ? OBJECTIVE_RESULT_TYPES[objective] : undefined;
+  if (!types) return sumConversions(actions);
+  let sum = 0;
+  for (const a of actions) {
+    if (types.includes(a.action_type)) sum += parseFloat(a.value) || 0;
+  }
+  return sum;
+}
+
 /** Sum actions có action_type chứa "purchase" hoặc "lead" → conversions count.
  *  Logic conservative — vendor có thể có nhiều action_type custom. */
 export function sumConversions(actions: FBInsightAction[] | undefined): number {

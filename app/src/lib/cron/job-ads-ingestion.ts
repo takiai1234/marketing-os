@@ -25,6 +25,7 @@ import {
   fetchCampaigns,
   fetchAdInsights,
   spendStringToMicros,
+  getResultCount,
   sumConversions,
   sumActionValues,
   mapObjectiveToEnum,
@@ -122,14 +123,16 @@ export async function syncOneAccount(account: {
     // Không quit — vẫn thử pull insights
   }
 
-  // ─── 2. Map campaign external_id → DB id (để link metrics) ─────────────
-  const campaignMapRes = await db.query<{ external_id: string; id: string }>(
-    `SELECT external_id, id FROM ad_campaign WHERE ad_account_id = $1`,
+  // ─── 2. Map campaign external_id → DB id + objective (để link metrics) ──
+  const campaignMapRes = await db.query<{ external_id: string; id: string; objective: string }>(
+    `SELECT external_id, id, objective FROM ad_campaign WHERE ad_account_id = $1`,
     [account.id]
   );
   const campaignIdMap = new Map<string, string>();
+  const campaignObjectiveMap = new Map<string, string>();
   for (const r of campaignMapRes.rows) {
     campaignIdMap.set(r.external_id, r.id);
+    campaignObjectiveMap.set(r.external_id, r.objective);
   }
 
   // ─── 3. Account-level daily insights ────────────────────────────────────
@@ -164,7 +167,10 @@ export async function syncOneAccount(account: {
       const campaignDbId = ins.campaign_id
         ? campaignIdMap.get(ins.campaign_id) ?? null
         : null;
-      await upsertOneInsight(account.id, campaignDbId, ins, account.currency);
+      const objective = ins.campaign_id
+        ? campaignObjectiveMap.get(ins.campaign_id)
+        : undefined;
+      await upsertOneInsight(account.id, campaignDbId, ins, account.currency, objective);
     }
   } catch (err) {
     // Campaign-level fail không kill toàn cron — account-level đã thành công
@@ -181,7 +187,8 @@ async function upsertOneInsight(
   adAccountId: string,
   campaignId: string | null,
   ins: FBAdInsight,
-  currency: string
+  currency: string,
+  objective?: string
 ): Promise<void> {
   // FB returns spend in smallest currency unit. Cents (USD) hoặc đồng (VND).
   // VND: 1 unit = 1 đồng → ×1_000_000 = micros. USD: 1 cent = 0.01 USD → ×10_000.
@@ -198,7 +205,7 @@ async function upsertOneInsight(
   const ctr = ins.ctr ? parseFloat(ins.ctr) : null;
   const cpmCents = ins.cpm ? parseFloat(ins.cpm) : null;
   const cpcCents = ins.cpc ? parseFloat(ins.cpc) : null;
-  const conversions = sumConversions(ins.actions);
+  const conversions = getResultCount(ins.actions, objective);
   const revenue = sumActionValues(ins.action_values);
   const roas = spendCents > 0 ? revenue / spendCents : null;
 
@@ -232,6 +239,8 @@ async function upsertOneInsight(
     extraMetrics: {
       frequency: ins.frequency ? parseFloat(ins.frequency) : null,
       revenue,
+      actions: ins.actions ?? [],
+      objective: objective ?? null,
     },
   });
 }
