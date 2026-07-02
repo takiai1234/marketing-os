@@ -39,7 +39,8 @@ export type SyncTypeT =
   | 'manual_refresh'
   | 'ladipage'
   | 'news_ingestion'
-  | 'message_sync';
+  | 'message_sync'
+  | 'ga4_sync';
 
 export type SyncStatusT = 'running' | 'success' | 'failed';
 

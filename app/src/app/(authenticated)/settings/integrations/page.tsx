@@ -8,17 +8,24 @@ import { listSettingsMetadata, getSetting } from '@/lib/settings/api-keys';
 import { OPENROUTER_KEY_NAME } from '@/lib/llm/openrouter';
 import { KIE_AI_KEY_NAME } from '@/lib/llm/kie-ai';
 import { FB_APP_ID_KEY, FB_APP_SECRET_KEY } from '@/lib/fb/oauth-flow';
+import { GOOGLE_CLIENT_ID_KEY, GOOGLE_CLIENT_SECRET_KEY, isGoogleConnected } from '@/lib/google/oauth';
 import { OpenRouterKeyForm } from './openrouter-key-form';
 import { KieAiKeyForm } from './kieai-key-form';
 import { FacebookAppForm } from './facebook-app-form';
 import { ApifyForm } from './apify-form';
 import { AdsTokenForm } from './ads-token-form';
+import { GoogleAnalyticsForm } from './google-analytics-form';
 
 export const metadata = {
   title: 'Tích hợp API — Marketing OS',
 };
 
-export default async function IntegrationsPage() {
+interface PageProps {
+  searchParams: Promise<Record<string, string | undefined>>;
+}
+
+export default async function IntegrationsPage({ searchParams }: PageProps) {
+  const sp = await searchParams;
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
@@ -36,7 +43,7 @@ export default async function IntegrationsPage() {
     );
   }
 
-  const [orMeta, kieMeta, fbIdMeta, fbSecretMeta, apifyTokenMeta, adsTokenMeta] =
+  const [orMeta, kieMeta, fbIdMeta, fbSecretMeta, apifyTokenMeta, adsTokenMeta, googleIdMeta, googleSecretMeta] =
     await listSettingsMetadata([
       OPENROUTER_KEY_NAME,
       KIE_AI_KEY_NAME,
@@ -44,9 +51,12 @@ export default async function IntegrationsPage() {
       FB_APP_SECRET_KEY,
       'APIFY_API_TOKEN',
       'ADS_INGEST_TOKEN',
+      GOOGLE_CLIENT_ID_KEY,
+      GOOGLE_CLIENT_SECRET_KEY,
     ]);
   // Load plaintext Apify lists (not secret — hiển thị OK trong UI)
-  const [twitterHandles, facebookPages, twitterActor, facebookActor] = await Promise.all([
+  const [googleConnected, twitterHandles, facebookPages, twitterActor, facebookActor] = await Promise.all([
+    isGoogleConnected(),
     getSetting('APIFY_TWITTER_HANDLES'),
     getSetting('APIFY_FACEBOOK_PAGES'),
     getSetting('APIFY_TWITTER_ACTOR'),
@@ -85,6 +95,9 @@ export default async function IntegrationsPage() {
       envFbAppSecret &&
       envFbAppSecret !== 'placeholder'
   );
+
+  const googleConnectError = sp.google_error ? decodeURIComponent(sp.google_error) : undefined;
+  const googleConnectSuccess = sp.google_connected === '1';
 
   return (
     <div className="flex flex-col gap-6">
@@ -126,6 +139,14 @@ export default async function IntegrationsPage() {
         facebookActor={facebookActor ?? ''}
         updatedAt={apifyTokenMeta?.updatedAt ?? null}
         updatedByName={apifyTokenMeta?.updatedByName ?? null}
+      />
+
+      <GoogleAnalyticsForm
+        clientIdIsSet={googleIdMeta?.isSet ?? Boolean(process.env[GOOGLE_CLIENT_ID_KEY])}
+        clientSecretIsSet={googleSecretMeta?.isSet ?? Boolean(process.env[GOOGLE_CLIENT_SECRET_KEY])}
+        isConnected={googleConnected}
+        connectError={googleConnectError}
+        connectSuccess={googleConnectSuccess}
       />
 
       <AdsTokenForm

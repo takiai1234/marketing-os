@@ -30,6 +30,7 @@ const bodySchema = z.object({
     'bundle_import',
     'bundle_import_poller',
     'bundle_connect_poller',
+    'ga4_sync',
   ]),
 });
 
@@ -114,6 +115,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       case 'bundle_connect_poller': {
         const { runBundleConnectPollerJob } = await import('@/lib/cron/job-bundle-connect-poller');
         report = await runBundleConnectPollerJob();
+        break;
+      }
+      case 'ga4_sync': {
+        const { runGa4SyncJob } = await import('@/lib/cron/job-ga4-sync');
+        await runGa4SyncJob();
         break;
       }
     }

@@ -14,6 +14,7 @@ import { runBundleConnectPollerJob } from '@/lib/cron/job-bundle-connect-poller'
 import { runAdsIngestionJob } from '@/lib/cron/job-ads-ingestion';
 import { runMessageSyncJob } from '@/lib/cron/job-message-sync';
 import { runApifyNewsJob } from '@/lib/cron/job-apify-news';
+import { runGa4SyncJob } from '@/lib/cron/job-ga4-sync';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -134,6 +135,17 @@ export function initCrons(): void {
     );
   });
 
+  // Job L: GA4 sessions sync — daily 00:30 VN (sau ladipage_sync 23:30 xong).
+  cron.schedule(
+    '30 0 * * *',
+    () => {
+      runGa4SyncJob().catch((err) =>
+        console.error('[cron] job-ga4-sync uncaught error:', err)
+      );
+    },
+    { timezone: 'Asia/Ho_Chi_Minh' }
+  );
+
   // Job J: Page messaging (inbox) ingestion — every 2 hours (UTC).
   // Pull recent Messenger conversations per FB page → daily inbox metrics
   // (new conversations, response rate, response time, unanswered snapshot).
@@ -164,7 +176,7 @@ export function initCrons(): void {
       `[cron] WARNING: ladipage_sync will fail — missing env vars: ${missing.join(', ')}`
     );
   }
-  console.log('[cron] schedules:');
+  console.log('[cron] schedules (12 jobs):');
   console.log('  - page_insights:    0 2 * * *         (UTC)');
   console.log('  - posts_ingestion:  30 2,10,18 * * *  (UTC)');
   console.log('  - health_recompute: 0 3 * * *         (UTC)');
@@ -176,6 +188,7 @@ export function initCrons(): void {
   console.log('  - ads_ingestion:    30 4 * * *         (Asia/Ho_Chi_Minh, daily 04:30 VN)');
   console.log('  - message_sync:     0 */2 * * *        (UTC, every 2h)');
   console.log('  - apify_news:       0 */6 * * *        (UTC, every 6h)');
+  console.log('  - ga4_sync:         30 0 * * *         (Asia/Ho_Chi_Minh, daily 00:30 VN)');
 
   // Boot-time heartbeat: log every 60s for the first 5 minutes so an
   // operator looking at `docker logs` after deploy can confirm the Node

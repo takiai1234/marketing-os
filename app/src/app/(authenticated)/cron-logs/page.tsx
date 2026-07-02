@@ -30,6 +30,7 @@ const JOB_LABEL: Record<SyncTypeT, string> = {
   ladipage: 'Ladipage sync',
   news_ingestion: 'News ingestion',
   message_sync: 'Tin nhắn (inbox)',
+  ga4_sync: 'GA4 Sessions sync',
 };
 
 const JOB_SCHEDULE: Record<SyncTypeT, string> = {
@@ -40,6 +41,7 @@ const JOB_SCHEDULE: Record<SyncTypeT, string> = {
   ladipage: '23:30 Asia/Ho_Chi_Minh daily',
   news_ingestion: 'Hourly (phút :15)',
   message_sync: 'Mỗi 2 giờ (UTC)',
+  ga4_sync: '00:30 Asia/Ho_Chi_Minh daily',
 };
 
 const VALID_STATUS = new Set<SyncStatusT>(['success', 'failed', 'running']);
@@ -51,6 +53,7 @@ const VALID_TYPES = new Set<SyncTypeT>([
   'ladipage',
   'news_ingestion',
   'message_sync',
+  'ga4_sync',
 ]);
 
 function formatTime(iso: string | null): string {

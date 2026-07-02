@@ -33,6 +33,7 @@ const JOB_LABEL: Record<SyncTypeT, string> = {
   ladipage: 'Ladipage sync',
   news_ingestion: 'News ingestion',
   message_sync: 'Tin nhắn (inbox)',
+  ga4_sync: 'GA4 Sessions sync',
 };
 
 function formatTime(iso: string | null): string {
