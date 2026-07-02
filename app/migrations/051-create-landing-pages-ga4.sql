@@ -8,20 +8,18 @@ ALTER TYPE platform_t ADD VALUE IF NOT EXISTS 'website';
 -- 2. Thêm sync_type cho GA4 job
 ALTER TYPE sync_type_t ADD VALUE IF NOT EXISTS 'ga4_sync';
 
--- 3. Bảng quản lý landing pages
+-- 3. Bảng quản lý landing pages (single-tenant — không cần team FK)
 CREATE TABLE IF NOT EXISTS landing_page (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  team_id         UUID NOT NULL REFERENCES team(id) ON DELETE CASCADE,
   name            TEXT NOT NULL,
   page_path       TEXT NOT NULL,        -- VD: '/san-pham/ai-power' hoặc '/'
   ga4_property_id TEXT NOT NULL,        -- VD: '362645470' (numeric property ID)
   -- Link về social_account (Facebook page) để ghép lead từ landing_page_conversion
-  -- NULL nếu chưa link hoặc không cần ghép lead
   account_id      UUID REFERENCES social_account(id) ON DELETE SET NULL,
   is_active       BOOLEAN NOT NULL DEFAULT TRUE,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (team_id, ga4_property_id, page_path)
+  UNIQUE (ga4_property_id, page_path)
 );
 
 -- 4. Sessions theo ngày từ GA4

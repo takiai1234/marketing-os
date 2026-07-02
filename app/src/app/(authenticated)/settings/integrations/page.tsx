@@ -56,7 +56,7 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
     ]);
   // Load plaintext Apify lists (not secret — hiển thị OK trong UI)
   const [googleConnected, twitterHandles, facebookPages, twitterActor, facebookActor] = await Promise.all([
-    isGoogleConnected(),
+    isGoogleConnected().catch(() => false),
     getSetting('APIFY_TWITTER_HANDLES'),
     getSetting('APIFY_FACEBOOK_PAGES'),
     getSetting('APIFY_TWITTER_ACTOR'),

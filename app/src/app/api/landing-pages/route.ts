@@ -23,14 +23,6 @@ export async function GET(): Promise<NextResponse> {
   const role = await getUserRole(user.userId);
   if (role !== 'admin') return NextResponse.json({ error: 'Admin only' }, { status: 403 });
 
-  // Lấy team_id từ user
-  const teamRes = await db.query<{ team_id: string }>(
-    `SELECT team_id FROM team_member WHERE id = $1`,
-    [user.userId]
-  );
-  const teamId = teamRes.rows[0]?.team_id;
-  if (!teamId) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
-
   const { rows } = await db.query<{
     id: string;
     name: string;
@@ -56,10 +48,8 @@ export async function GET(): Promise<NextResponse> {
      LEFT JOIN social_account sa ON sa.id = lp.account_id
      LEFT JOIN landing_page_daily lpd ON lpd.landing_page_id = lp.id
      LEFT JOIN landing_page_conversion lpc ON lpc.account_id = lp.account_id
-     WHERE lp.team_id = $1
      GROUP BY lp.id, sa.name
-     ORDER BY lp.name`,
-    [teamId]
+     ORDER BY lp.name`
   );
 
   const result = rows.map((r) => ({
@@ -96,20 +86,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Dữ liệu không hợp lệ', details: parsed.error.flatten() }, { status: 400 });
   }
 
-  const teamRes = await db.query<{ team_id: string }>(
-    `SELECT team_id FROM team_member WHERE id = $1`, [user.userId]
-  );
-  const teamId = teamRes.rows[0]?.team_id;
-  if (!teamId) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
-
   const { name, pagePath, ga4PropertyId, accountId } = parsed.data;
 
   try {
     const { rows } = await db.query<{ id: string }>(
-      `INSERT INTO landing_page (team_id, name, page_path, ga4_property_id, account_id)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO landing_page (name, page_path, ga4_property_id, account_id)
+       VALUES ($1, $2, $3, $4)
        RETURNING id`,
-      [teamId, name, pagePath, ga4PropertyId, accountId ?? null]
+      [name, pagePath, ga4PropertyId, accountId ?? null]
     );
     return NextResponse.json({ id: rows[0]?.id }, { status: 201 });
   } catch (err) {

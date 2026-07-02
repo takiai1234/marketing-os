@@ -19,13 +19,8 @@ export default async function LandingPagesPage() {
     );
   }
 
-  const teamRes = await db.query<{ team_id: string }>(
-    `SELECT team_id FROM team_member WHERE id = $1`, [user.userId]
-  );
-  const teamId = teamRes.rows[0]?.team_id;
-
   const [pagesRes, accountsRes] = await Promise.all([
-    teamId ? db.query<{
+    db.query<{
       id: string; name: string; page_path: string; ga4_property_id: string;
       account_id: string | null; account_name: string | null; is_active: boolean;
       sessions_30d: string; leads_30d: string;
@@ -39,11 +34,9 @@ export default async function LandingPagesPage() {
        LEFT JOIN social_account sa ON sa.id = lp.account_id
        LEFT JOIN landing_page_daily lpd ON lpd.landing_page_id = lp.id
        LEFT JOIN landing_page_conversion lpc ON lpc.account_id = lp.account_id
-       WHERE lp.team_id = $1
        GROUP BY lp.id, sa.name
-       ORDER BY lp.name`,
-      [teamId]
-    ) : Promise.resolve({ rows: [] }),
+       ORDER BY lp.name`
+    ),
 
     db.query<{ id: string; name: string }>(
       `SELECT sa.id, sa.name
