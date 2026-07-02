@@ -15,6 +15,7 @@ import {
   Newspaper,
   FolderKanban,
   Zap,
+  Globe,
 } from 'lucide-react';
 import type { SessionData } from '@/lib/auth/session-config';
 import { UserMenu } from './user-menu';
@@ -24,6 +25,7 @@ const BASE_ITEMS = [
   { href: '/briefs', label: 'Xưởng nội dung', icon: Inbox },
   { href: '/channels', label: 'Kênh', icon: Radio },
   { href: '/ads', label: 'Quảng cáo', icon: Zap },
+  { href: '/landing-pages', label: 'Landing Pages', icon: Globe },
   { href: '/library', label: 'Thư viện', icon: BookOpen },
   { href: '/skills', label: 'Thư viện Skill', icon: Package },
   { href: '/projects', label: 'Projects', icon: FolderKanban },
