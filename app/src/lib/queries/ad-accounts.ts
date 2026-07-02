@@ -365,13 +365,26 @@ export interface UpsertMetricInput {
 }
 
 export async function upsertMetric(input: UpsertMetricInput): Promise<void> {
-  await db.query(
-    `INSERT INTO ad_metric_daily
-       (ad_account_id, campaign_id, ad_external_id, date,
-        spend_micros, impressions, reach, clicks, conversions,
-        cpm_micros, cpc_micros, ctr, roas, extra_metrics)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb)
-     ON CONFLICT (ad_account_id, campaign_id, ad_external_id, date) DO UPDATE
+  // PostgreSQL UNIQUE treats NULL != NULL, so we use partial unique indexes
+  // (migration 050) and match the correct conflict target per level.
+  const vals = [
+    input.adAccountId,
+    input.campaignId,
+    input.adExternalId,
+    input.date,
+    input.spendMicros,
+    input.impressions,
+    input.reach,
+    input.clicks,
+    input.conversions,
+    input.cpmMicros,
+    input.cpcMicros,
+    input.ctr,
+    input.roas,
+    JSON.stringify(input.extraMetrics ?? {}),
+  ];
+
+  const updateClause = `
        SET spend_micros = EXCLUDED.spend_micros,
            impressions = EXCLUDED.impressions,
            reach = EXCLUDED.reach,
@@ -381,24 +394,27 @@ export async function upsertMetric(input: UpsertMetricInput): Promise<void> {
            cpc_micros = EXCLUDED.cpc_micros,
            ctr = EXCLUDED.ctr,
            roas = EXCLUDED.roas,
-           extra_metrics = EXCLUDED.extra_metrics`,
-    [
-      input.adAccountId,
-      input.campaignId,
-      input.adExternalId,
-      input.date,
-      input.spendMicros,
-      input.impressions,
-      input.reach,
-      input.clicks,
-      input.conversions,
-      input.cpmMicros,
-      input.cpcMicros,
-      input.ctr,
-      input.roas,
-      JSON.stringify(input.extraMetrics ?? {}),
-    ]
-  );
+           extra_metrics = EXCLUDED.extra_metrics`;
+
+  const insert = `INSERT INTO ad_metric_daily
+       (ad_account_id, campaign_id, ad_external_id, date,
+        spend_micros, impressions, reach, clicks, conversions,
+        cpm_micros, cpc_micros, ctr, roas, extra_metrics)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb)`;
+
+  let conflictClause: string;
+  if (input.campaignId === null && input.adExternalId === null) {
+    // Account-level → ad_metric_daily_account_uq
+    conflictClause = `ON CONFLICT (ad_account_id, date) WHERE campaign_id IS NULL AND ad_external_id IS NULL DO UPDATE${updateClause}`;
+  } else if (input.campaignId !== null && input.adExternalId === null) {
+    // Campaign-level → ad_metric_daily_campaign_uq
+    conflictClause = `ON CONFLICT (ad_account_id, campaign_id, date) WHERE campaign_id IS NOT NULL AND ad_external_id IS NULL DO UPDATE${updateClause}`;
+  } else {
+    // Ad-level → ad_metric_daily_ad_uq
+    conflictClause = `ON CONFLICT (ad_account_id, campaign_id, ad_external_id, date) WHERE campaign_id IS NOT NULL AND ad_external_id IS NOT NULL DO UPDATE${updateClause}`;
+  }
+
+  await db.query(`${insert} ${conflictClause}`, vals);
 }
 
 /** Aggregate metrics for last N days per account (for /ads overview). */
