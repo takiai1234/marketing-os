@@ -4,7 +4,7 @@
 
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, AlertCircleIcon, CheckCircle2Icon, DownloadIcon } from 'lucide-react';
+import { ArrowLeft, AlertCircleIcon, CheckCircle2Icon, DownloadIcon, FilterIcon } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import {
   getAdAccountForUser,
@@ -70,6 +70,7 @@ export default async function AdAccountDetailPage({ params, searchParams }: Page
   const { id } = await params;
   const sp = await searchParams;
   const range = parseRangeFromSearchParams(sp);
+  const objectiveFilter = typeof sp.objective === 'string' ? sp.objective : 'all';
 
   const account = await getAdAccountForUser(id, user.userId);
   if (!account) notFound();
@@ -207,91 +208,156 @@ export default async function AdAccountDetailPage({ params, searchParams }: Page
       <AdsTrendChart data={dailyMetrics} currency={account.currency} />
 
       {/* Campaigns table */}
-      <div className="rounded-xl bg-white ring-1 ring-zinc-200 shadow-sm">
-        <div className="px-4 py-3 border-b border-zinc-100 flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-zinc-900">
-            Campaigns ({campaigns.length})
-          </h3>
-          <span className="text-[11px] text-zinc-500">Sort theo Spend {range.days}d ↓</span>
-        </div>
-        {campaigns.length === 0 ? (
-          <p className="text-xs text-zinc-500 italic px-4 py-6 text-center">
-            Chưa có campaign nào trong account. Sync data từ FB Ads để pull
-            campaign list.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-600">
-                <tr>
-                  <th className="text-left px-3 py-2 font-medium">Campaign</th>
-                  <th className="text-left px-3 py-2 font-medium">Objective</th>
-                  <th className="text-center px-3 py-2 font-medium">Status</th>
-                  <th className="text-right px-3 py-2 font-medium">Spend {range.days}d</th>
-                  <th className="text-right px-3 py-2 font-medium">Impressions</th>
-                  <th className="text-right px-3 py-2 font-medium">Clicks</th>
-                  <th className="text-right px-3 py-2 font-medium">CTR</th>
-                  <th className="text-right px-3 py-2 font-medium">Conv.</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100">
-                {campaigns.map((c) => (
-                  <tr key={c.id} className="hover:bg-zinc-50/50">
-                    <td className="px-3 py-2">
-                      <Link
-                        href={`/ads/${id}/campaigns/${c.id}?${rangeToQueryString(range)}`}
-                        className="font-medium text-zinc-900 hover:text-blue-700 truncate max-w-[260px] block"
-                        title={c.name}
-                      >
-                        {c.name} →
-                      </Link>
-                      <p className="text-[10px] text-zinc-400 font-mono mt-0.5">
-                        ID: {c.externalId}
-                      </p>
-                    </td>
-                    <td className="px-3 py-2 text-zinc-600">
-                      {OBJECTIVE_LABEL[c.objective] ?? c.objective}
-                    </td>
-                    <td className="text-center px-3 py-2">
-                      <span
-                        className={cn(
-                          'inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ring-1',
-                          STATUS_BADGE_CLS[c.status.toUpperCase()] ?? 'bg-zinc-50 text-zinc-600 ring-zinc-200'
-                        )}
-                      >
-                        {c.status}
-                      </span>
-                    </td>
-                    {c.summary30d ? (
-                      <>
-                        <td className="text-right px-3 py-2 tabular-nums">
-                          {microsToDisplay(c.summary30d.spendMicros, account.currency)}
-                        </td>
-                        <td className="text-right px-3 py-2 tabular-nums">
-                          {NUMBER_FMT.format(c.summary30d.impressions)}
-                        </td>
-                        <td className="text-right px-3 py-2 tabular-nums">
-                          {NUMBER_FMT.format(c.summary30d.clicks)}
-                        </td>
-                        <td className="text-right px-3 py-2 tabular-nums">
-                          {(c.summary30d.ctr * 100).toFixed(2)}%
-                        </td>
-                        <td className="text-right px-3 py-2 tabular-nums">
-                          {NUMBER_FMT.format(c.summary30d.conversions)}
-                        </td>
-                      </>
-                    ) : (
-                      <td colSpan={5} className="px-3 py-2 text-center text-zinc-400 italic">
-                        Không có data 30d
-                      </td>
+      {(() => {
+        // Distinct objectives present in this account
+        const objectives = [...new Set(campaigns.map((c) => c.objective))].sort();
+        const filtered = objectiveFilter === 'all'
+          ? campaigns
+          : campaigns.filter((c) => c.objective === objectiveFilter);
+        const isSalesFocus = objectiveFilter === 'sales';
+
+        const baseQs = rangeToQueryString(range);
+        function objLink(obj: string) {
+          const qs = new URLSearchParams(baseQs);
+          if (obj === 'all') qs.delete('objective'); else qs.set('objective', obj);
+          return `/ads/${id}?${qs.toString()}`;
+        }
+
+        return (
+          <div className="rounded-xl bg-white ring-1 ring-zinc-200 shadow-sm">
+            <div className="px-4 py-3 border-b border-zinc-100 flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <FilterIcon className="size-3.5 text-zinc-400" />
+                <div className="flex items-center gap-1 flex-wrap">
+                  <Link
+                    href={objLink('all')}
+                    className={cn(
+                      'px-2 py-0.5 rounded text-[11px] font-medium transition-colors',
+                      objectiveFilter === 'all'
+                        ? 'bg-zinc-900 text-white'
+                        : 'text-zinc-600 hover:bg-zinc-100'
                     )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                  >
+                    Tất cả ({campaigns.length})
+                  </Link>
+                  {objectives.map((obj) => (
+                    <Link
+                      key={obj}
+                      href={objLink(obj)}
+                      className={cn(
+                        'px-2 py-0.5 rounded text-[11px] font-medium transition-colors',
+                        objectiveFilter === obj
+                          ? 'bg-zinc-900 text-white'
+                          : 'text-zinc-600 hover:bg-zinc-100'
+                      )}
+                    >
+                      {OBJECTIVE_LABEL[obj] ?? obj} ({campaigns.filter((c) => c.objective === obj).length})
+                    </Link>
+                  ))}
+                </div>
+              </div>
+              <span className="text-[11px] text-zinc-500">Sort theo Spend {range.days}d ↓</span>
+            </div>
+
+            {filtered.length === 0 ? (
+              <p className="text-xs text-zinc-500 italic px-4 py-6 text-center">
+                Không có campaign nào với objective này.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-600">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-medium">Campaign</th>
+                      {objectiveFilter === 'all' && (
+                        <th className="text-left px-3 py-2 font-medium">Objective</th>
+                      )}
+                      <th className="text-center px-3 py-2 font-medium">Status</th>
+                      <th className="text-right px-3 py-2 font-medium">Spend {range.days}d</th>
+                      {!isSalesFocus && <th className="text-right px-3 py-2 font-medium">Impressions</th>}
+                      <th className="text-right px-3 py-2 font-medium">Clicks</th>
+                      <th className="text-right px-3 py-2 font-medium">CTR</th>
+                      <th className="text-right px-3 py-2 font-medium">Kết quả</th>
+                      {isSalesFocus && <th className="text-right px-3 py-2 font-medium text-blue-700">CPL</th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100">
+                    {filtered.map((c) => {
+                      const cpl = c.summary30d && c.summary30d.conversions > 0
+                        ? c.summary30d.spendMicros / c.summary30d.conversions
+                        : null;
+                      return (
+                        <tr key={c.id} className="hover:bg-zinc-50/50">
+                          <td className="px-3 py-2">
+                            <Link
+                              href={`/ads/${id}/campaigns/${c.id}?${rangeToQueryString(range)}`}
+                              className="font-medium text-zinc-900 hover:text-blue-700 truncate max-w-[260px] block"
+                              title={c.name}
+                            >
+                              {c.name} →
+                            </Link>
+                            <p className="text-[10px] text-zinc-400 font-mono mt-0.5">
+                              ID: {c.externalId}
+                            </p>
+                          </td>
+                          {objectiveFilter === 'all' && (
+                            <td className="px-3 py-2 text-zinc-600">
+                              {OBJECTIVE_LABEL[c.objective] ?? c.objective}
+                            </td>
+                          )}
+                          <td className="text-center px-3 py-2">
+                            <span
+                              className={cn(
+                                'inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ring-1',
+                                STATUS_BADGE_CLS[c.status.toUpperCase()] ?? 'bg-zinc-50 text-zinc-600 ring-zinc-200'
+                              )}
+                            >
+                              {c.status}
+                            </span>
+                          </td>
+                          {c.summary30d ? (
+                            <>
+                              <td className="text-right px-3 py-2 tabular-nums">
+                                {microsToDisplay(c.summary30d.spendMicros, account.currency)}
+                              </td>
+                              {!isSalesFocus && (
+                                <td className="text-right px-3 py-2 tabular-nums">
+                                  {NUMBER_FMT.format(c.summary30d.impressions)}
+                                </td>
+                              )}
+                              <td className="text-right px-3 py-2 tabular-nums">
+                                {NUMBER_FMT.format(c.summary30d.clicks)}
+                              </td>
+                              <td className="text-right px-3 py-2 tabular-nums">
+                                {(c.summary30d.ctr * 100).toFixed(2)}%
+                              </td>
+                              <td className="text-right px-3 py-2 tabular-nums font-medium">
+                                {NUMBER_FMT.format(c.summary30d.conversions)}
+                              </td>
+                              {isSalesFocus && (
+                                <td className="text-right px-3 py-2 tabular-nums text-blue-700 font-medium">
+                                  {cpl !== null
+                                    ? microsToDisplay(cpl, account.currency)
+                                    : <span className="text-zinc-400">—</span>
+                                  }
+                                </td>
+                              )}
+                            </>
+                          ) : (
+                            <td colSpan={isSalesFocus ? 5 : 5} className="px-3 py-2 text-center text-zinc-400 italic">
+                              Không có data {range.days}d
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        );
+      })()}
     </div>
   );
 }
