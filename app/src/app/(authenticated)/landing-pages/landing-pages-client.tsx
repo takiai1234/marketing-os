@@ -17,22 +17,16 @@ interface LandingPage {
   name: string;
   pagePath: string;
   ga4PropertyId: string;
-  accountId: string | null;
-  accountName: string | null;
+  sheetId: string | null;
+  sheetName: string | null;
   isActive: boolean;
   sessions30d: number;
   leads30d: number;
   conversionRate: number | null;
 }
 
-interface Account {
-  id: string;
-  name: string;
-}
-
 interface Props {
   initialPages: LandingPage[];
-  accounts: Account[];
 }
 
 const inputCls = 'h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 disabled:opacity-50';
@@ -50,17 +44,19 @@ function ConversionBadge({ rate }: { rate: number | null }) {
   );
 }
 
-function AddPageDialog({ accounts, onCreated }: { accounts: Account[]; onCreated: () => void }) {
+function AddPageDialog({ onCreated }: { onCreated: () => void }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [pagePath, setPagePath] = useState('/');
   const [propertyId, setPropertyId] = useState('');
-  const [accountId, setAccountId] = useState('');
+  const [sheetId, setSheetId] = useState('');
+  const [sheetName, setSheetName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function reset() {
-    setName(''); setPagePath('/'); setPropertyId(''); setAccountId(''); setError(null);
+    setName(''); setPagePath('/'); setPropertyId('');
+    setSheetId(''); setSheetName(''); setError(null);
   }
 
   async function onSubmit(e: FormEvent) {
@@ -74,7 +70,8 @@ function AddPageDialog({ accounts, onCreated }: { accounts: Account[]; onCreated
           name,
           pagePath,
           ga4PropertyId: propertyId,
-          accountId: accountId || null,
+          sheetId: sheetId.trim() || null,
+          sheetName: sheetName.trim() || null,
         }),
       });
       if (res.ok) {
@@ -115,18 +112,20 @@ function AddPageDialog({ accounts, onCreated }: { accounts: Account[]; onCreated
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-zinc-700">GA4 Property ID</label>
             <input className={inputCls} value={propertyId} onChange={e => setPropertyId(e.target.value)}
-              placeholder="VD: 362645470" required disabled={loading} inputMode="numeric" />
-            <p className="text-[11px] text-zinc-400">Số ở dưới tên domain trong Google Analytics</p>
+              placeholder="VD: 498041843" required disabled={loading} inputMode="numeric" />
+            <p className="text-[11px] text-zinc-400">Số ở dưới tên domain trong Google Analytics → Quản trị → Chi tiết tài sản</p>
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-zinc-700">Kênh Facebook (để ghép lead)</label>
-            <select className={inputCls} value={accountId} onChange={e => setAccountId(e.target.value)} disabled={loading}>
-              <option value="">— Không ghép —</option>
-              {accounts.map(a => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
-            <p className="text-[11px] text-zinc-400">Lead từ Ladipage/n8n của trang này</p>
+            <label className="text-xs font-medium text-zinc-700">Google Sheet ID (lead)</label>
+            <input className={inputCls} value={sheetId} onChange={e => setSheetId(e.target.value)}
+              placeholder="VD: 1OdOFIYD6NRfMLp6PkpQGs4guJhg8WSrFe9noIWWaJPQ" disabled={loading} />
+            <p className="text-[11px] text-zinc-400">Phần ID trong URL: docs.google.com/spreadsheets/d/<strong>ID</strong>/edit</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-zinc-700">Tên tab trong Sheet</label>
+            <input className={inputCls} value={sheetName} onChange={e => setSheetName(e.target.value)}
+              placeholder="VD: Sheet1 hoặc DATA PHẾU 2025" disabled={loading} />
+            <p className="text-[11px] text-zinc-400">Đúng tên tab ở dưới cùng Google Sheet</p>
           </div>
           {error && (
             <div className="rounded-lg border border-red-200 bg-red-50/60 px-3 py-2 text-xs text-red-700">{error}</div>
@@ -144,7 +143,7 @@ function AddPageDialog({ accounts, onCreated }: { accounts: Account[]; onCreated
   );
 }
 
-export function LandingPagesClient({ initialPages, accounts }: Props) {
+export function LandingPagesClient({ initialPages }: Props) {
   const router = useRouter();
   const [pages, setPages] = useState(initialPages);
   const [syncing, setSyncing] = useState(false);
@@ -204,7 +203,7 @@ export function LandingPagesClient({ initialPages, accounts }: Props) {
               : <RefreshCwIcon className="size-3.5" />}
             {syncing ? 'Đang sync…' : 'Sync GA4'}
           </Button>
-          <AddPageDialog accounts={accounts} onCreated={reload} />
+          <AddPageDialog onCreated={reload} />
         </div>
       </div>
 
@@ -235,8 +234,8 @@ export function LandingPagesClient({ initialPages, accounts }: Props) {
                     <p className="text-[10px] text-zinc-400 font-mono mt-0.5">
                       {p.pagePath} · prop {p.ga4PropertyId}
                     </p>
-                    {p.accountName && (
-                      <p className="text-[10px] text-blue-600 mt-0.5">↳ {p.accountName}</p>
+                    {p.sheetId && (
+                      <p className="text-[10px] text-emerald-600 mt-0.5">↳ Sheet: {p.sheetName ?? p.sheetId.slice(0, 12) + '…'}</p>
                     )}
                   </td>
                   <td className="text-right px-3 py-3 tabular-nums font-medium">

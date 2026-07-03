@@ -8,7 +8,10 @@ export const GOOGLE_CLIENT_ID_KEY = 'GOOGLE_CLIENT_ID';
 export const GOOGLE_CLIENT_SECRET_KEY = 'GOOGLE_CLIENT_SECRET';
 export const GOOGLE_REFRESH_TOKEN_KEY = 'GOOGLE_REFRESH_TOKEN';
 
-const SCOPES = ['https://www.googleapis.com/auth/analytics.readonly'];
+const SCOPES = [
+  'https://www.googleapis.com/auth/analytics.readonly',
+  'https://www.googleapis.com/auth/spreadsheets.readonly',
+];
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
 function getRedirectUri(): string {
