@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
 
 const createSchema = z.object({
   name: z.string().min(1).max(100),
-  pagePath: z.string().min(1).max(500),
+  pagePath: z.string().min(1).max(500).transform(s => s.trim()),
   ga4PropertyId: z.string().min(1).max(50),
   accountId: z.string().uuid().nullable().optional(),
 });
