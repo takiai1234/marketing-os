@@ -11,7 +11,7 @@ export async function GET(): Promise<NextResponse> {
   if ((await getUserRole(user.userId)) !== 'admin') return NextResponse.json({ error: 'Admin only' }, { status: 403 });
 
   const { rows } = await db.query(
-    `SELECT id, name, page_path, ga4_property_id, is_active FROM landing_page ORDER BY name`
+    `SELECT id, name, page_path, ga4_property_id, sheet_id, sheet_name, sheet_source_filter, sheet_source_column, is_active FROM landing_page ORDER BY name`
   );
   return NextResponse.json(rows);
 }
