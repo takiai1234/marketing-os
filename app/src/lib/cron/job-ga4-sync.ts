@@ -92,7 +92,6 @@ export async function runGa4SyncJob(): Promise<void> {
       try {
         const leadRows = await fetchSheetLeadsByDay(page.sheet_id, page.sheet_name, {
           sourceFilter: page.sheet_source_filter ?? undefined,
-          sourceColumn: page.sheet_source_column ?? 'E',
         });
         console.log(`[job-ga4] sheet "${page.name}" → ${leadRows.length} ngày`);
         for (const r of leadRows) {

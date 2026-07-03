@@ -1,5 +1,4 @@
-// Google Sheets API v4 — đọc cột Thời gian, đếm leads theo ngày.
-// Dùng: GET https://sheets.googleapis.com/v4/spreadsheets/{id}/values/{range}
+// Google Sheets API v4 — đọc header để tìm cột theo tên, đếm leads theo ngày.
 
 import { getAccessToken } from './oauth';
 
@@ -9,15 +8,14 @@ export interface SheetLeadRow {
 }
 
 export interface FetchSheetOptions {
-  timeColumn?: string;   // Cột thời gian, default 'A'
-  startRow?: number;     // Dòng bắt đầu (bỏ header), default 2
-  sourceColumn?: string; // Cột Nguồn, default 'E'
-  sourceFilter?: string; // Giá trị cần lọc, VD: 'aiplus.vn'. Null = không lọc
+  timeColumnName?: string;   // Tên header cột thời gian, default 'Thời gian'
+  sourceColumnName?: string; // Tên header cột nguồn, default 'Nguồn'
+  sourceFilter?: string;     // Giá trị cần lọc (contains, không phân biệt hoa thường). Null = đếm tất cả
 }
 
 /**
- * Đọc cột thời gian + nguồn từ sheet, đếm leads theo ngày.
- * Nếu sourceFilter được truyền, chỉ đếm các dòng có cột nguồn chứa giá trị đó (không phân biệt hoa thường).
+ * Đọc toàn bộ sheet, tìm cột theo tên header, đếm leads theo ngày.
+ * Nếu sourceFilter được truyền, chỉ đếm các dòng có cột Nguồn chứa giá trị đó.
  */
 export async function fetchSheetLeadsByDay(
   spreadsheetId: string,
@@ -25,17 +23,15 @@ export async function fetchSheetLeadsByDay(
   options: FetchSheetOptions = {}
 ): Promise<SheetLeadRow[]> {
   const {
-    timeColumn = 'A',
-    startRow = 2,
-    sourceColumn = 'E',
+    timeColumnName = 'Thời gian',
+    sourceColumnName = 'Nguồn',
     sourceFilter,
   } = options;
 
   const accessToken = await getAccessToken();
 
-  // Lấy từ cột thời gian đến cột nguồn trong 1 request
-  const endCol = sourceFilter ? sourceColumn : timeColumn;
-  const range = encodeURIComponent(`${sheetName}!${timeColumn}${startRow}:${endCol}`);
+  // Lấy toàn bộ sheet (không giới hạn cột — header sẽ cho biết cột nào là gì)
+  const range = encodeURIComponent(`${sheetName}`);
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
 
   const res = await fetch(url, {
@@ -48,24 +44,35 @@ export async function fetchSheetLeadsByDay(
   }
 
   const data = (await res.json()) as { values?: string[][] };
-  const rows = data.values ?? [];
+  const allRows = data.values ?? [];
+  if (allRows.length < 2) return [];
 
-  // Tính index cột nguồn tương đối so với cột thời gian
-  const timeColIdx = 0;
-  const sourceColIdx = sourceFilter
-    ? colLetterToIndex(sourceColumn) - colLetterToIndex(timeColumn)
+  // Tìm index cột theo tên header (dòng đầu tiên)
+  const headers = (allRows[0] ?? []).map(h => h.trim().toLowerCase());
+  const timeIdx = headers.findIndex(h => h === timeColumnName.toLowerCase());
+  const sourceIdx = sourceFilter
+    ? headers.findIndex(h => h === sourceColumnName.toLowerCase())
     : -1;
 
-  const filterLower = sourceFilter?.toLowerCase().trim();
+  if (timeIdx === -1) {
+    throw new Error(`Không tìm thấy cột "${timeColumnName}" trong header của sheet`);
+  }
+  if (sourceFilter && sourceIdx === -1) {
+    throw new Error(`Không tìm thấy cột "${sourceColumnName}" trong header của sheet`);
+  }
 
+  const filterLower = sourceFilter?.toLowerCase().trim();
   const byDay = new Map<string, number>();
-  for (const row of rows) {
-    const raw = row[timeColIdx]?.trim();
+
+  for (let i = 1; i < allRows.length; i++) {
+    const row = allRows[i];
+    if (!row) continue;
+    const raw = row[timeIdx]?.trim();
     if (!raw) continue;
 
     // Lọc theo nguồn nếu có
-    if (filterLower && sourceColIdx >= 0) {
-      const src = (row[sourceColIdx] ?? '').toLowerCase().trim();
+    if (filterLower && sourceIdx >= 0) {
+      const src = (row[sourceIdx] ?? '').toLowerCase().trim();
       if (!src.includes(filterLower)) continue;
     }
 
@@ -85,10 +92,4 @@ export async function fetchSheetLeadsByDay(
   }
 
   return [...byDay.entries()].map(([date, count]) => ({ date, count }));
-}
-
-function colLetterToIndex(col: string): number {
-  let n = 0;
-  for (const c of col.toUpperCase()) n = n * 26 + (c.charCodeAt(0) - 64);
-  return n;
 }
