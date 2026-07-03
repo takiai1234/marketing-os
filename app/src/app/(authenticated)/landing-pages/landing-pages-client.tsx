@@ -1,10 +1,9 @@
 'use client';
 
 import { useState, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
-  PlusIcon, Trash2Icon, RefreshCwIcon, Loader2Icon, GlobeIcon, CheckCircle2Icon,
+  PlusIcon, Trash2Icon, RefreshCwIcon, Loader2Icon, GlobeIcon, CheckCircle2Icon, PencilIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -143,8 +142,106 @@ function AddPageDialog({ onCreated }: { onCreated: () => void }) {
   );
 }
 
+function EditPageDialog({ page, onSaved }: { page: LandingPage; onSaved: (updated: Partial<LandingPage>) => void }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(page.name);
+  const [sheetId, setSheetId] = useState(page.sheetId ?? '');
+  const [sheetName, setSheetName] = useState(page.sheetName ?? '');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function onOpenChange(v: boolean) {
+    setOpen(v);
+    if (v) {
+      setName(page.name);
+      setSheetId(page.sheetId ?? '');
+      setSheetName(page.sheetName ?? '');
+      setError(null);
+    }
+  }
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setLoading(true); setError(null);
+    try {
+      const res = await fetch(`/api/landing-pages/${page.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          sheetId: sheetId.trim() || null,
+          sheetName: sheetName.trim() || null,
+        }),
+      });
+      if (res.ok) {
+        toast.success('Đã cập nhật');
+        setOpen(false);
+        onSaved({
+          name: name.trim(),
+          sheetId: sheetId.trim() || null,
+          sheetName: sheetName.trim() || null,
+        });
+        return;
+      }
+      const d = (await res.json().catch(() => ({}))) as { error?: string };
+      setError(d.error ?? 'Lỗi không xác định');
+    } catch {
+      setError('Lỗi kết nối');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger className="text-zinc-400 hover:text-zinc-700 transition-colors p-1 rounded">
+        <PencilIcon className="size-3.5" />
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Sửa landing page</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={onSubmit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-zinc-700">Tên hiển thị</label>
+            <input className={inputCls} value={name} onChange={e => setName(e.target.value)}
+              required disabled={loading} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-zinc-700 flex items-center justify-between">
+              Google Sheet ID (lead)
+              {sheetId && (
+                <button type="button" onClick={() => { setSheetId(''); setSheetName(''); }}
+                  className="text-[10px] text-red-500 hover:text-red-700 font-normal">Xoá sheet</button>
+              )}
+            </label>
+            <input className={inputCls} value={sheetId} onChange={e => setSheetId(e.target.value)}
+              placeholder="VD: 1OdOFIYD6NRfMLp6PkpQGs4guJhg8WSrFe9noIWWaJPQ" disabled={loading} />
+            <p className="text-[11px] text-zinc-400">Phần ID trong URL: docs.google.com/spreadsheets/d/<strong>ID</strong>/edit</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-zinc-700">Tên tab trong Sheet</label>
+            <input className={inputCls} value={sheetName} onChange={e => setSheetName(e.target.value)}
+              placeholder="VD: Sheet1 hoặc DATA PHẾU 2025" disabled={loading} />
+            <p className="text-[11px] text-zinc-400">Đúng tên tab ở dưới cùng Google Sheet</p>
+          </div>
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50/60 px-3 py-2 text-xs text-red-700">{error}</div>
+          )}
+          <div className="flex justify-end gap-2">
+            <DialogClose render={<Button type="button" variant="outline" disabled={loading} />}>Huỷ</DialogClose>
+            <Button type="submit" disabled={loading}>
+              {loading && <Loader2Icon className="size-4 animate-spin mr-1.5" />}
+              {loading ? 'Đang lưu…' : 'Lưu'}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function LandingPagesClient({ initialPages }: Props) {
-  const router = useRouter();
   const [pages, setPages] = useState(initialPages);
   const [syncing, setSyncing] = useState(false);
 
@@ -261,12 +358,20 @@ export function LandingPagesClient({ initialPages }: Props) {
                     </button>
                   </td>
                   <td className="px-3 py-3 text-right">
-                    <button
-                      onClick={() => handleDelete(p.id, p.name)}
-                      className="text-zinc-400 hover:text-red-600 transition-colors p-1 rounded"
-                    >
-                      <Trash2Icon className="size-3.5" />
-                    </button>
+                    <div className="flex items-center justify-end gap-0.5">
+                      <EditPageDialog
+                        page={p}
+                        onSaved={(updated) =>
+                          setPages(prev => prev.map(x => x.id === p.id ? { ...x, ...updated } : x))
+                        }
+                      />
+                      <button
+                        onClick={() => handleDelete(p.id, p.name)}
+                        className="text-zinc-400 hover:text-red-600 transition-colors p-1 rounded"
+                      >
+                        <Trash2Icon className="size-3.5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
