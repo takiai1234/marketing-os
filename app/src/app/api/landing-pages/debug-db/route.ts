@@ -13,5 +13,15 @@ export async function GET(): Promise<NextResponse> {
   const { rows } = await db.query(
     `SELECT id, name, page_path, ga4_property_id, sheet_id, sheet_name, sheet_source_filter, sheet_source_column, is_active FROM landing_page ORDER BY name`
   );
-  return NextResponse.json(rows);
+
+  // Leads per day (30d) cho từng landing page
+  const { rows: leadRows } = await db.query(
+    `SELECT lp.name, lld.date, lld.leads
+       FROM landing_page_leads_daily lld
+       JOIN landing_page lp ON lp.id = lld.landing_page_id
+      WHERE lld.date >= CURRENT_DATE - 29
+      ORDER BY lp.name, lld.date DESC`
+  );
+
+  return NextResponse.json({ pages: rows, leadsPerDay: leadRows });
 }
