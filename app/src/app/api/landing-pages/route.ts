@@ -15,6 +15,8 @@ const createSchema = z.object({
   ga4PropertyId: z.string().min(1).max(50),
   sheetId: z.string().trim().max(200).nullable().optional(),
   sheetName: z.string().trim().max(200).nullable().optional(),
+  sheetSourceFilter: z.string().trim().max(200).nullable().optional(),
+  sheetSourceColumn: z.string().trim().max(5).nullable().optional(),
 });
 
 export async function GET(): Promise<NextResponse> {
@@ -31,6 +33,8 @@ export async function GET(): Promise<NextResponse> {
     ga4_property_id: string;
     sheet_id: string | null;
     sheet_name: string | null;
+    sheet_source_filter: string | null;
+    sheet_source_column: string | null;
     is_active: boolean;
     sessions_30d: string;
     leads_30d: string;
@@ -42,6 +46,8 @@ export async function GET(): Promise<NextResponse> {
        lp.ga4_property_id,
        lp.sheet_id,
        lp.sheet_name,
+       lp.sheet_source_filter,
+       lp.sheet_source_column,
        lp.is_active,
        COALESCE(SUM(lpd.sessions) FILTER (WHERE lpd.date >= CURRENT_DATE - 29), 0)::text AS sessions_30d,
        COALESCE(SUM(lld.leads)    FILTER (WHERE lld.date >= CURRENT_DATE - 29), 0)::text AS leads_30d
@@ -49,7 +55,7 @@ export async function GET(): Promise<NextResponse> {
      LEFT JOIN landing_page_daily lpd ON lpd.landing_page_id = lp.id
      LEFT JOIN landing_page_leads_daily lld ON lld.landing_page_id = lp.id
      GROUP BY lp.id
-     ORDER BY lp.name`
+     ORDER BY lp.name`,
   );
 
   const result = rows.map((r) => {
@@ -62,6 +68,8 @@ export async function GET(): Promise<NextResponse> {
       ga4PropertyId: r.ga4_property_id,
       sheetId: r.sheet_id,
       sheetName: r.sheet_name,
+      sheetSourceFilter: r.sheet_source_filter,
+      sheetSourceColumn: r.sheet_source_column,
       isActive: r.is_active,
       sessions30d: sessions,
       leads30d: leads,
@@ -87,14 +95,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Dữ liệu không hợp lệ', details: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { name, pagePath, ga4PropertyId, sheetId, sheetName } = parsed.data;
+  const { name, pagePath, ga4PropertyId, sheetId, sheetName, sheetSourceFilter, sheetSourceColumn } = parsed.data;
 
   try {
     const { rows } = await db.query<{ id: string }>(
-      `INSERT INTO landing_page (name, page_path, ga4_property_id, sheet_id, sheet_name)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO landing_page (name, page_path, ga4_property_id, sheet_id, sheet_name, sheet_source_filter, sheet_source_column)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id`,
-      [name, pagePath, ga4PropertyId, sheetId ?? null, sheetName ?? null]
+      [name, pagePath, ga4PropertyId, sheetId ?? null, sheetName ?? null, sheetSourceFilter ?? null, sheetSourceColumn ?? null]
     );
     return NextResponse.json({ id: rows[0]?.id }, { status: 201 });
   } catch (err) {

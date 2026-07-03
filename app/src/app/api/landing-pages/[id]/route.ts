@@ -16,6 +16,8 @@ const patchSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   sheetId: z.string().trim().max(200).nullable().optional(),
   sheetName: z.string().trim().max(200).nullable().optional(),
+  sheetSourceFilter: z.string().trim().max(200).nullable().optional(),
+  sheetSourceColumn: z.string().trim().max(5).nullable().optional(),
 });
 
 export async function DELETE(_req: NextRequest, { params }: Ctx): Promise<NextResponse> {
@@ -51,6 +53,8 @@ export async function PATCH(req: NextRequest, { params }: Ctx): Promise<NextResp
   if (data.name !== undefined) { sets.push(`name = $${vals.length + 1}`); vals.push(data.name); }
   if ('sheetId' in data) { sets.push(`sheet_id = $${vals.length + 1}`); vals.push(data.sheetId ?? null); }
   if ('sheetName' in data) { sets.push(`sheet_name = $${vals.length + 1}`); vals.push(data.sheetName ?? null); }
+  if ('sheetSourceFilter' in data) { sets.push(`sheet_source_filter = $${vals.length + 1}`); vals.push(data.sheetSourceFilter ?? null); }
+  if ('sheetSourceColumn' in data) { sets.push(`sheet_source_column = $${vals.length + 1}`); vals.push(data.sheetSourceColumn ?? null); }
 
   if (sets.length === 0) return NextResponse.json({ error: 'Không có gì để cập nhật' }, { status: 400 });
 

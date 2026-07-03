@@ -8,23 +8,34 @@ export interface SheetLeadRow {
   count: number;
 }
 
+export interface FetchSheetOptions {
+  timeColumn?: string;   // Cột thời gian, default 'A'
+  startRow?: number;     // Dòng bắt đầu (bỏ header), default 2
+  sourceColumn?: string; // Cột Nguồn, default 'E'
+  sourceFilter?: string; // Giá trị cần lọc, VD: 'aiplus.vn'. Null = không lọc
+}
+
 /**
- * Đọc cột thời gian từ sheet, đếm số leads theo ngày.
- * @param spreadsheetId  VD: '1OdOFIYD6NRfMLp6PkpQGs4guJhg8WSrFe9noIWWaJPQ'
- * @param sheetName      Tên tab, VD: 'Sheet1' hoặc 'DATA PHẾU 2025'
- * @param timeColumn     Cột chứa timestamp, VD: 'A' (default)
- * @param startRow       Bắt đầu từ dòng nào (default 2 — bỏ qua header)
+ * Đọc cột thời gian + nguồn từ sheet, đếm leads theo ngày.
+ * Nếu sourceFilter được truyền, chỉ đếm các dòng có cột nguồn chứa giá trị đó (không phân biệt hoa thường).
  */
 export async function fetchSheetLeadsByDay(
   spreadsheetId: string,
   sheetName: string,
-  timeColumn = 'A',
-  startRow = 2
+  options: FetchSheetOptions = {}
 ): Promise<SheetLeadRow[]> {
+  const {
+    timeColumn = 'A',
+    startRow = 2,
+    sourceColumn = 'E',
+    sourceFilter,
+  } = options;
+
   const accessToken = await getAccessToken();
 
-  // Lấy toàn bộ cột thời gian
-  const range = encodeURIComponent(`${sheetName}!${timeColumn}${startRow}:${timeColumn}`);
+  // Lấy từ cột thời gian đến cột nguồn trong 1 request
+  const endCol = sourceFilter ? sourceColumn : timeColumn;
+  const range = encodeURIComponent(`${sheetName}!${timeColumn}${startRow}:${endCol}`);
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
 
   const res = await fetch(url, {
@@ -39,35 +50,45 @@ export async function fetchSheetLeadsByDay(
   const data = (await res.json()) as { values?: string[][] };
   const rows = data.values ?? [];
 
-  // Đếm theo ngày
+  // Tính index cột nguồn tương đối so với cột thời gian
+  const timeColIdx = 0;
+  const sourceColIdx = sourceFilter
+    ? colLetterToIndex(sourceColumn) - colLetterToIndex(timeColumn)
+    : -1;
+
+  const filterLower = sourceFilter?.toLowerCase().trim();
+
   const byDay = new Map<string, number>();
   for (const row of rows) {
-    const raw = row[0]?.trim();
+    const raw = row[timeColIdx]?.trim();
     if (!raw) continue;
 
-    // Parse các format phổ biến:
-    // '2026-04-08 11:06:37' → '2026-04-08'
-    // '08/04/2026 11:06:37' → '2026-04-08'
-    // '2026-04-08' → '2026-04-08'
-    let date: string | null = null;
+    // Lọc theo nguồn nếu có
+    if (filterLower && sourceColIdx >= 0) {
+      const src = (row[sourceColIdx] ?? '').toLowerCase().trim();
+      if (!src.includes(filterLower)) continue;
+    }
 
+    // Parse timestamp → YYYY-MM-DD
+    let date: string | null = null;
     if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
       date = raw.slice(0, 10);
     } else if (/^\d{2}\/\d{2}\/\d{4}/.test(raw)) {
       const [d, m, y] = raw.split(/[\/ ]/);
       date = `${y}-${m}-${d}`;
     } else {
-      // Thử Date.parse
       const parsed = new Date(raw);
-      if (!isNaN(parsed.getTime())) {
-        date = parsed.toISOString().slice(0, 10);
-      }
+      if (!isNaN(parsed.getTime())) date = parsed.toISOString().slice(0, 10);
     }
 
-    if (date) {
-      byDay.set(date, (byDay.get(date) ?? 0) + 1);
-    }
+    if (date) byDay.set(date, (byDay.get(date) ?? 0) + 1);
   }
 
   return [...byDay.entries()].map(([date, count]) => ({ date, count }));
+}
+
+function colLetterToIndex(col: string): number {
+  let n = 0;
+  for (const c of col.toUpperCase()) n = n * 26 + (c.charCodeAt(0) - 64);
+  return n;
 }

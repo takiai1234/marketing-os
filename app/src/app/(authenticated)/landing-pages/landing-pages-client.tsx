@@ -18,6 +18,8 @@ interface LandingPage {
   ga4PropertyId: string;
   sheetId: string | null;
   sheetName: string | null;
+  sheetSourceFilter: string | null;
+  sheetSourceColumn: string | null;
   isActive: boolean;
   sessions30d: number;
   leads30d: number;
@@ -50,12 +52,13 @@ function AddPageDialog({ onCreated }: { onCreated: () => void }) {
   const [propertyId, setPropertyId] = useState('');
   const [sheetId, setSheetId] = useState('');
   const [sheetName, setSheetName] = useState('');
+  const [sourceFilter, setSourceFilter] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function reset() {
     setName(''); setPagePath('/'); setPropertyId('');
-    setSheetId(''); setSheetName(''); setError(null);
+    setSheetId(''); setSheetName(''); setSourceFilter(''); setError(null);
   }
 
   async function onSubmit(e: FormEvent) {
@@ -71,6 +74,7 @@ function AddPageDialog({ onCreated }: { onCreated: () => void }) {
           ga4PropertyId: propertyId,
           sheetId: sheetId.trim() || null,
           sheetName: sheetName.trim() || null,
+          sheetSourceFilter: sourceFilter.trim() || null,
         }),
       });
       if (res.ok) {
@@ -126,6 +130,12 @@ function AddPageDialog({ onCreated }: { onCreated: () => void }) {
               placeholder="VD: Sheet1 hoặc DATA PHẾU 2025" disabled={loading} />
             <p className="text-[11px] text-zinc-400">Đúng tên tab ở dưới cùng Google Sheet</p>
           </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-zinc-700">Lọc theo Nguồn (cột E)</label>
+            <input className={inputCls} value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}
+              placeholder="VD: aiplus.vn" disabled={loading} />
+            <p className="text-[11px] text-zinc-400">Chỉ đếm dòng có cột Nguồn chứa giá trị này. Để trống = đếm tất cả.</p>
+          </div>
           {error && (
             <div className="rounded-lg border border-red-200 bg-red-50/60 px-3 py-2 text-xs text-red-700">{error}</div>
           )}
@@ -147,6 +157,7 @@ function EditPageDialog({ page, onSaved }: { page: LandingPage; onSaved: (update
   const [name, setName] = useState(page.name);
   const [sheetId, setSheetId] = useState(page.sheetId ?? '');
   const [sheetName, setSheetName] = useState(page.sheetName ?? '');
+  const [sourceFilter, setSourceFilter] = useState(page.sheetSourceFilter ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -156,6 +167,7 @@ function EditPageDialog({ page, onSaved }: { page: LandingPage; onSaved: (update
       setName(page.name);
       setSheetId(page.sheetId ?? '');
       setSheetName(page.sheetName ?? '');
+      setSourceFilter(page.sheetSourceFilter ?? '');
       setError(null);
     }
   }
@@ -171,6 +183,7 @@ function EditPageDialog({ page, onSaved }: { page: LandingPage; onSaved: (update
           name: name.trim(),
           sheetId: sheetId.trim() || null,
           sheetName: sheetName.trim() || null,
+          sheetSourceFilter: sourceFilter.trim() || null,
         }),
       });
       if (res.ok) {
@@ -180,6 +193,7 @@ function EditPageDialog({ page, onSaved }: { page: LandingPage; onSaved: (update
           name: name.trim(),
           sheetId: sheetId.trim() || null,
           sheetName: sheetName.trim() || null,
+          sheetSourceFilter: sourceFilter.trim() || null,
         });
         return;
       }
@@ -224,6 +238,12 @@ function EditPageDialog({ page, onSaved }: { page: LandingPage; onSaved: (update
             <input className={inputCls} value={sheetName} onChange={e => setSheetName(e.target.value)}
               placeholder="VD: Sheet1 hoặc DATA PHẾU 2025" disabled={loading} />
             <p className="text-[11px] text-zinc-400">Đúng tên tab ở dưới cùng Google Sheet</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-zinc-700">Lọc theo Nguồn (cột E)</label>
+            <input className={inputCls} value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}
+              placeholder="VD: aiplus.vn" disabled={loading} />
+            <p className="text-[11px] text-zinc-400">Chỉ đếm dòng có cột Nguồn chứa giá trị này. Để trống = đếm tất cả.</p>
           </div>
           {error && (
             <div className="rounded-lg border border-red-200 bg-red-50/60 px-3 py-2 text-xs text-red-700">{error}</div>

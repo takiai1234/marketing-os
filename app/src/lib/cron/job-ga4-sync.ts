@@ -15,6 +15,8 @@ interface LandingPageRow {
   ga4_property_id: string;
   sheet_id: string | null;
   sheet_name: string | null;
+  sheet_source_filter: string | null;
+  sheet_source_column: string | null;
 }
 
 function nDaysAgo(n: number): string {
@@ -34,7 +36,8 @@ export async function runGa4SyncJob(): Promise<void> {
 
   try {
     const { rows: pages } = await db.query<LandingPageRow>(
-      `SELECT id, name, page_path, ga4_property_id, sheet_id, sheet_name
+      `SELECT id, name, page_path, ga4_property_id, sheet_id, sheet_name,
+              sheet_source_filter, sheet_source_column
          FROM landing_page
         WHERE is_active = TRUE`
     );
@@ -87,7 +90,10 @@ export async function runGa4SyncJob(): Promise<void> {
     for (const page of pages) {
       if (!page.sheet_id || !page.sheet_name) continue;
       try {
-        const leadRows = await fetchSheetLeadsByDay(page.sheet_id, page.sheet_name);
+        const leadRows = await fetchSheetLeadsByDay(page.sheet_id, page.sheet_name, {
+          sourceFilter: page.sheet_source_filter ?? undefined,
+          sourceColumn: page.sheet_source_column ?? 'E',
+        });
         console.log(`[job-ga4] sheet "${page.name}" → ${leadRows.length} ngày`);
         for (const r of leadRows) {
           await db.query(

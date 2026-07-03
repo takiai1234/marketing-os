@@ -26,6 +26,8 @@ export default async function LandingPagesPage() {
     ga4_property_id: string;
     sheet_id: string | null;
     sheet_name: string | null;
+    sheet_source_filter: string | null;
+    sheet_source_column: string | null;
     is_active: boolean;
     sessions_30d: string;
     leads_30d: string;
@@ -37,6 +39,8 @@ export default async function LandingPagesPage() {
        lp.ga4_property_id,
        lp.sheet_id,
        lp.sheet_name,
+       lp.sheet_source_filter,
+       lp.sheet_source_column,
        lp.is_active,
        COALESCE(SUM(lpd.sessions) FILTER (WHERE lpd.date >= CURRENT_DATE - 29), 0)::text AS sessions_30d,
        COALESCE(SUM(lld.leads)    FILTER (WHERE lld.date >= CURRENT_DATE - 29), 0)::text AS leads_30d
@@ -57,6 +61,8 @@ export default async function LandingPagesPage() {
       ga4PropertyId: r.ga4_property_id,
       sheetId: r.sheet_id,
       sheetName: r.sheet_name,
+      sheetSourceFilter: r.sheet_source_filter,
+      sheetSourceColumn: r.sheet_source_column,
       isActive: r.is_active,
       sessions30d: sessions,
       leads30d: leads,
