@@ -42,12 +42,21 @@ export default async function LandingPagesPage() {
        lp.sheet_source_filter,
        lp.sheet_source_column,
        lp.is_active,
-       COALESCE(SUM(lpd.sessions) FILTER (WHERE lpd.date >= CURRENT_DATE - 29), 0)::text AS sessions_30d,
-       COALESCE(SUM(lld.leads)    FILTER (WHERE lld.date >= CURRENT_DATE - 29), 0)::text AS leads_30d
+       COALESCE(s.sessions_30d, 0)::text AS sessions_30d,
+       COALESCE(l.leads_30d, 0)::text AS leads_30d
      FROM landing_page lp
-     LEFT JOIN landing_page_daily lpd ON lpd.landing_page_id = lp.id
-     LEFT JOIN landing_page_leads_daily lld ON lld.landing_page_id = lp.id
-     GROUP BY lp.id
+     LEFT JOIN (
+       SELECT landing_page_id, SUM(sessions) AS sessions_30d
+         FROM landing_page_daily
+        WHERE date >= CURRENT_DATE - 29
+        GROUP BY landing_page_id
+     ) s ON s.landing_page_id = lp.id
+     LEFT JOIN (
+       SELECT landing_page_id, SUM(leads) AS leads_30d
+         FROM landing_page_leads_daily
+        WHERE date >= CURRENT_DATE - 29
+        GROUP BY landing_page_id
+     ) l ON l.landing_page_id = lp.id
      ORDER BY lp.name`
   );
 
