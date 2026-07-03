@@ -50,12 +50,17 @@ export async function runGa4SyncJob(): Promise<void> {
       byProperty.set(p.ga4_property_id, arr);
     }
 
+    const errors: string[] = [];
+
     for (const [propertyId, propertyPages] of byProperty) {
       let rows;
       try {
         rows = await fetchGa4Sessions(propertyId, startDate, endDate);
+        console.log(`[job-ga4] property=${propertyId} → ${rows.length} rows`);
       } catch (err) {
-        console.error(`[job-ga4] property=${propertyId} fetch failed:`, err);
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[job-ga4] property=${propertyId} fetch failed:`, msg);
+        errors.push(`property ${propertyId}: ${msg}`);
         continue;
       }
 
@@ -84,8 +89,12 @@ export async function runGa4SyncJob(): Promise<void> {
       }
     }
 
-    await finishSyncLog(logId, 'success', totalUpserted);
-    console.log(`[job-ga4] Done — ${totalUpserted} rows upserted`);
+    if (errors.length > 0 && totalUpserted === 0) {
+      await finishSyncLog(logId, 'failed', 0, errors.join('; '));
+    } else {
+      await finishSyncLog(logId, 'success', totalUpserted, errors.length > 0 ? errors.join('; ') : undefined);
+    }
+    console.log(`[job-ga4] Done — ${totalUpserted} rows upserted, ${errors.length} errors`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[job-ga4] Fatal:', err);
