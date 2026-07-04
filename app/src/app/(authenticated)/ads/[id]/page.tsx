@@ -83,6 +83,15 @@ export default async function AdAccountDetailPage({ params, searchParams }: Page
   const avgCtr = totalImpressions > 0 ? totalClicks / totalImpressions : 0;
   const avgCpc = totalClicks > 0 ? totalSpendMicros / totalClicks : 0;
 
+  // KPI: tách kết quả theo objective từ campaigns
+  let totalSalesResults = 0;
+  let totalLeadsResults = 0;
+  for (const c of campaigns) {
+    if (!c.summary30d) continue;
+    if (c.objective === 'sales') totalSalesResults += c.summary30d.conversions;
+    else if (c.objective === 'leads') totalLeadsResults += c.summary30d.conversions;
+  }
+
   const platform = PLATFORM_META[account.platform] ?? {
     label: account.platform,
     cls: 'bg-zinc-700 text-white',
@@ -176,12 +185,13 @@ export default async function AdAccountDetailPage({ params, searchParams }: Page
 
       {/* KPI 30d */}
       {dailyMetrics.length > 0 ? (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <KpiCard label={`Spend ${range.days}d`} value={microsToDisplay(totalSpendMicros, account.currency)} />
           <KpiCard label="Impressions" value={NUMBER_FMT.format(totalImpressions)} />
           <KpiCard label="Clicks" value={NUMBER_FMT.format(totalClicks)} />
           <KpiCard label="CTR" value={`${(avgCtr * 100).toFixed(2)}%`} />
-          <KpiCard label="Kết quả" value={NUMBER_FMT.format(totalConversions)} sub={avgCpc > 0 ? `Avg CPC: ${microsToDisplay(avgCpc, account.currency)}` : undefined} />
+          <KpiCard label="Kết quả Sales" value={NUMBER_FMT.format(totalSalesResults)} sub={totalSalesResults > 0 && totalSpendMicros > 0 ? `CPS: ${microsToDisplay(totalSpendMicros / totalSalesResults, account.currency)}` : undefined} />
+          <KpiCard label="Kết quả Leads" value={NUMBER_FMT.format(totalLeadsResults)} sub={totalLeadsResults > 0 && totalSpendMicros > 0 ? `CPL: ${microsToDisplay(totalSpendMicros / totalLeadsResults, account.currency)}` : undefined} />
         </div>
       ) : account.status === 'active' ? (
         <div className="rounded-xl bg-blue-50 ring-1 ring-blue-200 px-4 py-3 text-sm text-blue-900 flex items-start gap-2">
