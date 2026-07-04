@@ -2,10 +2,14 @@
 
 import { useState, useRef } from 'react';
 import { SparklesIcon, XIcon, RefreshCwIcon, ChevronRightIcon, PlusIcon, Trash2Icon } from 'lucide-react';
+import {
+  buildPresetRange, buildCustomRange, rangeToQueryString,
+  type DateRangePreset, type DateRange, PRESET_LABELS,
+} from '@/lib/ads/date-ranges';
 
 interface AdsAiAnalystProps {
   endpoint: string;
-  queryString?: string;
+  queryString?: string;  // initial range từ URL (fallback)
 }
 
 interface ProductCpl {
@@ -17,11 +21,21 @@ interface ProductCpl {
 
 let nextId = 1;
 
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export function AdsAiAnalyst({ endpoint, queryString }: AdsAiAnalystProps) {
   const [step, setStep] = useState<'idle' | 'setup' | 'analyzing'>('idle');
   const [products, setProducts] = useState<ProductCpl[]>([
     { id: nextId++, name: '', cplTarget: '', cplBreakeven: '' },
   ]);
+  // Date range state
+  const [rangePreset, setRangePreset] = useState<DateRangePreset>('30d');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState(todayIso);
+  const [rangeError, setRangeError] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +45,22 @@ export function AdsAiAnalyst({ endpoint, queryString }: AdsAiAnalystProps) {
     setStep('setup');
     setText('');
     setError(null);
+    setRangeError(null);
+  }
+
+  function buildRangeQs(): string | null {
+    try {
+      let r: DateRange;
+      if (rangePreset === 'custom') {
+        r = buildCustomRange(customFrom, customTo);
+      } else {
+        r = buildPresetRange(rangePreset as Exclude<DateRangePreset, 'custom'>);
+      }
+      return rangeToQueryString(r);
+    } catch (e) {
+      setRangeError(e instanceof Error ? e.message : 'Khoảng thời gian không hợp lệ');
+      return null;
+    }
   }
 
   function addProduct() {
@@ -46,6 +76,10 @@ export function AdsAiAnalyst({ endpoint, queryString }: AdsAiAnalystProps) {
   }
 
   async function runAnalysis() {
+    setRangeError(null);
+    const qs = buildRangeQs();
+    if (!qs) return;  // range validation failed
+
     setStep('analyzing');
     setLoading(true);
     setText('');
@@ -55,7 +89,7 @@ export function AdsAiAnalyst({ endpoint, queryString }: AdsAiAnalystProps) {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
-    const url = queryString ? `${endpoint}?${queryString}` : endpoint;
+    const url = `${endpoint}?${qs}`;
 
     const validProducts = products
       .filter((p) => p.name.trim() && p.cplTarget.trim())
@@ -129,6 +163,54 @@ export function AdsAiAnalyst({ endpoint, queryString }: AdsAiAnalystProps) {
           </div>
 
           <div className="px-4 py-4 flex flex-col gap-4">
+            {/* Date range selector */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-zinc-700">Khoảng thời gian phân tích</span>
+              <div className="flex flex-wrap gap-1.5">
+                {(Object.keys(PRESET_LABELS) as Exclude<DateRangePreset, 'custom'>[]).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => { setRangePreset(p); setRangeError(null); }}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                      rangePreset === p
+                        ? 'bg-violet-600 text-white'
+                        : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                    }`}
+                  >
+                    {PRESET_LABELS[p]}
+                  </button>
+                ))}
+                <button
+                  onClick={() => { setRangePreset('custom'); setRangeError(null); }}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                    rangePreset === 'custom'
+                      ? 'bg-violet-600 text-white'
+                      : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                  }`}
+                >
+                  Tuỳ chỉnh
+                </button>
+              </div>
+              {rangePreset === 'custom' && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={customFrom}
+                    onChange={(e) => { setCustomFrom(e.target.value); setRangeError(null); }}
+                    className="h-8 rounded-md border border-zinc-200 px-2 text-xs text-zinc-900 focus:border-violet-500 focus:outline-none"
+                  />
+                  <span className="text-xs text-zinc-400">→</span>
+                  <input
+                    type="date"
+                    value={customTo}
+                    onChange={(e) => { setCustomTo(e.target.value); setRangeError(null); }}
+                    className="h-8 rounded-md border border-zinc-200 px-2 text-xs text-zinc-900 focus:border-violet-500 focus:outline-none"
+                  />
+                </div>
+              )}
+              {rangeError && <p className="text-xs text-red-600">{rangeError}</p>}
+            </div>
+
             <p className="text-xs text-zinc-500">
               Nhập tên sản phẩm và <strong>CPL trần</strong> (ngưỡng có lời).
               AI sẽ match campaign với sản phẩm để đánh giá đúng ngưỡng.
@@ -203,7 +285,9 @@ export function AdsAiAnalyst({ endpoint, queryString }: AdsAiAnalystProps) {
           <div className="flex items-center justify-between px-4 py-2.5 bg-violet-50 border-b border-violet-100">
             <div className="flex items-center gap-2">
               <SparklesIcon className="size-4 text-violet-600" />
-              <span className="text-sm font-semibold text-violet-900">Phân tích AI — Meta Ads Profit Engine</span>
+              <span className="text-sm font-semibold text-violet-900">
+                Phân tích AI — {rangePreset === 'custom' ? `${customFrom} → ${customTo}` : PRESET_LABELS[rangePreset as Exclude<DateRangePreset,'custom'>]}
+              </span>
             </div>
             <div className="flex items-center gap-1">
               {!loading && text && (
