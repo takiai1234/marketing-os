@@ -218,22 +218,33 @@ export default async function AdAccountDetailPage({ params, searchParams }: Page
                     <tr>
                       <th className="text-left px-3 py-2 font-medium">Campaign</th>
                       <th className="text-center px-3 py-2 font-medium">Status</th>
+                      <th className="text-right px-3 py-2 font-medium">Budget</th>
                       <th className="text-right px-3 py-2 font-medium">Spend {range.days}d</th>
+                      <th className="text-right px-3 py-2 font-medium">Impressions</th>
+                      <th className="text-right px-3 py-2 font-medium">Clicks</th>
+                      <th className="text-right px-3 py-2 font-medium">CTR</th>
+                      <th className="text-right px-3 py-2 font-medium">CPM</th>
                       <th className="text-right px-3 py-2 font-medium">Kết quả</th>
                       <th className="text-right px-3 py-2 font-medium">CPL</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100">
                     {salesCampaigns.map((c) => {
-                      const cpl = c.summary30d && c.summary30d.conversions > 0
-                        ? c.summary30d.spendMicros / c.summary30d.conversions
-                        : null;
+                      const s = c.summary30d;
+                      const cpl = s && s.conversions > 0 ? s.spendMicros / s.conversions : null;
+                      const ctr = s && s.impressions > 0 ? (s.clicks / s.impressions * 100) : null;
+                      const cpm = s && s.impressions > 0 ? (s.spendMicros / s.impressions * 1000) : null;
+                      const budget = c.dailyBudgetMicros
+                        ? `${microsToDisplay(c.dailyBudgetMicros, account.currency)}/ngày`
+                        : c.lifetimeBudgetMicros
+                        ? `${microsToDisplay(c.lifetimeBudgetMicros, account.currency)} trọn đời`
+                        : '—';
                       return (
                         <tr key={c.id} className="hover:bg-zinc-50/50">
                           <td className="px-3 py-2">
                             <Link
                               href={`/ads/${id}/campaigns/${c.id}?${rangeToQueryString(range)}`}
-                              className="font-medium text-zinc-900 hover:text-blue-700 truncate max-w-[320px] block"
+                              className="font-medium text-zinc-900 hover:text-blue-700 truncate max-w-[280px] block"
                               title={c.name}
                             >
                               {c.name} →
@@ -250,13 +261,26 @@ export default async function AdAccountDetailPage({ params, searchParams }: Page
                               {c.status}
                             </span>
                           </td>
-                          {c.summary30d ? (
+                          <td className="text-right px-3 py-2 tabular-nums text-zinc-500">{budget}</td>
+                          {s ? (
                             <>
                               <td className="text-right px-3 py-2 tabular-nums">
-                                {microsToDisplay(c.summary30d.spendMicros, account.currency)}
+                                {microsToDisplay(s.spendMicros, account.currency)}
+                              </td>
+                              <td className="text-right px-3 py-2 tabular-nums">
+                                {NUMBER_FMT.format(s.impressions)}
+                              </td>
+                              <td className="text-right px-3 py-2 tabular-nums">
+                                {NUMBER_FMT.format(s.clicks)}
+                              </td>
+                              <td className="text-right px-3 py-2 tabular-nums">
+                                {ctr !== null ? `${ctr.toFixed(2)}%` : '—'}
+                              </td>
+                              <td className="text-right px-3 py-2 tabular-nums">
+                                {cpm !== null ? microsToDisplay(cpm, account.currency) : '—'}
                               </td>
                               <td className="text-right px-3 py-2 tabular-nums font-semibold">
-                                {NUMBER_FMT.format(c.summary30d.conversions)}
+                                {NUMBER_FMT.format(s.conversions)}
                               </td>
                               <td className="text-right px-3 py-2 tabular-nums font-medium text-blue-700">
                                 {cpl !== null
@@ -266,7 +290,7 @@ export default async function AdAccountDetailPage({ params, searchParams }: Page
                               </td>
                             </>
                           ) : (
-                            <td colSpan={3} className="px-3 py-2 text-center text-zinc-400 italic">
+                            <td colSpan={7} className="px-3 py-2 text-center text-zinc-400 italic">
                               Không có data {range.days}d
                             </td>
                           )}
