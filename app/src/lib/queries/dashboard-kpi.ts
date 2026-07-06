@@ -161,6 +161,12 @@ async function fetchWithDays(days: number, tagSlug: string | null): Promise<KpiD
         INNER JOIN social_account sa ON sa.id = pmd.account_id
         WHERE sa.status != 'disconnected'
           ${tagFilter}
+        UNION ALL
+        SELECT amd.date AS d, amd.manual_leads AS cnt
+        FROM account_metric_daily amd
+        INNER JOIN social_account sa ON sa.id = amd.account_id
+        WHERE sa.is_manual AND sa.status != 'disconnected' AND amd.manual_leads > 0
+          ${tagFilter}
       ) u
     `,
       params
@@ -317,6 +323,12 @@ async function fetchWithDateRange(
         FROM page_message_daily pmd
         INNER JOIN social_account sa ON sa.id = pmd.account_id
         WHERE sa.status != 'disconnected'
+          ${tagFilter}
+        UNION ALL
+        SELECT amd.date AS d, amd.manual_leads AS cnt
+        FROM account_metric_daily amd
+        INNER JOIN social_account sa ON sa.id = amd.account_id
+        WHERE sa.is_manual AND sa.status != 'disconnected' AND amd.manual_leads > 0
           ${tagFilter}
       ) u
     `,

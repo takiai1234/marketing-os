@@ -107,7 +107,7 @@ async function fetchWithDays(
         ELSE COALESCE(f_end.total_engagement, 0)
       END::TEXT          AS engagement,
       COALESCE(p.posts_count, 0)::TEXT AS posts_count,
-      lc.leads,
+      (COALESCE(lc.leads::INT, 0) + COALESCE(ml.manual_leads::INT, 0))::TEXT AS leads,
       f_start.followers  AS follower_start,
       f_end.followers    AS follower_end,
       COALESCE(mc.inbox_conv, 0)::TEXT AS inbox_conv
@@ -140,6 +140,16 @@ async function fetchWithDays(
         AND occurred_date >= CURRENT_DATE - $1::INT
         AND occurred_date <= CURRENT_DATE
     ) lc ON TRUE
+    -- Manual leads (kênh thủ công nhập tay): SUM(manual_leads) từ account_metric_daily.
+    -- Include today (nhập tay hoàn chỉnh ngay).
+    LEFT JOIN LATERAL (
+      SELECT COALESCE(SUM(manual_leads), 0) AS manual_leads
+      FROM account_metric_daily
+      WHERE account_id = sa.id
+        AND date >= CURRENT_DATE - $1::INT
+        AND date <= CURRENT_DATE
+        AND sa.is_manual
+    ) ml ON TRUE
     -- Snapshot ĐẦU range: followers cho growth + reach/engagement cumulative cho non-FB
     LEFT JOIN LATERAL (
       SELECT followers, total_reach, total_engagement
@@ -245,7 +255,7 @@ async function fetchWithDateRange(
         ELSE COALESCE(f_end.total_engagement, 0)
       END::TEXT          AS engagement,
       COALESCE(p.posts_count, 0)::TEXT AS posts_count,
-      lc.leads,
+      (COALESCE(lc.leads::INT, 0) + COALESCE(ml.manual_leads::INT, 0))::TEXT AS leads,
       f_start.followers  AS follower_start,
       f_end.followers    AS follower_end,
       COALESCE(mc.inbox_conv, 0)::TEXT AS inbox_conv
@@ -274,6 +284,15 @@ async function fetchWithDateRange(
         AND occurred_date >= $1::date
         AND occurred_date <= $2::date
     ) lc ON TRUE
+    -- Manual leads (kênh thủ công nhập tay): SUM(manual_leads) từ account_metric_daily.
+    LEFT JOIN LATERAL (
+      SELECT COALESCE(SUM(manual_leads), 0) AS manual_leads
+      FROM account_metric_daily
+      WHERE account_id = sa.id
+        AND date >= $1::date
+        AND date <= $2::date
+        AND sa.is_manual
+    ) ml ON TRUE
     -- Snapshot ĐẦU range = snapshot mới nhất TRƯỚC sinceIso ($1).
     LEFT JOIN LATERAL (
       SELECT followers, total_reach, total_engagement
