@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 import { getKpiData, getTrendData } from '@/lib/cache/dashboard-cache';
 import { fetchChannelsTable } from '@/lib/queries/dashboard-channels-table';
-import { fetchUnreadAlerts } from '@/lib/queries/alerts';
+import { fetchDashboardLandingPages } from '@/lib/queries/dashboard-landing-pages';
 import { fetchTopPerformers } from '@/lib/queries/dashboard-top-performers';
 import { fetchFollowersTrend } from '@/lib/queries/dashboard-followers-trend';
 import { fetchTopReachPosts } from '@/lib/queries/dashboard-top-reach-posts';
@@ -16,7 +16,7 @@ import { ChannelsTable } from '@/components/dashboard/channels-table';
 import { FollowersTrendChart } from '@/components/dashboard/followers-trend-chart';
 import { TopPerformersRankedList } from '@/components/dashboard/top-performers-ranked-list';
 import { TopReachPostsList } from '@/components/dashboard/top-reach-posts-list';
-import { AlertsFeed } from '@/components/dashboard/alerts-feed';
+import { LandingPagesTable } from '@/components/dashboard/landing-pages-table';
 import { DashboardDateRangePicker } from '@/components/dashboard/date-range-picker';
 import {
   ChannelTagTabs,
@@ -72,7 +72,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     kpi,
     trend,
     channels,
-    alerts,
+    landingPages,
     topPerformers,
     followersTrend,
     topReachPosts,
@@ -81,7 +81,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     getKpiData(days, null, kpiRange),
     getTrendData(days, null, simpleRange),
     fetchChannelsTable(days, tagSlug, simpleRange),
-    fetchUnreadAlerts(10),
+    fetchDashboardLandingPages(),
     fetchTopPerformers(days, 5, null, simpleRange),
     fetchFollowersTrend(days, null, simpleRange),
     fetchTopReachPosts(days, 5),
@@ -148,7 +148,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           các bài reach cao nhất kèm nút "Viết lại" để remix nhanh. */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <TopPerformersRankedList performers={topPerformers} days={days} />
-        <AlertsFeed initialData={alerts} />
+        <LandingPagesTable data={landingPages} />
         <TopReachPostsList posts={topReachPosts} days={days} />
       </div>
     </div>
