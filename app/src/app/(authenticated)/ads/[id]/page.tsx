@@ -209,13 +209,34 @@ export default async function AdAccountDetailPage({ params, searchParams }: Page
       {/* Campaigns table — chỉ hiện Sales, tập trung vào Kết quả + CPL */}
       {(() => {
         const salesCampaigns = campaigns.filter((c) => c.objective === 'sales');
+        // Campaigns ACTIVE có spend nhưng 0 conversion — cần chú ý nhất
+        const noConvCampaigns = salesCampaigns.filter(
+          (c) => c.status.toLowerCase() === 'active' && c.summary30d && c.summary30d.spendMicros > 0 && c.summary30d.conversions === 0
+        );
+        // Sort: 0-conv active lên đầu, còn lại sort theo spend desc
+        const sortedSalesCampaigns = [...salesCampaigns].sort((a, b) => {
+          const aNoConv = a.status.toLowerCase() === 'active' && a.summary30d && a.summary30d.spendMicros > 0 && a.summary30d.conversions === 0;
+          const bNoConv = b.status.toLowerCase() === 'active' && b.summary30d && b.summary30d.spendMicros > 0 && b.summary30d.conversions === 0;
+          if (aNoConv && !bNoConv) return -1;
+          if (!aNoConv && bNoConv) return 1;
+          const aSpend = a.summary30d?.spendMicros ?? 0;
+          const bSpend = b.summary30d?.spendMicros ?? 0;
+          return bSpend - aSpend;
+        });
         return (
           <div className="rounded-xl bg-white ring-1 ring-zinc-200 shadow-sm">
             <div className="px-4 py-3 border-b border-zinc-100 flex items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold text-zinc-900">
-                Campaigns — Sales ({salesCampaigns.length})
-              </h3>
-              <span className="text-[11px] text-zinc-500">Sort theo Spend {range.days}d ↓</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm font-semibold text-zinc-900">
+                  Campaigns — Sales ({salesCampaigns.length})
+                </h3>
+                {noConvCampaigns.length > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 text-rose-700 ring-1 ring-rose-200">
+                    🚨 {noConvCampaigns.length} chiến dịch thiếu conversion
+                  </span>
+                )}
+              </div>
+              <span className="text-[11px] text-zinc-500">0-conv lên đầu · Sort theo Spend {range.days}d ↓</span>
             </div>
             {salesCampaigns.length === 0 ? (
               <p className="text-xs text-zinc-500 italic px-4 py-6 text-center">
@@ -239,7 +260,7 @@ export default async function AdAccountDetailPage({ params, searchParams }: Page
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100">
-                    {salesCampaigns.map((c) => {
+                    {sortedSalesCampaigns.map((c) => {
                       const s = c.summary30d;
                       const cpl = s && s.conversions > 0 ? s.spendMicros / s.conversions : null;
                       const ctr = s && s.impressions > 0 ? (s.clicks / s.impressions * 100) : null;
@@ -249,16 +270,24 @@ export default async function AdAccountDetailPage({ params, searchParams }: Page
                         : c.lifetimeBudgetMicros
                         ? `${microsToDisplay(c.lifetimeBudgetMicros, account.currency)} trọn đời`
                         : '—';
+                      const isNoConv = c.status.toLowerCase() === 'active' && s && s.spendMicros > 0 && s.conversions === 0;
                       return (
-                        <tr key={c.id} className="hover:bg-zinc-50/50">
+                        <tr key={c.id} className={cn('hover:bg-zinc-50/50', isNoConv && 'bg-rose-50/60')}>
                           <td className="px-3 py-2">
-                            <Link
-                              href={`/ads/${id}/campaigns/${c.id}?${rangeToQueryString(range)}`}
-                              className="font-medium text-zinc-900 hover:text-blue-700 truncate max-w-[280px] block"
-                              title={c.name}
-                            >
-                              {c.name} →
-                            </Link>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Link
+                                href={`/ads/${id}/campaigns/${c.id}?${rangeToQueryString(range)}`}
+                                className="font-medium text-zinc-900 hover:text-blue-700 truncate max-w-[260px] block"
+                                title={c.name}
+                              >
+                                {c.name} →
+                              </Link>
+                              {isNoConv && (
+                                <span className="shrink-0 text-[10px] font-semibold text-rose-700 bg-rose-100 ring-1 ring-rose-200 px-1.5 py-0.5 rounded-full">
+                                  0 conv
+                                </span>
+                              )}
+                            </div>
                             <p className="text-[10px] text-zinc-400 font-mono mt-0.5">
                               ID: {c.externalId}
                             </p>
@@ -274,7 +303,7 @@ export default async function AdAccountDetailPage({ params, searchParams }: Page
                           <td className="text-right px-3 py-2 tabular-nums text-zinc-500">{budget}</td>
                           {s ? (
                             <>
-                              <td className="text-right px-3 py-2 tabular-nums">
+                              <td className={cn('text-right px-3 py-2 tabular-nums', isNoConv && 'text-rose-700 font-medium')}>
                                 {microsToDisplay(s.spendMicros, account.currency)}
                               </td>
                               <td className="text-right px-3 py-2 tabular-nums">
@@ -289,8 +318,8 @@ export default async function AdAccountDetailPage({ params, searchParams }: Page
                               <td className="text-right px-3 py-2 tabular-nums">
                                 {cpm !== null ? microsToDisplay(cpm, account.currency) : '—'}
                               </td>
-                              <td className="text-right px-3 py-2 tabular-nums font-semibold">
-                                {NUMBER_FMT.format(s.conversions)}
+                              <td className={cn('text-right px-3 py-2 tabular-nums font-semibold', isNoConv && 'text-rose-600')}>
+                                {isNoConv ? '0 🚨' : NUMBER_FMT.format(s.conversions)}
                               </td>
                               <td className="text-right px-3 py-2 tabular-nums font-medium text-blue-700">
                                 {cpl !== null
