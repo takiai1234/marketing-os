@@ -1,4 +1,5 @@
 import { Metadata } from 'next';
+import { LarkSendButton } from '@/components/dashboard/lark-send-button';
 import { getKpiData, getTrendData } from '@/lib/cache/dashboard-cache';
 import { fetchChannelsTable } from '@/lib/queries/dashboard-channels-table';
 import { fetchDashboardLandingPages } from '@/lib/queries/dashboard-landing-pages';
@@ -110,12 +111,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             )}
           </p>
         </div>
-        <DashboardDateRangePicker
-          currentMode={range.mode}
-          currentPreset={range.preset}
-          currentFromIso={range.sinceIso}
-          currentToIso={range.untilIso}
-        />
+        <div className="flex items-center gap-2">
+          <LarkSendButton days={days} tagSlug={tagSlug} />
+          <DashboardDateRangePicker
+            currentMode={range.mode}
+            currentPreset={range.preset}
+            currentFromIso={range.sinceIso}
+            currentToIso={range.untilIso}
+          />
+        </div>
       </div>
 
       {/* Tier 1: 4 KPI cards with sparklines (Lead = Ladipage + tin nhắn) */}
