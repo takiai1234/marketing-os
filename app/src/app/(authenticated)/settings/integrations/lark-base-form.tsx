@@ -28,15 +28,14 @@ function parseFromUrl(input: string): { appToken: string; domain: string; tableI
   input = input.trim();
   try {
     const url = new URL(input);
-    // pathname: /base/<appToken> hoặc /wiki/... — lấy segment sau /base/
-    const match = url.pathname.match(/\/base\/([^/?#]+)/);
+    // Hỗ trợ cả /base/<token> và /wiki/<token>
+    const match = url.pathname.match(/\/(?:base|wiki)\/([^/?#]+)/);
     if (match?.[1]) {
-      // query string có thể chứa ?table=tblXXX
       const tableId = url.searchParams.get('table') ?? undefined;
       return { appToken: match[1], domain: url.hostname, tableId };
     }
   } catch { /* không phải URL */ }
-  // raw token (không có /)
+  // raw token
   if (!input.includes('/') && input.length >= 8) return { appToken: input, domain: '' };
   return null;
 }
