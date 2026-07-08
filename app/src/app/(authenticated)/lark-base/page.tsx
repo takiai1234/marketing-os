@@ -2,12 +2,14 @@ import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
+
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { getSetting } from '@/lib/settings/api-keys';
 import { LARK_APP_ID_KEY, LARK_APP_SECRET_KEY } from '@/lib/lark/client';
 import {
   LARK_BASE_MARKETING_APP_TOKEN_KEY, LARK_BASE_MARKETING_TABLE_ID_KEY, LARK_BASE_MARKETING_DOMAIN_KEY,
   LARK_BASE_ORDER_APP_TOKEN_KEY,      LARK_BASE_ORDER_TABLE_ID_KEY,      LARK_BASE_ORDER_DOMAIN_KEY,
+  LARK_DASHBOARD_MARKETING_URL_KEY,   LARK_DASHBOARD_ORDER_URL_KEY,
   fetchLarkBaseRecords,
 } from '@/lib/lark/base-client';
 import { LarkBaseTabs } from '@/components/lark-base/lark-base-tabs';
@@ -16,11 +18,9 @@ export const metadata: Metadata = { title: 'Lark Base — Marketing OS' };
 
 async function loadSlot(appId: string, appSecret: string, appTokenKey: string, tableIdKey: string, domainKey: string) {
   const [appToken, tableId, domain] = await Promise.all([
-    getSetting(appTokenKey),
-    getSetting(tableIdKey),
-    getSetting(domainKey),
+    getSetting(appTokenKey), getSetting(tableIdKey), getSetting(domainKey),
   ]);
-  if (!appToken || !tableId) return { configured: false, records: [], columns: [], total: 0, error: null };
+  if (!appToken || !tableId || tableId === '_tmp') return { configured: false, records: [], columns: [], total: 0, error: null };
   try {
     const result = await fetchLarkBaseRecords(appId, appSecret, appToken, tableId, { pageSize: 200 }, domain);
     const fieldSet = new Set<string>();
@@ -35,7 +35,9 @@ export default async function LarkBasePage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
-  const [appId, appSecret] = await Promise.all([getSetting(LARK_APP_ID_KEY), getSetting(LARK_APP_SECRET_KEY)]);
+  const [appId, appSecret] = await Promise.all([
+    getSetting(LARK_APP_ID_KEY), getSetting(LARK_APP_SECRET_KEY),
+  ]);
 
   if (!appId || !appSecret) {
     return (
@@ -48,9 +50,11 @@ export default async function LarkBasePage() {
     );
   }
 
-  const [marketing, order] = await Promise.all([
+  const [marketing, order, dashboardMktUrl, dashboardOrderUrl] = await Promise.all([
     loadSlot(appId, appSecret, LARK_BASE_MARKETING_APP_TOKEN_KEY, LARK_BASE_MARKETING_TABLE_ID_KEY, LARK_BASE_MARKETING_DOMAIN_KEY),
     loadSlot(appId, appSecret, LARK_BASE_ORDER_APP_TOKEN_KEY,     LARK_BASE_ORDER_TABLE_ID_KEY,     LARK_BASE_ORDER_DOMAIN_KEY),
+    getSetting(LARK_DASHBOARD_MARKETING_URL_KEY),
+    getSetting(LARK_DASHBOARD_ORDER_URL_KEY),
   ]);
 
   return (
@@ -59,7 +63,12 @@ export default async function LarkBasePage() {
         <h2 className="text-xl font-bold text-zinc-900">Lark Base</h2>
         <p className="text-sm text-zinc-500 mt-0.5">Dữ liệu kéo từ Lark Base về Marketing OS.</p>
       </div>
-      <LarkBaseTabs marketing={marketing} order={order} />
+      <LarkBaseTabs
+        marketing={marketing}
+        order={order}
+        dashboardMktUrl={dashboardMktUrl ?? null}
+        dashboardOrderUrl={dashboardOrderUrl ?? null}
+      />
     </div>
   );
 }

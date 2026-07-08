@@ -247,6 +247,55 @@ export function LarkBaseForm({ marketing, order, larkAppConfigured }: Props) {
 
       <SlotForm slot="marketing" label="📊 Dashboard Marketing" {...marketing} disabled={!larkAppConfigured} />
       <SlotForm slot="order"     label="📋 Order Media"        {...order}     disabled={!larkAppConfigured} />
+
+      <DashboardUrlSlot slot="marketing" label="📊 Link Dashboard Marketing (embed)" />
+      <DashboardUrlSlot slot="order"     label="📋 Link Dashboard Order Media (embed)" />
+    </div>
+  );
+}
+
+function DashboardUrlSlot({ slot, label }: { slot: 'marketing' | 'order'; label: string }) {
+  const router = useRouter();
+  const [url, setUrl] = useState('');
+  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function onSave() {
+    if (!url.trim()) return;
+    setBusy(true);
+    try {
+      const res = await fetch('/api/settings/lark-dashboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slot, url: url.trim() }),
+      });
+      if (!res.ok) { toast.error('Lưu thất bại'); return; }
+      setSaved(true); setUrl('');
+      toast.success('Đã lưu link dashboard');
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-1.5 rounded-lg border border-zinc-100 p-4">
+      <Label className="text-xs font-semibold text-zinc-700">{label}</Label>
+      <p className="text-xs text-zinc-400">
+        Dán URL Lark Wiki/Base có chứa Bảng điều khiển. Trang sẽ nhúng bằng iframe.
+      </p>
+      <div className="flex gap-2">
+        <Input
+          placeholder="https://xxx.larksuite.com/wiki/..."
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          className="text-xs h-8 flex-1"
+        />
+        <Button size="sm" disabled={!url.trim() || busy} onClick={onSave}>
+          {busy ? <Loader2Icon className="w-3 h-3 animate-spin" /> : 'Lưu'}
+        </Button>
+      </div>
+      {saved && <p className="text-xs text-green-600">✓ Đã lưu</p>}
     </div>
   );
 }

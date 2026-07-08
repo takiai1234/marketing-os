@@ -19,8 +19,10 @@ export function getLarkApiBase(tenantDomain?: string | null): string {
 }
 
 // Tenant domain key để lưu cùng với app_token
-export const LARK_BASE_MARKETING_DOMAIN_KEY = 'LARK_BASE_MARKETING_DOMAIN';
+export const LARK_BASE_MARKETING_DOMAIN_KEY  = 'LARK_BASE_MARKETING_DOMAIN';
 export const LARK_BASE_ORDER_DOMAIN_KEY      = 'LARK_BASE_ORDER_DOMAIN';
+export const LARK_DASHBOARD_MARKETING_URL_KEY = 'LARK_DASHBOARD_MARKETING_URL';
+export const LARK_DASHBOARD_ORDER_URL_KEY     = 'LARK_DASHBOARD_ORDER_URL';
 
 export interface LarkBaseRecord {
   record_id: string;
