@@ -16,6 +16,7 @@ import {
   FolderKanban,
   Zap,
   Globe,
+  Table2,
 } from 'lucide-react';
 import type { SessionData } from '@/lib/auth/session-config';
 import { UserMenu } from './user-menu';
@@ -30,6 +31,7 @@ const BASE_ITEMS = [
   { href: '/skills', label: 'Thư viện Skill', icon: Package },
   { href: '/projects', label: 'Projects', icon: FolderKanban },
   { href: '/revenue', label: 'Doanh thu', icon: Wallet },
+  { href: '/lark-base', label: 'Order Media', icon: Table2 },
   { href: '/news', label: 'Tin tức AI', icon: Newspaper },
 ];
 

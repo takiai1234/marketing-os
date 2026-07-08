@@ -16,7 +16,9 @@ import { ApifyForm } from './apify-form';
 import { AdsTokenForm } from './ads-token-form';
 import { GoogleAnalyticsForm } from './google-analytics-form';
 import { LarkWebhookForm } from './lark-form';
+import { LarkBaseForm } from './lark-base-form';
 import { LARK_APP_ID_KEY, LARK_APP_SECRET_KEY, LARK_CHAT_ID_KEY } from '@/lib/lark/client';
+import { LARK_BASE_APP_TOKEN_KEY, LARK_BASE_TABLE_ID_KEY } from '@/lib/lark/base-client';
 
 export const metadata = {
   title: 'Tích hợp API — Marketing OS',
@@ -45,7 +47,7 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
     );
   }
 
-  const [orMeta, kieMeta, fbIdMeta, fbSecretMeta, apifyTokenMeta, adsTokenMeta, googleIdMeta, googleSecretMeta, larkAppIdMeta, larkAppSecretMeta, larkChatIdMeta] =
+  const [orMeta, kieMeta, fbIdMeta, fbSecretMeta, apifyTokenMeta, adsTokenMeta, googleIdMeta, googleSecretMeta, larkAppIdMeta, larkAppSecretMeta, larkChatIdMeta, larkBaseAppTokenMeta, larkBaseTableIdMeta] =
     await listSettingsMetadata([
       OPENROUTER_KEY_NAME,
       KIE_AI_KEY_NAME,
@@ -58,6 +60,8 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
       LARK_APP_ID_KEY,
       LARK_APP_SECRET_KEY,
       LARK_CHAT_ID_KEY,
+      LARK_BASE_APP_TOKEN_KEY,
+      LARK_BASE_TABLE_ID_KEY,
     ]);
   // Load plaintext Apify lists (not secret — hiển thị OK trong UI)
   const [googleConnected, twitterHandles, facebookPages, twitterActor, facebookActor] = await Promise.all([
@@ -166,6 +170,13 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
         initialAppSecretIsSet={larkAppSecretMeta?.isSet ?? false}
         initialChatIdIsSet={larkChatIdMeta?.isSet ?? false}
         initialUpdatedAt={larkAppIdMeta?.updatedAt ?? null}
+      />
+
+      <LarkBaseForm
+        initialAppTokenIsSet={larkBaseAppTokenMeta?.isSet ?? false}
+        initialTableIdIsSet={larkBaseTableIdMeta?.isSet ?? false}
+        initialUpdatedAt={larkBaseAppTokenMeta?.updatedAt ?? null}
+        larkAppConfigured={(larkAppIdMeta?.isSet ?? false) && (larkAppSecretMeta?.isSet ?? false)}
       />
 
       <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 px-5 py-4 text-xs text-zinc-500 italic">
