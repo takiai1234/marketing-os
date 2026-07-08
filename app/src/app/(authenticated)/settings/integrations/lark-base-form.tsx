@@ -1,6 +1,6 @@
 'use client';
 
-// Lark Base form — 2 slot riêng: Marketing dashboard + Order Media.
+// Lark Base form — 2 slot riêng: Marketing dashboard + Dashboard Lark.
 // Dán URL Lark Base → tự parse app_token + tenant domain → load tables → chọn bảng.
 
 import { useState } from 'react';
@@ -246,10 +246,10 @@ export function LarkBaseForm({ marketing, order, larkAppConfigured }: Props) {
       </div>
 
       <SlotForm slot="marketing" label="📊 Dashboard Marketing" {...marketing} disabled={!larkAppConfigured} />
-      <SlotForm slot="order"     label="📋 Order Media"        {...order}     disabled={!larkAppConfigured} />
+      <SlotForm slot="order"     label="📋 Dashboard Lark"        {...order}     disabled={!larkAppConfigured} />
 
       <DashboardUrlSlot slot="marketing" label="📊 Link Dashboard Marketing (embed)" />
-      <DashboardUrlSlot slot="order"     label="📋 Link Dashboard Order Media (embed)" />
+      <DashboardUrlSlot slot="order"     label="📋 Link Dashboard Dashboard Lark (embed)" />
     </div>
   );
 }

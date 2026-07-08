@@ -92,7 +92,7 @@ export function LarkBaseTabs({ marketing, order, dashboardMktUrl, dashboardOrder
       <div className="flex gap-1 border-b">
         {[
           { key: 'marketing' as const, label: '📊 Dashboard Marketing' },
-          { key: 'order'     as const, label: '📋 Order Media' },
+          { key: 'order'     as const, label: '📋 Dashboard Lark' },
         ].map((t) => (
           <button
             key={t.key}
@@ -111,7 +111,7 @@ export function LarkBaseTabs({ marketing, order, dashboardMktUrl, dashboardOrder
         <SlotContent data={marketing} dashboardUrl={dashboardMktUrl} label="Dashboard Marketing" />
       )}
       {tab === 'order' && (
-        <SlotContent data={order} dashboardUrl={dashboardOrderUrl} label="Order Media" />
+        <SlotContent data={order} dashboardUrl={dashboardOrderUrl} label="Dashboard Lark" />
       )}
     </div>
   );

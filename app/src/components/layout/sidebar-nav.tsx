@@ -31,7 +31,7 @@ const BASE_ITEMS = [
   { href: '/skills', label: 'Thư viện Skill', icon: Package },
   { href: '/projects', label: 'Projects', icon: FolderKanban },
   { href: '/revenue', label: 'Doanh thu', icon: Wallet },
-  { href: '/lark-base', label: 'Order Media', icon: Table2 },
+  { href: '/lark-base', label: 'Dashboard Lark', icon: Table2 },
   { href: '/news', label: 'Tin tức AI', icon: Newspaper },
 ];
 
