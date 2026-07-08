@@ -24,15 +24,20 @@ interface Props {
 
 interface TableOption { table_id: string; name: string }
 
-function parseFromUrl(input: string): { appToken: string; domain: string } | null {
+function parseFromUrl(input: string): { appToken: string; domain: string; tableId?: string } | null {
   input = input.trim();
   try {
     const url = new URL(input);
-    const match = url.pathname.match(/\/base\/([A-Za-z0-9_-]+)/);
-    if (match?.[1]) return { appToken: match[1], domain: url.hostname };
+    // pathname: /base/<appToken> hoặc /wiki/... — lấy segment sau /base/
+    const match = url.pathname.match(/\/base\/([^/?#]+)/);
+    if (match?.[1]) {
+      // query string có thể chứa ?table=tblXXX
+      const tableId = url.searchParams.get('table') ?? undefined;
+      return { appToken: match[1], domain: url.hostname, tableId };
+    }
   } catch { /* không phải URL */ }
-  // raw token
-  if (/^[A-Za-z0-9_-]{10,}$/.test(input)) return { appToken: input, domain: '' };
+  // raw token (không có /)
+  if (!input.includes('/') && input.length >= 8) return { appToken: input, domain: '' };
   return null;
 }
 
@@ -67,7 +72,7 @@ function SlotForm({
   const [urlInput, setUrlInput] = useState('');
   const [tables, setTables] = useState<TableOption[]>([]);
   const [selectedTableId, setSelectedTableId] = useState('');
-  const [parsed, setParsed] = useState<{ appToken: string; domain: string } | null>(null);
+  const [parsed, setParsed] = useState<{ appToken: string; domain: string; tableId?: string } | null>(null);
   const [busy, setBusy] = useState<null | 'load' | 'save' | 'delete'>(null);
 
   async function onLoad() {
@@ -101,7 +106,12 @@ function SlotForm({
         return;
       }
       setTables(data.tables);
-      if (data.tables.length === 1 && data.tables[0]) setSelectedTableId(data.tables[0].table_id);
+      // Ưu tiên table_id từ URL query string, rồi mới fallback chọn nếu chỉ có 1
+      if (info.tableId) {
+        setSelectedTableId(info.tableId);
+      } else if (data.tables.length === 1 && data.tables[0]) {
+        setSelectedTableId(data.tables[0].table_id);
+      }
       toast.success(`Tìm thấy ${data.tables.length} bảng`);
     } finally {
       setBusy(null);
