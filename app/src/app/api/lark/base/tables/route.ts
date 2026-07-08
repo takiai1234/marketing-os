@@ -3,6 +3,8 @@
 // Dùng trong Settings để user chọn table muốn hiển thị.
 
 import { NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { getSetting } from '@/lib/settings/api-keys';
 import { listLarkBaseTables } from '@/lib/lark/base-client';

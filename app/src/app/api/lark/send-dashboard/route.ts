@@ -5,6 +5,8 @@
 //   { days?: number; tagSlug?: string | null }
 
 import { NextRequest, NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { getSetting } from '@/lib/settings/api-keys';
 import { fetchKpiData } from '@/lib/queries/dashboard-kpi';

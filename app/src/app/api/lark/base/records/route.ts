@@ -2,6 +2,8 @@
 // Lấy records từ Lark Base table đã cấu hình trong Settings.
 
 import { NextRequest, NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { getSetting } from '@/lib/settings/api-keys';
 import { fetchLarkBaseRecords } from '@/lib/lark/base-client';

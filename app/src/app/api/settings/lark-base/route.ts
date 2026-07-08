@@ -3,6 +3,8 @@
 // DELETE /api/settings/lark-base — xoá
 
 import { NextRequest, NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { getUserRole } from '@/lib/auth/get-role';
 import { setSetting, deleteSetting, listSettingsMetadata } from '@/lib/settings/api-keys';
