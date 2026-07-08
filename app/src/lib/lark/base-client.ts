@@ -1,17 +1,30 @@
-// Lark Base API client.
-// Docs: https://open.larksuite.com/document/server-docs/docs/bitable-v1/app-table-record/list
-//
-// Lark Base "app_token" = ID của file Lark Base (lấy từ URL: /base/<app_token>)
-// table_id = ID của bảng trong file (lấy từ API list tables hoặc URL)
+// Lark Base API client — hỗ trợ cả Lark (larksuite.com) và Feishu (feishu.cn).
+// app_token = ID file Lark Base, lấy từ URL: /base/<app_token>
+// Tự detect API base URL từ tenant domain được lưu cùng app_token.
 
+// Keys cho 2 Lark Base riêng
+export const LARK_BASE_MARKETING_APP_TOKEN_KEY = 'LARK_BASE_MARKETING_APP_TOKEN';
+export const LARK_BASE_MARKETING_TABLE_ID_KEY  = 'LARK_BASE_MARKETING_TABLE_ID';
+export const LARK_BASE_ORDER_APP_TOKEN_KEY      = 'LARK_BASE_ORDER_APP_TOKEN';
+export const LARK_BASE_ORDER_TABLE_ID_KEY       = 'LARK_BASE_ORDER_TABLE_ID';
+
+// Keys cũ (giữ lại để không break settings đã lưu)
 export const LARK_BASE_APP_TOKEN_KEY = 'LARK_BASE_APP_TOKEN';
-export const LARK_BASE_TABLE_ID_KEY = 'LARK_BASE_TABLE_ID';
+export const LARK_BASE_TABLE_ID_KEY  = 'LARK_BASE_TABLE_ID';
 
-const LARK_BASE_URL = 'https://open.larksuite.com/open-apis';
+// API host — Feishu (VN/CN) vs Lark (quốc tế)
+export function getLarkApiBase(tenantDomain?: string | null): string {
+  if (tenantDomain?.includes('feishu.cn')) return 'https://open.feishu.cn/open-apis';
+  return 'https://open.larksuite.com/open-apis';
+}
+
+// Tenant domain key để lưu cùng với app_token
+export const LARK_BASE_MARKETING_DOMAIN_KEY = 'LARK_BASE_MARKETING_DOMAIN';
+export const LARK_BASE_ORDER_DOMAIN_KEY      = 'LARK_BASE_ORDER_DOMAIN';
 
 export interface LarkBaseRecord {
   record_id: string;
-  fields: Record<string, unknown>;
+  fields: { [key: string]: unknown };
 }
 
 export interface LarkBaseTable {
@@ -19,8 +32,8 @@ export interface LarkBaseTable {
   name: string;
 }
 
-async function getTenantToken(appId: string, appSecret: string): Promise<string> {
-  const res = await fetch(`${LARK_BASE_URL}/auth/v3/tenant_access_token/internal`, {
+async function getTenantToken(appId: string, appSecret: string, apiBase: string): Promise<string> {
+  const res = await fetch(`${apiBase}/auth/v3/tenant_access_token/internal`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ app_id: appId, app_secret: appSecret }),
@@ -36,10 +49,12 @@ async function getTenantToken(appId: string, appSecret: string): Promise<string>
 export async function listLarkBaseTables(
   appId: string,
   appSecret: string,
-  appToken: string
+  appToken: string,
+  tenantDomain?: string | null
 ): Promise<LarkBaseTable[]> {
-  const token = await getTenantToken(appId, appSecret);
-  const res = await fetch(`${LARK_BASE_URL}/bitable/v1/apps/${appToken}/tables`, {
+  const apiBase = getLarkApiBase(tenantDomain);
+  const token = await getTenantToken(appId, appSecret, apiBase);
+  const res = await fetch(`${apiBase}/bitable/v1/apps/${appToken}/tables`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`List tables HTTP ${res.status}`);
@@ -51,8 +66,6 @@ export async function listLarkBaseTables(
 export interface FetchRecordsOptions {
   pageSize?: number;
   pageToken?: string;
-  filter?: string;
-  sort?: string[];
 }
 
 export interface FetchRecordsResult {
@@ -67,28 +80,21 @@ export async function fetchLarkBaseRecords(
   appSecret: string,
   appToken: string,
   tableId: string,
-  opts: FetchRecordsOptions = {}
+  opts: FetchRecordsOptions = {},
+  tenantDomain?: string | null
 ): Promise<FetchRecordsResult> {
-  const token = await getTenantToken(appId, appSecret);
+  const apiBase = getLarkApiBase(tenantDomain);
+  const token = await getTenantToken(appId, appSecret, apiBase);
   const params = new URLSearchParams();
   params.set('page_size', String(opts.pageSize ?? 100));
   if (opts.pageToken) params.set('page_token', opts.pageToken);
-  if (opts.filter) params.set('filter', opts.filter);
 
-  const url = `${LARK_BASE_URL}/bitable/v1/apps/${appToken}/tables/${tableId}/records?${params}`;
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const url = `${apiBase}/bitable/v1/apps/${appToken}/tables/${tableId}/records?${params}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error(`Fetch records HTTP ${res.status}`);
   const data = await res.json() as {
-    code: number;
-    msg: string;
-    data?: {
-      items?: LarkBaseRecord[];
-      has_more?: boolean;
-      page_token?: string;
-      total?: number;
-    };
+    code: number; msg: string;
+    data?: { items?: LarkBaseRecord[]; has_more?: boolean; page_token?: string; total?: number };
   };
   if (data.code !== 0) throw new Error(`Lark Base error ${data.code}: ${data.msg}`);
   return {

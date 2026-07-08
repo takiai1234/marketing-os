@@ -12,6 +12,7 @@ interface LarkRecord {
 interface Props {
   columns: string[];
   records: LarkRecord[];
+  total?: number;
 }
 
 function renderCell(value: unknown): string {

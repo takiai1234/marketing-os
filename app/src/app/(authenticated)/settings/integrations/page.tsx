@@ -18,7 +18,10 @@ import { GoogleAnalyticsForm } from './google-analytics-form';
 import { LarkAppForm } from './lark-form';
 import { LarkBaseForm } from './lark-base-form';
 import { LARK_APP_ID_KEY, LARK_APP_SECRET_KEY } from '@/lib/lark/client';
-import { LARK_BASE_APP_TOKEN_KEY, LARK_BASE_TABLE_ID_KEY } from '@/lib/lark/base-client';
+import {
+  LARK_BASE_MARKETING_APP_TOKEN_KEY, LARK_BASE_MARKETING_TABLE_ID_KEY,
+  LARK_BASE_ORDER_APP_TOKEN_KEY,     LARK_BASE_ORDER_TABLE_ID_KEY,
+} from '@/lib/lark/base-client';
 
 export const metadata = {
   title: 'Tích hợp API — Marketing OS',
@@ -47,7 +50,9 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
     );
   }
 
-  const [orMeta, kieMeta, fbIdMeta, fbSecretMeta, apifyTokenMeta, adsTokenMeta, googleIdMeta, googleSecretMeta, larkAppIdMeta, larkAppSecretMeta, larkBaseAppTokenMeta, larkBaseTableIdMeta] =
+  const [orMeta, kieMeta, fbIdMeta, fbSecretMeta, apifyTokenMeta, adsTokenMeta, googleIdMeta, googleSecretMeta,
+         larkAppIdMeta, larkAppSecretMeta,
+         larkMktAppTokenMeta, larkMktTableIdMeta, larkOrderAppTokenMeta, larkOrderTableIdMeta] =
     await listSettingsMetadata([
       OPENROUTER_KEY_NAME,
       KIE_AI_KEY_NAME,
@@ -59,8 +64,10 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
       GOOGLE_CLIENT_SECRET_KEY,
       LARK_APP_ID_KEY,
       LARK_APP_SECRET_KEY,
-      LARK_BASE_APP_TOKEN_KEY,
-      LARK_BASE_TABLE_ID_KEY,
+      LARK_BASE_MARKETING_APP_TOKEN_KEY,
+      LARK_BASE_MARKETING_TABLE_ID_KEY,
+      LARK_BASE_ORDER_APP_TOKEN_KEY,
+      LARK_BASE_ORDER_TABLE_ID_KEY,
     ]);
   // Load plaintext Apify lists (not secret — hiển thị OK trong UI)
   const [googleConnected, twitterHandles, facebookPages, twitterActor, facebookActor] = await Promise.all([
@@ -171,9 +178,8 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
       />
 
       <LarkBaseForm
-        initialAppTokenIsSet={larkBaseAppTokenMeta?.isSet ?? false}
-        initialTableIdIsSet={larkBaseTableIdMeta?.isSet ?? false}
-        initialUpdatedAt={larkBaseAppTokenMeta?.updatedAt ?? null}
+        marketing={{ isSet: (larkMktAppTokenMeta?.isSet ?? false) && (larkMktTableIdMeta?.isSet ?? false), updatedAt: larkMktAppTokenMeta?.updatedAt ?? null }}
+        order={{ isSet: (larkOrderAppTokenMeta?.isSet ?? false) && (larkOrderTableIdMeta?.isSet ?? false), updatedAt: larkOrderAppTokenMeta?.updatedAt ?? null }}
         larkAppConfigured={(larkAppIdMeta?.isSet ?? false) && (larkAppSecretMeta?.isSet ?? false)}
       />
 

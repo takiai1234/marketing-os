@@ -1,8 +1,7 @@
 'use client';
 
-// Lark Base form — dán URL file Lark Base → tự parse app_token → auto-load tables.
-// URL format: https://<tenant>.larksuite.com/base/<appToken>?table=<tableId>&view=...
-// hoặc:       https://<tenant>.feishu.cn/base/<appToken>?...
+// Lark Base form — 2 slot riêng: Marketing dashboard + Order Media.
+// Dán URL Lark Base → tự parse app_token + tenant domain → load tables → chọn bảng.
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -12,27 +11,28 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CheckCircleIcon, AlertCircleIcon, Trash2Icon, Loader2Icon } from 'lucide-react';
 
+interface SlotState {
+  isSet: boolean;
+  updatedAt: string | null;
+}
+
 interface Props {
-  initialAppTokenIsSet: boolean;
-  initialTableIdIsSet: boolean;
-  initialUpdatedAt: string | null;
+  marketing: SlotState;
+  order: SlotState;
   larkAppConfigured: boolean;
 }
 
 interface TableOption { table_id: string; name: string }
 
-function parseAppToken(input: string): string | null {
+function parseFromUrl(input: string): { appToken: string; domain: string } | null {
   input = input.trim();
-  // Nếu là URL: extract phần sau /base/
   try {
     const url = new URL(input);
     const match = url.pathname.match(/\/base\/([A-Za-z0-9_-]+)/);
-    if (match) return match[1] ?? null;
-  } catch {
-    // không phải URL — kiểm tra nếu là raw token
-  }
-  // raw token: bascnXXX hoặc BascXXX
-  if (/^[A-Za-z0-9_-]{10,}$/.test(input)) return input;
+    if (match?.[1]) return { appToken: match[1], domain: url.hostname };
+  } catch { /* không phải URL */ }
+  // raw token
+  if (/^[A-Za-z0-9_-]{10,}$/.test(input)) return { appToken: input, domain: '' };
   return null;
 }
 
@@ -48,59 +48,81 @@ function formatRelativeTime(iso: string | null): string {
   return d.toLocaleDateString('vi-VN');
 }
 
-export function LarkBaseForm({ initialAppTokenIsSet, initialTableIdIsSet, initialUpdatedAt, larkAppConfigured }: Props) {
+function SlotForm({
+  slot,
+  label,
+  isSet: initialIsSet,
+  updatedAt: initialUpdatedAt,
+  disabled,
+}: {
+  slot: 'marketing' | 'order';
+  label: string;
+  isSet: boolean;
+  updatedAt: string | null;
+  disabled: boolean;
+}) {
   const router = useRouter();
-  const [isSet, setIsSet] = useState(initialAppTokenIsSet && initialTableIdIsSet);
+  const [isSet, setIsSet] = useState(initialIsSet);
   const [updatedAt, setUpdatedAt] = useState(initialUpdatedAt);
-
   const [urlInput, setUrlInput] = useState('');
   const [tables, setTables] = useState<TableOption[]>([]);
   const [selectedTableId, setSelectedTableId] = useState('');
+  const [parsed, setParsed] = useState<{ appToken: string; domain: string } | null>(null);
   const [busy, setBusy] = useState<null | 'load' | 'save' | 'delete'>(null);
-  const [parsedToken, setParsedToken] = useState<string | null>(null);
 
   async function onLoad() {
-    const token = parseAppToken(urlInput);
-    if (!token) { toast.error('Không nhận ra URL hoặc App Token. Hãy dán URL file Lark Base.'); return; }
-
+    const info = parseFromUrl(urlInput);
+    if (!info) {
+      toast.error('Không nhận ra URL. Dán URL đầy đủ của file Lark Base.');
+      return;
+    }
+    setParsed(info);
     setBusy('load');
-    setParsedToken(token);
+
+    // Lưu tạm để API /tables dùng
+    await fetch('/api/settings/lark-base', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slot, appToken: info.appToken, tableId: '_tmp', domain: info.domain }),
+    });
+
     try {
-      // Lưu tạm app_token để API /tables dùng được
-      await fetch('/api/settings/lark-base', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ appToken: token, tableId: '_tmp' }),
-      });
-
-      const res = await fetch('/api/lark/base/tables');
+      const res = await fetch(`/api/lark/base/tables?slot=${slot}`);
       const data = await res.json() as { tables?: TableOption[]; error?: string };
-      if (!res.ok || !data.tables) { toast.error(data.error ?? 'Không load được bảng'); return; }
-
+      if (!res.ok || !data.tables) {
+        toast.error(data.error ?? 'Không load được bảng');
+        return;
+      }
+      if (data.tables.length === 0) {
+        toast.error(
+          'Không tìm thấy bảng nào. Kiểm tra: (1) App đã được thêm vào file Lark Base chưa? ' +
+          '(2) App có scope bitable:app:readonly chưa?'
+        );
+        return;
+      }
       setTables(data.tables);
-      // Auto-chọn nếu chỉ có 1 bảng
       if (data.tables.length === 1 && data.tables[0]) setSelectedTableId(data.tables[0].table_id);
-      toast.success(`Tìm thấy ${data.tables.length} bảng — chọn bảng muốn hiển thị`);
+      toast.success(`Tìm thấy ${data.tables.length} bảng`);
     } finally {
       setBusy(null);
     }
   }
 
   async function onSave() {
-    if (!parsedToken || !selectedTableId) return;
+    if (!parsed || !selectedTableId) return;
     setBusy('save');
     try {
       const res = await fetch('/api/settings/lark-base', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ appToken: parsedToken, tableId: selectedTableId }),
+        body: JSON.stringify({ slot, appToken: parsed.appToken, tableId: selectedTableId, domain: parsed.domain }),
       });
       const data = await res.json().catch(() => ({})) as { error?: string };
       if (!res.ok) { toast.error(data.error ?? 'Lưu thất bại'); return; }
       setIsSet(true);
       setUpdatedAt(new Date().toISOString());
-      setUrlInput(''); setTables([]); setSelectedTableId(''); setParsedToken(null);
-      toast.success('Đã lưu cấu hình Lark Base');
+      setUrlInput(''); setTables([]); setSelectedTableId(''); setParsed(null);
+      toast.success(`Đã lưu ${label}`);
       router.refresh();
     } finally {
       setBusy(null);
@@ -108,10 +130,10 @@ export function LarkBaseForm({ initialAppTokenIsSet, initialTableIdIsSet, initia
   }
 
   async function onDelete() {
-    if (!confirm('Xoá cấu hình Lark Base?')) return;
+    if (!confirm(`Xoá cấu hình ${label}?`)) return;
     setBusy('delete');
     try {
-      const res = await fetch('/api/settings/lark-base', { method: 'DELETE' });
+      const res = await fetch(`/api/settings/lark-base?slot=${slot}`, { method: 'DELETE' });
       if (!res.ok) { toast.error('Xoá thất bại'); return; }
       setIsSet(false); setUpdatedAt(null);
       toast.success('Đã xoá');
@@ -122,12 +144,83 @@ export function LarkBaseForm({ initialAppTokenIsSet, initialTableIdIsSet, initia
   }
 
   return (
+    <div className="space-y-3 rounded-lg border border-zinc-100 p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-zinc-700">{label}</p>
+        <div className="flex items-center gap-1.5 text-xs">
+          {isSet ? (
+            <><CheckCircleIcon className="w-3.5 h-3.5 text-green-500" /><span className="text-green-700">Đã kết nối {formatRelativeTime(updatedAt)}</span></>
+          ) : (
+            <><AlertCircleIcon className="w-3.5 h-3.5 text-amber-500" /><span className="text-amber-600">Chưa cấu hình</span></>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium">URL file Lark Base</Label>
+        <div className="flex gap-2">
+          <Input
+            placeholder="https://xxx.feishu.cn/base/bascnXXX..."
+            value={urlInput}
+            onChange={(e) => { setUrlInput(e.target.value); setTables([]); setSelectedTableId(''); }}
+            className="text-xs h-8 flex-1"
+            disabled={disabled || busy !== null}
+          />
+          <Button type="button" size="sm" variant="outline"
+            disabled={!urlInput.trim() || disabled || busy !== null}
+            onClick={onLoad}
+          >
+            {busy === 'load' ? <Loader2Icon className="w-3 h-3 animate-spin" /> : 'Load'}
+          </Button>
+        </div>
+      </div>
+
+      {tables.length > 0 && (
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium">Chọn bảng</Label>
+          <select
+            value={selectedTableId}
+            onChange={(e) => setSelectedTableId(e.target.value)}
+            className="w-full h-8 rounded-md border border-input bg-background px-3 text-xs"
+          >
+            <option value="">— Chọn bảng —</option>
+            {tables.map((t) => (
+              <option key={t.table_id} value={t.table_id}>{t.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        {tables.length > 0 && (
+          <Button size="sm" disabled={!selectedTableId || busy !== null} onClick={onSave}>
+            {busy === 'save' && <Loader2Icon className="w-3 h-3 mr-1 animate-spin" />}
+            Lưu
+          </Button>
+        )}
+        {isSet && (
+          <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive"
+            disabled={busy !== null} onClick={onDelete}
+          >
+            {busy === 'delete' ? <Loader2Icon className="w-3 h-3 mr-1 animate-spin" /> : <Trash2Icon className="w-3 h-3 mr-1" />}
+            Xoá
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function LarkBaseForm({ marketing, order, larkAppConfigured }: Props) {
+  return (
     <div className="rounded-xl border bg-card p-5 space-y-4">
       <div className="flex items-start gap-3">
         <div className="mt-0.5 flex-shrink-0 w-8 h-8 rounded-lg bg-[#0B6EFD] flex items-center justify-center text-white font-bold text-sm">B</div>
         <div>
           <h3 className="font-semibold text-sm">Lark Base</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Dán URL file Lark Base để kéo dữ liệu vào trang Order Media.</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Kéo dữ liệu từ 2 file Lark Base vào Marketing OS. Dán URL file → Load → Chọn bảng.
+          </p>
         </div>
       </div>
 
@@ -137,63 +230,14 @@ export function LarkBaseForm({ initialAppTokenIsSet, initialTableIdIsSet, initia
         </div>
       )}
 
-      <div className="flex items-center gap-2 text-xs">
-        {isSet ? (
-          <><CheckCircleIcon className="w-4 h-4 text-green-500 flex-shrink-0" /><span className="text-green-700">Đã kết nối {formatRelativeTime(updatedAt)}</span></>
-        ) : (
-          <><AlertCircleIcon className="w-4 h-4 text-amber-500 flex-shrink-0" /><span className="text-amber-700">Chưa cấu hình</span></>
-        )}
+      <div className="text-xs text-zinc-500 bg-zinc-50 rounded-lg px-3 py-2 space-y-1">
+        <p className="font-medium text-zinc-700">Yêu cầu để Load được bảng:</p>
+        <p>1. Mở file Lark Base → Share → thêm bot app của bạn làm collaborator</p>
+        <p>2. Lark Developer Console → Permissions → bật scope <code className="bg-zinc-200 px-1 rounded">bitable:app:readonly</code></p>
       </div>
 
-      <div className="space-y-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="lark-base-url" className="text-xs font-medium">URL file Lark Base</Label>
-          <div className="flex gap-2">
-            <Input
-              id="lark-base-url"
-              placeholder="https://xxx.larksuite.com/base/bascnXXX..."
-              value={urlInput}
-              onChange={(e) => { setUrlInput(e.target.value); setTables([]); setSelectedTableId(''); }}
-              className="text-xs h-8 flex-1"
-              disabled={!larkAppConfigured || busy !== null}
-            />
-            <Button type="button" size="sm" variant="outline" disabled={!urlInput.trim() || !larkAppConfigured || busy !== null} onClick={onLoad}>
-              {busy === 'load' ? <Loader2Icon className="w-3 h-3 animate-spin" /> : 'Load'}
-            </Button>
-          </div>
-        </div>
-
-        {tables.length > 0 && (
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">Chọn bảng dữ liệu</Label>
-            <select
-              value={selectedTableId}
-              onChange={(e) => setSelectedTableId(e.target.value)}
-              className="w-full h-8 rounded-md border border-input bg-background px-3 text-xs"
-            >
-              <option value="">— Chọn bảng —</option>
-              {tables.map((t) => (
-                <option key={t.table_id} value={t.table_id}>{t.name}</option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        <div className="flex gap-2">
-          {tables.length > 0 && (
-            <Button size="sm" disabled={!selectedTableId || busy !== null} onClick={onSave}>
-              {busy === 'save' && <Loader2Icon className="w-3 h-3 mr-1 animate-spin" />}
-              Lưu
-            </Button>
-          )}
-          {isSet && (
-            <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" disabled={busy !== null} onClick={onDelete}>
-              {busy === 'delete' ? <Loader2Icon className="w-3 h-3 mr-1 animate-spin" /> : <Trash2Icon className="w-3 h-3 mr-1" />}
-              Xoá
-            </Button>
-          )}
-        </div>
-      </div>
+      <SlotForm slot="marketing" label="📊 Dashboard Marketing" {...marketing} disabled={!larkAppConfigured} />
+      <SlotForm slot="order"     label="📋 Order Media"        {...order}     disabled={!larkAppConfigured} />
     </div>
   );
 }
