@@ -37,16 +37,15 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = await req.json() as { appId?: string; appSecret?: string; chatId?: string };
-  const { appId, appSecret, chatId } = body;
+  const { appId, appSecret } = body;
 
-  if (!appId || !appSecret || !chatId) {
-    return NextResponse.json({ error: 'Cần đủ appId, appSecret, chatId' }, { status: 400 });
+  if (!appId || !appSecret) {
+    return NextResponse.json({ error: 'Cần đủ appId và appSecret' }, { status: 400 });
   }
 
   await Promise.all([
     setSetting(LARK_APP_ID_KEY, appId.trim(), user.userId, 'Lark App ID'),
     setSetting(LARK_APP_SECRET_KEY, appSecret.trim(), user.userId, 'Lark App Secret'),
-    setSetting(LARK_CHAT_ID_KEY, chatId.trim(), user.userId, 'Lark Chat ID (group to receive reports)'),
   ]);
 
   return NextResponse.json({ ok: true });

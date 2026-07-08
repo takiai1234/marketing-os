@@ -15,9 +15,9 @@ import { FacebookAppForm } from './facebook-app-form';
 import { ApifyForm } from './apify-form';
 import { AdsTokenForm } from './ads-token-form';
 import { GoogleAnalyticsForm } from './google-analytics-form';
-import { LarkWebhookForm } from './lark-form';
+import { LarkAppForm } from './lark-form';
 import { LarkBaseForm } from './lark-base-form';
-import { LARK_APP_ID_KEY, LARK_APP_SECRET_KEY, LARK_CHAT_ID_KEY } from '@/lib/lark/client';
+import { LARK_APP_ID_KEY, LARK_APP_SECRET_KEY } from '@/lib/lark/client';
 import { LARK_BASE_APP_TOKEN_KEY, LARK_BASE_TABLE_ID_KEY } from '@/lib/lark/base-client';
 
 export const metadata = {
@@ -47,7 +47,7 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
     );
   }
 
-  const [orMeta, kieMeta, fbIdMeta, fbSecretMeta, apifyTokenMeta, adsTokenMeta, googleIdMeta, googleSecretMeta, larkAppIdMeta, larkAppSecretMeta, larkChatIdMeta, larkBaseAppTokenMeta, larkBaseTableIdMeta] =
+  const [orMeta, kieMeta, fbIdMeta, fbSecretMeta, apifyTokenMeta, adsTokenMeta, googleIdMeta, googleSecretMeta, larkAppIdMeta, larkAppSecretMeta, larkBaseAppTokenMeta, larkBaseTableIdMeta] =
     await listSettingsMetadata([
       OPENROUTER_KEY_NAME,
       KIE_AI_KEY_NAME,
@@ -59,7 +59,6 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
       GOOGLE_CLIENT_SECRET_KEY,
       LARK_APP_ID_KEY,
       LARK_APP_SECRET_KEY,
-      LARK_CHAT_ID_KEY,
       LARK_BASE_APP_TOKEN_KEY,
       LARK_BASE_TABLE_ID_KEY,
     ]);
@@ -165,10 +164,9 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
         hasEnvFallback={Boolean(process.env.ADS_INGEST_TOKEN)}
       />
 
-      <LarkWebhookForm
+      <LarkAppForm
         initialAppIdIsSet={larkAppIdMeta?.isSet ?? false}
         initialAppSecretIsSet={larkAppSecretMeta?.isSet ?? false}
-        initialChatIdIsSet={larkChatIdMeta?.isSet ?? false}
         initialUpdatedAt={larkAppIdMeta?.updatedAt ?? null}
       />
 
