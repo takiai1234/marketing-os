@@ -1,5 +1,7 @@
 import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
+
+export const dynamic = 'force-dynamic';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { getSetting } from '@/lib/settings/api-keys';
 import { LARK_APP_ID_KEY, LARK_APP_SECRET_KEY } from '@/lib/lark/client';
