@@ -182,7 +182,7 @@ export async function getBundleSocialAccountByType(input: {
       query: { type: input.type, teamId: input.teamId },
     });
   } catch (err) {
-    if (err instanceof BundleError && err.httpStatus === 404) return null;
+    if (err instanceof BundleError && (err.httpStatus === 404 || err.httpStatus === 400)) return null;
     throw err;
   }
 }
