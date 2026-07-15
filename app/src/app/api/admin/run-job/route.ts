@@ -31,6 +31,7 @@ const bodySchema = z.object({
     'bundle_import_poller',
     'bundle_connect_poller',
     'ga4_sync',
+    'ads_ingestion',
   ]),
 });
 
