@@ -122,6 +122,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         await runGa4SyncJob();
         break;
       }
+      case 'ads_ingestion': {
+        const { runAdsIngestionJob } = await import('@/lib/cron/job-ads-ingestion');
+        report = await runAdsIngestionJob();
+        break;
+      }
     }
     return NextResponse.json({
       ok: true,

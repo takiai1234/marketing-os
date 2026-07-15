@@ -211,7 +211,7 @@ const OBJECTIVE_RESULT_TYPES: Record<string, string[]> = {
   traffic:        ['link_click', 'outbound_click'],
   leads:          ['lead', 'omni_complete_registration', 'complete_registration', 'onsite_conversion.lead_grouped', 'offsite_complete_registration_add_meta_leads', 'onsite_conversion.lead', 'onsite_web_lead', 'offsite_conversion.fb_pixel_complete_registration'],
   sales:          ['purchase', 'omni_purchase', 'offsite_conversion.fb_pixel_purchase', 'omni_app_install', 'offsite_complete_registration_add_meta_leads', 'omni_complete_registration', 'complete_registration', 'lead', 'onsite_conversion.lead', 'onsite_web_lead', 'offsite_conversion.fb_pixel_complete_registration'],
-  engagement:     ['post_engagement', 'page_engagement', 'like'],
+  engagement:     [], // engagement = tương tác, không phải conversion — trả 0
   video_views:    ['video_view', 'thruplay'],
   messages:       ['onsite_conversion.messaging_conversation_started_7d', 'onsite_conversion.messaging_first_reply'],
   app_promotion:  ['omni_app_install', 'mobile_app_install'],
