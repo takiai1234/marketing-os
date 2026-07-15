@@ -49,7 +49,7 @@ export function computeHealthWarnings(input: HealthCheckInput): HealthWarning[] 
   // Trigger nếu 30d spend > 500K đồng (~$20) mà 0 conv
   // Note: spendMicros / 1_000_000 ra đơn vị nguyên (VND đồng hoặc USD).
   const spendUnit = input.spendMicros / 1_000_000;
-  if (spendUnit > 500_000 && input.conversions === 0 && input.daysWithData >= 5) {
+  if (spendUnit > 500_000 && input.conversions === 0) {
     warnings.push({
       level: 'critical',
       code: 'no_conversion',
