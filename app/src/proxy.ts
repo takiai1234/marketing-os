@@ -26,7 +26,7 @@ const SESSION_TTL = 60 * 60 * 24 * 7;
 // thực (token HOẶC session admin) nên không mất bảo mật.
 export const config = {
   matcher: [
-    '/((?!api/auth|api/skills/upload|api/news/ingest-ads|api/news/ingest-web|api/admin/run-job|_next|favicon.ico|public|login).*)',
+    '/((?!api/auth|api/skills/upload|api/news/ingest-ads|api/news/ingest-web|api/admin/run-job|api/debug-conv|_next|favicon.ico|public|login).*)',
   ],
 };
 
