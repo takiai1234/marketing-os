@@ -11,25 +11,25 @@ export async function GET(req: Request) {
 
   const [camps, raw] = await Promise.all([
     db.query(`
-      SELECT c.name, c.objective, c.external_id,
+      SELECT c.name, c.objective,
         SUM(m.conversions) AS total_conv,
         ROUND(SUM(m.spend_micros)/1000000) AS spend_vnd,
         COUNT(DISTINCT m.date) AS days
-      FROM ad_campaigns c
-      JOIN ad_metrics m ON m.campaign_id = c.id
-      JOIN ad_accounts a ON a.id = c.ad_account_id
+      FROM ad_campaign c
+      JOIN ad_metric_daily m ON m.campaign_id = c.id
+      JOIN ad_account a ON a.id = c.ad_account_id
       WHERE a.external_id = $1
         AND m.date >= CURRENT_DATE - INTERVAL '30 days'
-      GROUP BY c.id, c.name, c.objective, c.external_id
+      GROUP BY c.id, c.name, c.objective
       ORDER BY spend_vnd DESC
     `, [accountId]),
     db.query(`
       SELECT c.name, m.date, m.conversions,
         ROUND(m.spend_micros/1000000) AS spend_vnd,
         m.extra_metrics->'actions' AS actions
-      FROM ad_metrics m
-      JOIN ad_campaigns c ON c.id = m.campaign_id
-      JOIN ad_accounts a ON a.id = c.ad_account_id
+      FROM ad_metric_daily m
+      JOIN ad_campaign c ON c.id = m.campaign_id
+      JOIN ad_account a ON a.id = c.ad_account_id
       WHERE a.external_id = $1
         AND m.date >= CURRENT_DATE - INTERVAL '7 days'
         AND m.spend_micros > 0
