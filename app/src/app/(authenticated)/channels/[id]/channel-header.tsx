@@ -17,6 +17,7 @@ import type { ChannelMember } from './channel-members-editor';
 import { KpiEditor } from './kpi-editor';
 import { UpdateTokenDialog } from './update-token-dialog';
 import { ManualMetricDialog } from './manual-metric-dialog';
+import { RevealTokenButton } from './reveal-token-button';
 import { StatusDot } from '../_components/status-dot';
 import { CopyIdButton } from '../_components/copy-id-button';
 import { PlatformIcon } from '../_components/platform-icon';
@@ -159,6 +160,14 @@ export function ChannelHeader({
             <span className="text-zinc-300 mx-1">·</span>
             <span className="font-sans">Sync: {syncedAgo}</span>
           </p>
+
+          {/* Row 2b: Token (admin + facebook only) */}
+          {isAdmin && platform === 'facebook' && !isManual && (
+            <div className="flex items-center gap-1 text-xs text-zinc-400">
+              <span className="font-sans">Token:</span>
+              <RevealTokenButton accountId={accountId} />
+            </div>
+          )}
 
           {/* Row 3: Người phụ trách — multi-member với 1 primary + N editor */}
           <div className="flex flex-wrap items-center gap-2 mt-1">

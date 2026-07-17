@@ -22,7 +22,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { getUserRole } from '@/lib/auth/get-role';
-import { encryptToken } from '@/lib/fb/token-encryption';
+import { encryptToken, decryptToken } from '@/lib/fb/token-encryption';
 
 export const runtime = 'nodejs';
 
@@ -226,4 +226,31 @@ export async function POST(
       scopes,
     },
   });
+}
+
+// GET /api/channels/[id]/token — admin-only, trả về plaintext token để copy
+export async function GET(
+  _req: NextRequest,
+  { params }: RouteContext
+): Promise<NextResponse> {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const role = await getUserRole(user.userId);
+  if (role !== 'admin') return NextResponse.json({ error: 'Admin only' }, { status: 403 });
+
+  const { id } = await params;
+  if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
+
+  const res = await db.query<{ access_token_encrypted: Buffer | null; platform: string }>(
+    `SELECT access_token_encrypted, platform FROM social_account WHERE id = $1`,
+    [id]
+  );
+  const row = res.rows[0];
+  if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!row.access_token_encrypted) return NextResponse.json({ token: null });
+  if (row.platform !== 'facebook') return NextResponse.json({ error: 'Chỉ hỗ trợ Facebook token' }, { status: 400 });
+
+  const plain = await decryptToken(row.access_token_encrypted);
+  return NextResponse.json({ token: plain });
 }
