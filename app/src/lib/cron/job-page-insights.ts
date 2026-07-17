@@ -16,6 +16,7 @@ import type { AccountMetricDailyRow } from '@/lib/cron/upsert-helpers';
 
 interface ActiveAccount {
   id: string;
+  name: string;
   external_id: string;
   access_token_encrypted: Buffer;
 }
@@ -28,7 +29,7 @@ function unixDaysAgo(n: number): number {
 /** Fetch all active accounts that have an encrypted token. */
 async function loadActiveAccounts(): Promise<ActiveAccount[]> {
   const result = await db.query<ActiveAccount>(
-    `SELECT id, external_id, access_token_encrypted
+    `SELECT id, name, external_id, access_token_encrypted
      FROM social_account
      WHERE status = 'active' AND access_token_encrypted IS NOT NULL`
   );
@@ -91,6 +92,20 @@ export async function runPageInsightsJob(): Promise<void> {
     try {
       const upserted = await callContext.run(calls, async () => {
         const token = await decryptToken(acc.access_token_encrypted);
+
+        // Cập nhật tên page nếu đã đổi tên trên FB
+        try {
+          const meRes = await fetch(
+            `https://graph.facebook.com/v25.0/me?fields=name&access_token=${encodeURIComponent(token)}`,
+            { signal: AbortSignal.timeout(10_000) }
+          );
+          const meJson = await meRes.json() as { name?: string };
+          if (meJson.name && meJson.name !== acc.name) {
+            await db.query(`UPDATE social_account SET name = $1 WHERE id = $2`, [meJson.name, acc.id]);
+            console.log(`[job-page-insights] Đổi tên: "${acc.name}" → "${meJson.name}"`);
+          }
+        } catch { /* không block sync */ }
+
         // 7-day window: self-healing if a cron run misses (network drop, FB 5xx)
         // + covers FB backdated value updates that may land days late.
         // Idempotent UPSERT on (account_id, date) makes re-write safe.
