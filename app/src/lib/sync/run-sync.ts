@@ -97,6 +97,21 @@ async function runManualSyncFacebook(account: SocialAccount, calls: CallEntry[])
     // chạy trước khi giờ hiện tại vượt qua mốc PT-midnight gần nhất.
     const untilTs = getTodayUntilUtcSec();
 
+    // Cập nhật tên page từ FB (phòng khi page đã đổi tên)
+    try {
+      const meRes = await fetch(
+        `https://graph.facebook.com/v25.0/me?fields=name&access_token=${encodeURIComponent(token)}`,
+        { signal: AbortSignal.timeout(10_000) }
+      );
+      const meJson = await meRes.json() as { name?: string };
+      if (meJson.name && meJson.name !== account.name) {
+        await db.query(`UPDATE social_account SET name = $1 WHERE id = $2`, [meJson.name, accountId]);
+        console.log(`[runManualSync] Đổi tên page: "${account.name}" → "${meJson.name}"`);
+      }
+    } catch {
+      // Không block sync nếu lấy tên thất bại
+    }
+
     // Sequential calls + random throttle — avoid concurrent FB calls from
     // the same token (rate-limit pressure) and avoid bot-like cadence.
     const rawPosts = await fetchPagePosts(
