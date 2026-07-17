@@ -206,15 +206,13 @@ export default async function AdAccountDetailPage({ params, searchParams }: Page
       {/* Trend chart */}
       <AdsTrendChart data={dailyMetrics} currency={account.currency} />
 
-      {/* Campaigns table — chỉ hiện Sales, tập trung vào Kết quả + CPL */}
+      {/* Campaigns table — tất cả campaigns, sort theo spend */}
       {(() => {
-        const salesCampaigns = campaigns.filter((c) => c.objective === 'sales');
-        // Campaigns ACTIVE có spend nhưng 0 conversion — cần chú ý nhất
-        const noConvCampaigns = salesCampaigns.filter(
+        const noConvCampaigns = campaigns.filter(
           (c) => c.status.toLowerCase() === 'active' && c.summary30d && c.summary30d.spendMicros > 0 && c.summary30d.conversions === 0
         );
         // Sort: 0-conv active lên đầu, còn lại sort theo spend desc
-        const sortedSalesCampaigns = [...salesCampaigns].sort((a, b) => {
+        const sortedCampaigns = [...campaigns].sort((a, b) => {
           const aNoConv = a.status.toLowerCase() === 'active' && a.summary30d && a.summary30d.spendMicros > 0 && a.summary30d.conversions === 0;
           const bNoConv = b.status.toLowerCase() === 'active' && b.summary30d && b.summary30d.spendMicros > 0 && b.summary30d.conversions === 0;
           if (aNoConv && !bNoConv) return -1;
@@ -228,7 +226,7 @@ export default async function AdAccountDetailPage({ params, searchParams }: Page
             <div className="px-4 py-3 border-b border-zinc-100 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-sm font-semibold text-zinc-900">
-                  Campaigns — Sales ({salesCampaigns.length})
+                  Campaigns ({campaigns.length})
                 </h3>
                 {noConvCampaigns.length > 0 && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 text-rose-700 ring-1 ring-rose-200">
@@ -236,11 +234,11 @@ export default async function AdAccountDetailPage({ params, searchParams }: Page
                   </span>
                 )}
               </div>
-              <span className="text-[11px] text-zinc-500">0-conv lên đầu · Sort theo Spend {range.days}d ↓</span>
+              <span className="text-[11px] text-zinc-500">0-conv lên đầu · sort theo Spend {range.days}d ↓</span>
             </div>
-            {salesCampaigns.length === 0 ? (
+            {campaigns.length === 0 ? (
               <p className="text-xs text-zinc-500 italic px-4 py-6 text-center">
-                Chưa có campaign Sales nào. Sync data từ FB Ads để pull campaign list.
+                Chưa có campaign nào. Sync data từ FB Ads để pull campaign list.
               </p>
             ) : (
               <div className="overflow-x-auto">
@@ -255,12 +253,12 @@ export default async function AdAccountDetailPage({ params, searchParams }: Page
                       <th className="text-right px-3 py-2 font-medium">Clicks</th>
                       <th className="text-right px-3 py-2 font-medium">CTR</th>
                       <th className="text-right px-3 py-2 font-medium">CPM</th>
-                      <th className="text-right px-3 py-2 font-medium">Kết quả</th>
-                      <th className="text-right px-3 py-2 font-medium">CPL</th>
+                      <th className="text-right px-3 py-2 font-medium">Conversions</th>
+                      <th className="text-right px-3 py-2 font-medium">CPA</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100">
-                    {sortedSalesCampaigns.map((c) => {
+                    {sortedCampaigns.map((c) => {
                       const s = c.summary30d;
                       const cpl = s && s.conversions > 0 ? s.spendMicros / s.conversions : null;
                       const ctr = s && s.impressions > 0 ? (s.clicks / s.impressions * 100) : null;

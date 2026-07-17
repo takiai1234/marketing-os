@@ -61,7 +61,7 @@ function formatLargeNumber(v: number): string {
 
 export function AdsTrendChart({ data, currency }: Props) {
   const [activeSeries, setActiveSeries] = useState<Set<SeriesKey>>(
-    new Set(['spend', 'impressions'] as SeriesKey[])
+    new Set(['spend', 'impressions', 'conversions'] as SeriesKey[])
   );
 
   // Reshape: spend in display amount (not micros) cho dễ đọc trên chart
