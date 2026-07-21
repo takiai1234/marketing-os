@@ -17,11 +17,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: false }, { status: 400 });
   }
 
-  // Xử lý bất đồng bộ — không await để trả 200 ngay cho Telegram
-  // (nếu Telegram không nhận 200 trong 2s sẽ retry → duplicate message)
-  handleTelegramUpdate(update).catch((err) =>
-    console.error('[telegram-webhook] unhandled error:', err)
-  );
+  // Await xử lý — Next.js nodejs runtime có thể terminate async work sau khi
+  // response trả về. Telegram cho 60s timeout nên await an toàn.
+  try {
+    await handleTelegramUpdate(update);
+  } catch (err) {
+    console.error('[telegram-webhook] unhandled error:', err);
+  }
 
   return NextResponse.json({ ok: true });
 }

@@ -44,22 +44,24 @@ async function sendMessage(chatId: number, text: string, replyToId?: number): Pr
 
 export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void> {
   const msg = update.message;
+  console.log('[telegram-bot] update received:', JSON.stringify({ chatId: msg?.chat?.id, text: msg?.text?.slice(0, 50) }));
+
   if (!msg?.text || msg.from?.is_bot) return;
 
-  // Lấy bot user id để check @mention
   const token = await getSettingOrEnv(TELEGRAM_BOT_TOKEN_KEY);
-  if (!token) return;
-
-  // Chỉ xử lý group chat đã cấu hình (TELEGRAM_REPORT_CHAT_ID)
-  const configuredChatId = await getSettingOrEnv(TELEGRAM_CHAT_ID_KEY);
-  if (configuredChatId && String(msg.chat.id) !== configuredChatId) return;
+  if (!token) {
+    console.warn('[telegram-bot] TELEGRAM_BOT_TOKEN chưa set');
+    return;
+  }
 
   // Xác định có phải tin nhắn gửi cho bot không:
   // 1. Có @mention bot trong text
   // 2. Reply vào tin nhắn của bot
-  const hasMention = msg.entities?.some((e) => e.type === 'mention') &&
+  const hasMention = (msg.entities?.some((e) => e.type === 'mention') ?? false) &&
     msg.text.toLowerCase().includes('@taki_marketing_os_bot');
   const isReplyToBot = msg.reply_to_message?.from?.is_bot === true;
+
+  console.log('[telegram-bot] hasMention:', hasMention, '| isReplyToBot:', isReplyToBot, '| text:', msg.text?.slice(0, 60));
 
   if (!hasMention && !isReplyToBot) return;
 
