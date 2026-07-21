@@ -28,7 +28,7 @@ interface TelegramMessage {
 async function sendMessage(chatId: number, text: string, replyToId?: number): Promise<void> {
   const token = await getSettingOrEnv(TELEGRAM_BOT_TOKEN_KEY);
   if (!token) return;
-  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -38,6 +38,12 @@ async function sendMessage(chatId: number, text: string, replyToId?: number): Pr
       ...(replyToId ? { reply_to_message_id: replyToId } : {}),
     }),
   });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    console.error('[telegram-bot] sendMessage failed:', JSON.stringify(body));
+  } else {
+    console.log('[telegram-bot] sendMessage OK to chatId:', chatId);
+  }
 }
 
 // ─── Main handler ─────────────────────────────────────────────────────────
