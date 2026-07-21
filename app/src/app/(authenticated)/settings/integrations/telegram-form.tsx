@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { CheckCircleIcon, AlertCircleIcon, Trash2Icon, Loader2Icon, SendIcon } from 'lucide-react';
+import { CheckCircleIcon, AlertCircleIcon, Trash2Icon, Loader2Icon, SendIcon, FileTextIcon } from 'lucide-react';
 
 interface Props {
   initialBotTokenIsSet: boolean;
@@ -32,7 +32,7 @@ export function TelegramForm({ initialBotTokenIsSet, initialChatIdIsSet, initial
   const [updatedAt, setUpdatedAt] = useState(initialUpdatedAt);
   const [botToken, setBotToken] = useState('');
   const [chatId, setChatId] = useState('');
-  const [busy, setBusy] = useState<null | 'save' | 'delete' | 'test'>(null);
+  const [busy, setBusy] = useState<null | 'save' | 'delete' | 'test' | 'send'>(null);
 
   async function onSave(e: FormEvent) {
     e.preventDefault();
@@ -64,6 +64,18 @@ export function TelegramForm({ initialBotTokenIsSet, initialChatIdIsSet, initial
       const data = await res.json().catch(() => ({})) as { error?: string };
       if (!res.ok) { toast.error(data.error ?? 'Gửi test thất bại'); return; }
       toast.success('Đã gửi tin nhắn test lên Telegram!');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function onSendReport() {
+    setBusy('send');
+    try {
+      const res = await fetch('/api/settings/telegram/send-report', { method: 'POST' });
+      const data = await res.json().catch(() => ({})) as { error?: string };
+      if (!res.ok) { toast.error(data.error ?? 'Gửi báo cáo thất bại'); return; }
+      toast.success('Đã gửi báo cáo lên Telegram!');
     } finally {
       setBusy(null);
     }
@@ -174,6 +186,20 @@ export function TelegramForm({ initialBotTokenIsSet, initialChatIdIsSet, initial
                   <SendIcon className="w-3 h-3 mr-1" />
                 )}
                 Gửi test
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={busy !== null}
+                onClick={onSendReport}
+              >
+                {busy === 'send' ? (
+                  <Loader2Icon className="w-3 h-3 mr-1 animate-spin" />
+                ) : (
+                  <FileTextIcon className="w-3 h-3 mr-1" />
+                )}
+                Gửi báo cáo ngay
               </Button>
               <Button
                 type="button"
