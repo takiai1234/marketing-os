@@ -81,25 +81,10 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
 
   if (!hasMention && !isReplyToBot && !isQuestion) return;
 
-  // Strip @mention khỏi câu hỏi
-  const question = msg.text
-    .replace(/@\w+/g, '')
-    .trim();
-
-  if (!question) {
-    await sendMessage(targetChatId, '❓ Bạn muốn hỏi gì? Ví dụ: <i>reach tuần này bao nhiêu?</i>', msg.message_id);
-    return;
-  }
-
-  // Typing indicator
-  await fetch(`https://api.telegram.org/bot${token}/sendChatAction`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: targetChatId, action: 'typing' }),
-  });
-
-  // Gửi ack ngay để xác nhận bot nhận được message
-  await sendMessage(targetChatId, '⏳ Đang tra cứu data...', msg.message_id);
+  console.log('[telegram-bot] sending hardcoded reply to chatId:', targetChatId);
+  await sendMessage(targetChatId, '✅ Bot nhận được tin nhắn!');
+  console.log('[telegram-bot] hardcoded reply done');
+  return;
 
   let intent: Intent;
   try {
