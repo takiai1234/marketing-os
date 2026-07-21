@@ -54,16 +54,17 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
     return;
   }
 
-  // Xác định có phải tin nhắn gửi cho bot không:
-  // 1. Có @mention bot trong text
-  // 2. Reply vào tin nhắn của bot
+  // DEBUG MODE: reply mọi tin nhắn trong group để xác nhận pipeline hoạt động
+  // Sẽ đổi lại check @mention sau khi confirm
   const hasMention = (msg.entities?.some((e) => e.type === 'mention') ?? false) &&
     msg.text.toLowerCase().includes('@taki_marketing_os_bot');
   const isReplyToBot = msg.reply_to_message?.from?.is_bot === true;
+  const isQuestion = msg.text.includes('?') || msg.text.toLowerCase().includes('reach') ||
+    msg.text.toLowerCase().includes('lead') || msg.text.toLowerCase().includes('ads');
 
   console.log('[telegram-bot] hasMention:', hasMention, '| isReplyToBot:', isReplyToBot, '| text:', msg.text?.slice(0, 60));
 
-  if (!hasMention && !isReplyToBot) return;
+  if (!hasMention && !isReplyToBot && !isQuestion) return;
 
   // Strip @mention khỏi câu hỏi
   const question = msg.text
