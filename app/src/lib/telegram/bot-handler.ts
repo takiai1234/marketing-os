@@ -82,12 +82,15 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
     body: JSON.stringify({ chat_id: msg.chat.id, action: 'typing' }),
   });
 
+  // Gửi ack ngay để xác nhận bot nhận được message
+  await sendMessage(msg.chat.id, '⏳ Đang tra cứu data...', msg.message_id);
+
   let intent: Intent;
   try {
     intent = await parseIntent(question);
   } catch (err) {
     console.error('[telegram-bot] parseIntent error:', err);
-    await sendMessage(msg.chat.id, '⚠️ Không hiểu câu hỏi. Thử hỏi lại kiểu: <i>"reach tuần này bao nhiêu?"</i>', msg.message_id);
+    await sendMessage(msg.chat.id, `⚠️ Lỗi phân tích câu hỏi: ${err instanceof Error ? err.message : String(err)}`, msg.message_id);
     return;
   }
 
