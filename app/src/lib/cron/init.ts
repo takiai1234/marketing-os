@@ -15,6 +15,7 @@ import { runAdsIngestionJob } from '@/lib/cron/job-ads-ingestion';
 import { runMessageSyncJob } from '@/lib/cron/job-message-sync';
 import { runApifyNewsJob } from '@/lib/cron/job-apify-news';
 import { runGa4SyncJob } from '@/lib/cron/job-ga4-sync';
+import { runTelegramReportJob } from '@/lib/cron/job-telegram-report';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -146,6 +147,19 @@ export function initCrons(): void {
     { timezone: 'Asia/Ho_Chi_Minh' }
   );
 
+  // Job M: Telegram morning report — daily 07:00 VN.
+  // Gửi báo cáo KPI hôm qua + 7 ngày qua + top kênh + ads lên Telegram group.
+  // Cần env: TELEGRAM_BOT_TOKEN, TELEGRAM_REPORT_CHAT_ID.
+  cron.schedule(
+    '0 7 * * *',
+    () => {
+      runTelegramReportJob().catch((err) =>
+        console.error('[cron] job-telegram-report uncaught error:', err)
+      );
+    },
+    { timezone: 'Asia/Ho_Chi_Minh' }
+  );
+
   // Job J: Page messaging (inbox) ingestion — every 2 hours (UTC).
   // Pull recent Messenger conversations per FB page → daily inbox metrics
   // (new conversations, response rate, response time, unanswered snapshot).
@@ -160,7 +174,7 @@ export function initCrons(): void {
 
   const now = new Date();
   console.log(
-    `[cron] 11 jobs scheduled at ${now.toISOString()} ` +
+    `[cron] 12 jobs scheduled at ${now.toISOString()} ` +
       `(container TZ offset=${-now.getTimezoneOffset() / 60}h, ` +
       `process.env.TZ=${process.env.TZ ?? 'unset'})`
   );
@@ -176,7 +190,7 @@ export function initCrons(): void {
       `[cron] WARNING: ladipage_sync will fail — missing env vars: ${missing.join(', ')}`
     );
   }
-  console.log('[cron] schedules (12 jobs):');
+  console.log('[cron] schedules (13 jobs):');
   console.log('  - page_insights:    0 2 * * *         (UTC)');
   console.log('  - posts_ingestion:  30 2,10,18 * * *  (UTC)');
   console.log('  - health_recompute: 0 3 * * *         (UTC)');
@@ -189,6 +203,7 @@ export function initCrons(): void {
   console.log('  - message_sync:     0 */2 * * *        (UTC, every 2h)');
   console.log('  - apify_news:       0 */6 * * *        (UTC, every 6h)');
   console.log('  - ga4_sync:         30 0 * * *         (Asia/Ho_Chi_Minh, daily 00:30 VN)');
+  console.log('  - telegram_report:  0 7 * * *          (Asia/Ho_Chi_Minh, daily 07:00 VN)');
 
   // Boot-time heartbeat: log every 60s for the first 5 minutes so an
   // operator looking at `docker logs` after deploy can confirm the Node

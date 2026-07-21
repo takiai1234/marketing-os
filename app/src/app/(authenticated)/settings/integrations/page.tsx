@@ -17,6 +17,8 @@ import { AdsTokenForm } from './ads-token-form';
 import { GoogleAnalyticsForm } from './google-analytics-form';
 import { LarkAppForm } from './lark-form';
 import { LarkBaseForm } from './lark-base-form';
+import { TelegramForm } from './telegram-form';
+import { TELEGRAM_BOT_TOKEN_KEY, TELEGRAM_CHAT_ID_KEY } from '@/app/api/settings/telegram/route';
 import { LARK_APP_ID_KEY, LARK_APP_SECRET_KEY } from '@/lib/lark/client';
 import {
   LARK_BASE_MARKETING_APP_TOKEN_KEY, LARK_BASE_MARKETING_TABLE_ID_KEY,
@@ -52,7 +54,8 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
 
   const [orMeta, kieMeta, fbIdMeta, fbSecretMeta, apifyTokenMeta, adsTokenMeta, googleIdMeta, googleSecretMeta,
          larkAppIdMeta, larkAppSecretMeta,
-         larkMktAppTokenMeta, larkMktTableIdMeta, larkOrderAppTokenMeta, larkOrderTableIdMeta] =
+         larkMktAppTokenMeta, larkMktTableIdMeta, larkOrderAppTokenMeta, larkOrderTableIdMeta,
+         telegramBotTokenMeta, telegramChatIdMeta] =
     await listSettingsMetadata([
       OPENROUTER_KEY_NAME,
       KIE_AI_KEY_NAME,
@@ -68,6 +71,8 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
       LARK_BASE_MARKETING_TABLE_ID_KEY,
       LARK_BASE_ORDER_APP_TOKEN_KEY,
       LARK_BASE_ORDER_TABLE_ID_KEY,
+      TELEGRAM_BOT_TOKEN_KEY,
+      TELEGRAM_CHAT_ID_KEY,
     ]);
   // Load plaintext Apify lists (not secret — hiển thị OK trong UI)
   const [googleConnected, twitterHandles, facebookPages, twitterActor, facebookActor] = await Promise.all([
@@ -181,6 +186,12 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
         marketing={{ isSet: (larkMktAppTokenMeta?.isSet ?? false) && (larkMktTableIdMeta?.isSet ?? false), updatedAt: larkMktAppTokenMeta?.updatedAt ?? null }}
         order={{ isSet: (larkOrderAppTokenMeta?.isSet ?? false) && (larkOrderTableIdMeta?.isSet ?? false), updatedAt: larkOrderAppTokenMeta?.updatedAt ?? null }}
         larkAppConfigured={(larkAppIdMeta?.isSet ?? false) && (larkAppSecretMeta?.isSet ?? false)}
+      />
+
+      <TelegramForm
+        initialBotTokenIsSet={telegramBotTokenMeta?.isSet ?? false}
+        initialChatIdIsSet={telegramChatIdMeta?.isSet ?? false}
+        initialUpdatedAt={telegramBotTokenMeta?.updatedAt ?? null}
       />
 
       <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 px-5 py-4 text-xs text-zinc-500 italic">
