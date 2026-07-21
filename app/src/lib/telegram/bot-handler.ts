@@ -54,6 +54,15 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
     return;
   }
 
+  // Dùng chat ID từ DB (đã verify qua "Gửi test") thay vì targetChatId
+  // để tránh sai lệch format giữa Telegram API vs số lưu trong DB
+  const configuredChatId = await getSettingOrEnv(TELEGRAM_CHAT_ID_KEY);
+  if (!configuredChatId) {
+    console.warn('[telegram-bot] TELEGRAM_REPORT_CHAT_ID chưa set');
+    return;
+  }
+  const targetChatId = Number(configuredChatId);
+
   // DEBUG MODE: reply mọi tin nhắn trong group để xác nhận pipeline hoạt động
   // Sẽ đổi lại check @mention sau khi confirm
   const hasMention = (msg.entities?.some((e) => e.type === 'mention') ?? false) &&
@@ -72,7 +81,7 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
     .trim();
 
   if (!question) {
-    await sendMessage(msg.chat.id, '❓ Bạn muốn hỏi gì? Ví dụ: <i>reach tuần này bao nhiêu?</i>', msg.message_id);
+    await sendMessage(targetChatId, '❓ Bạn muốn hỏi gì? Ví dụ: <i>reach tuần này bao nhiêu?</i>', msg.message_id);
     return;
   }
 
@@ -80,23 +89,23 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
   await fetch(`https://api.telegram.org/bot${token}/sendChatAction`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: msg.chat.id, action: 'typing' }),
+    body: JSON.stringify({ chat_id: targetChatId, action: 'typing' }),
   });
 
   // Gửi ack ngay để xác nhận bot nhận được message
-  await sendMessage(msg.chat.id, '⏳ Đang tra cứu data...', msg.message_id);
+  await sendMessage(targetChatId, '⏳ Đang tra cứu data...', msg.message_id);
 
   let intent: Intent;
   try {
     intent = await parseIntent(question);
   } catch (err) {
     console.error('[telegram-bot] parseIntent error:', err);
-    await sendMessage(msg.chat.id, `⚠️ Lỗi phân tích câu hỏi: ${err instanceof Error ? err.message : String(err)}`, msg.message_id);
+    await sendMessage(targetChatId, `⚠️ Lỗi phân tích câu hỏi: ${err instanceof Error ? err.message : String(err)}`, msg.message_id);
     return;
   }
 
   if (intent.type === 'unknown') {
-    await sendMessage(msg.chat.id, `🤔 Tôi chỉ trả lời được câu hỏi về data marketing (reach, leads, ads, kênh...). Thử hỏi: <i>"leads tháng 7 là bao nhiêu?"</i>`, msg.message_id);
+    await sendMessage(targetChatId, `🤔 Tôi chỉ trả lời được câu hỏi về data marketing (reach, leads, ads, kênh...). Thử hỏi: <i>"leads tháng 7 là bao nhiêu?"</i>`, msg.message_id);
     return;
   }
 
@@ -105,9 +114,9 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
     answer = await executeIntent(intent, question);
   } catch (err) {
     console.error('[telegram-bot] executeIntent error:', err);
-    await sendMessage(msg.chat.id, '⚠️ Lỗi khi truy vấn data. Thử lại sau nhé.', msg.message_id);
+    await sendMessage(targetChatId, '⚠️ Lỗi khi truy vấn data. Thử lại sau nhé.', msg.message_id);
     return;
   }
 
-  await sendMessage(msg.chat.id, answer, msg.message_id);
+  await sendMessage(targetChatId, answer, msg.message_id);
 }
