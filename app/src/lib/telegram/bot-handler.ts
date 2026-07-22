@@ -66,8 +66,9 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
     return;
   }
 
+  const botUsername = (process.env.TELEGRAM_BOT_USERNAME ?? 'taki_marketing_os_bot').replace(/^@/, '');
   const hasMention = (msg.entities?.some((e) => e.type === 'mention') ?? false) &&
-    msg.text.toLowerCase().includes('@taki_marketing_os_bot');
+    msg.text.toLowerCase().includes(`@${botUsername.toLowerCase()}`);
   const isReplyToBot = msg.reply_to_message?.from?.is_bot === true;
   const isQuestion = msg.text.includes('?') ||
     /\b(reach|lead|ads|spend|chi phí|followers|báo cáo|hôm qua|tuần|tháng|kênh|conversions)\b/i.test(msg.text);
