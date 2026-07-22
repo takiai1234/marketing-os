@@ -6,6 +6,7 @@
 // tuyệt đối. follower_growth tự tính = followers − followers lần nhập trước.
 
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth/get-session';
@@ -115,6 +116,9 @@ export async function POST(req: NextRequest, { params }: Ctx): Promise<NextRespo
       [id, date, f, r, e, l]
     );
     await db.query(`UPDATE social_account SET last_synced_at = NOW() WHERE id = $1`, [id]);
+    revalidatePath('/dashboard');
+    revalidatePath('/channels');
+    revalidatePath(`/channels/${id}`);
     return NextResponse.json({ ok: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Internal error';

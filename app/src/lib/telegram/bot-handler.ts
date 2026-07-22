@@ -84,30 +84,4 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
   console.log('[telegram-bot] sending hardcoded reply to chatId:', targetChatId);
   await sendMessage(targetChatId, '✅ Bot nhận được tin nhắn!');
   console.log('[telegram-bot] hardcoded reply done');
-  return;
-
-  let intent: Intent;
-  try {
-    intent = await parseIntent(question);
-  } catch (err) {
-    console.error('[telegram-bot] parseIntent error:', err);
-    await sendMessage(targetChatId, `⚠️ Lỗi phân tích câu hỏi: ${err instanceof Error ? err.message : String(err)}`, msg.message_id);
-    return;
-  }
-
-  if (intent.type === 'unknown') {
-    await sendMessage(targetChatId, `🤔 Tôi chỉ trả lời được câu hỏi về data marketing (reach, leads, ads, kênh...). Thử hỏi: <i>"leads tháng 7 là bao nhiêu?"</i>`, msg.message_id);
-    return;
-  }
-
-  let answer: string;
-  try {
-    answer = await executeIntent(intent, question);
-  } catch (err) {
-    console.error('[telegram-bot] executeIntent error:', err);
-    await sendMessage(targetChatId, '⚠️ Lỗi khi truy vấn data. Thử lại sau nhé.', msg.message_id);
-    return;
-  }
-
-  await sendMessage(targetChatId, answer, msg.message_id);
 }
