@@ -1,12 +1,11 @@
 // Telegram bot message handler — nhận update từ webhook, parse intent bằng LLM, query DB, trả lời group.
-// Bot chỉ phản hồi khi: được @mention, reply vào tin nhắn của bot, hoặc câu hỏi rõ về data marketing.
 
 import { getSettingOrEnv } from '@/lib/settings/api-keys';
 import { TELEGRAM_BOT_TOKEN_KEY, TELEGRAM_CHAT_ID_KEY } from '@/app/api/settings/telegram/route';
 import { parseIntent } from './intent-parser';
 import { executeIntent } from './query-executor';
 
-// ─── Telegram types (minimal) ────────────────────────────────────────────────
+// ─── Telegram types ───────────────────────────────────────────────────────────
 
 export interface TelegramUpdate {
   update_id: number;
@@ -22,7 +21,7 @@ interface TelegramMessage {
   entities?: { type: string; offset: number; length: number }[];
 }
 
-// ─── Send helper — nhận token trực tiếp để tránh gọi DB lần 2 ───────────────
+// ─── Send helper ──────────────────────────────────────────────────────────────
 
 async function sendMessage(token: string, chatId: number, text: string, replyToId?: number): Promise<void> {
   try {
@@ -40,7 +39,7 @@ async function sendMessage(token: string, chatId: number, text: string, replyToI
     if (!res.ok) {
       console.error('[telegram-bot] sendMessage failed:', res.status, JSON.stringify(body));
     } else {
-      console.log('[telegram-bot] sendMessage OK, chatId:', chatId);
+      console.log('[telegram-bot] sendMessage OK');
     }
   } catch (err) {
     console.error('[telegram-bot] sendMessage exception:', err instanceof Error ? err.message : String(err));
@@ -51,27 +50,21 @@ async function sendMessage(token: string, chatId: number, text: string, replyToI
 
 export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void> {
   const msg = update.message;
-  console.log('[telegram-bot] update received, chatId:', msg?.chat?.id, 'text:', msg?.text?.slice(0, 60));
-
   if (!msg?.text || msg.from?.is_bot) return;
 
-  // Lấy token sớm — dùng cho cả sendMessage sau này
+  console.log('[bot] chatId:', msg.chat.id, 'text:', msg.text.slice(0, 80));
+
   const token = await getSettingOrEnv(TELEGRAM_BOT_TOKEN_KEY);
-  if (!token) {
-    console.warn('[telegram-bot] TELEGRAM_BOT_TOKEN chưa set');
-    return;
-  }
+  if (!token) { console.warn('[bot] no token'); return; }
 
-  // Verify tin nhắn đến từ group đã cấu hình (bảo mật cơ bản)
+  // Chỉ handle group đã cấu hình
   const configuredChatId = await getSettingOrEnv(TELEGRAM_CHAT_ID_KEY);
-  if (!configuredChatId) {
-    console.warn('[telegram-bot] TELEGRAM_REPORT_CHAT_ID chưa set');
+  if (!configuredChatId) { console.warn('[bot] no chatId configured'); return; }
+
+  if (String(msg.chat.id) !== String(configuredChatId)) {
+    console.log('[bot] wrong chat, skip. got:', msg.chat.id, 'expected:', configuredChatId);
     return;
   }
-
-  // Dùng msg.chat.id để reply — đảm bảo đúng group, không qua DB lần nữa
-  const replyChatId = msg.chat.id;
-  console.log('[telegram-bot] replyChatId:', replyChatId, '| configuredChatId:', configuredChatId);
 
   const hasMention = (msg.entities?.some((e) => e.type === 'mention') ?? false) &&
     msg.text.toLowerCase().includes('@taki_marketing_os_bot');
@@ -79,39 +72,35 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
   const isQuestion = msg.text.includes('?') ||
     /\b(reach|lead|ads|spend|chi phí|followers|báo cáo|hôm qua|tuần|tháng|kênh|conversions)\b/i.test(msg.text);
 
-  console.log('[telegram-bot] hasMention:', hasMention, '| isReplyToBot:', isReplyToBot, '| isQuestion:', isQuestion);
+  console.log('[bot] hasMention:', hasMention, 'isReplyToBot:', isReplyToBot, 'isQuestion:', isQuestion);
 
-  if (!hasMention && !isReplyToBot && !isQuestion) {
-    console.log('[telegram-bot] no trigger — ignored');
-    return;
-  }
+  if (!hasMention && !isReplyToBot && !isQuestion) return;
 
-  // Strip @mention để lấy câu hỏi thuần
+  const chatId = msg.chat.id;
+  const msgId = msg.message_id;
+
+  // Reply ngay để user biết bot đã nhận — xác nhận pipeline hoạt động
+  await sendMessage(token, chatId, '⏳ Đang tra cứu data...', msgId);
+
   const question = msg.text.replace(/@\w+/g, '').trim();
-  console.log('[telegram-bot] question:', question);
-
-  // Typing indicator
-  fetch(`https://api.telegram.org/bot${token}/sendChatAction`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: replyChatId, action: 'typing' }),
-  }).catch(() => {});
+  console.log('[bot] question:', question);
 
   let intent;
   try {
     intent = await parseIntent(question);
-    console.log('[telegram-bot] intent:', JSON.stringify(intent));
+    console.log('[bot] intent:', intent.type, intent.metric, intent.datePreset);
   } catch (err) {
-    console.error('[telegram-bot] parseIntent error:', err instanceof Error ? err.message : String(err));
-    await sendMessage(token, replyChatId, '⚠️ Lỗi phân tích câu hỏi, thử lại sau.', msg.message_id);
+    const msg2 = err instanceof Error ? err.message : String(err);
+    console.error('[bot] parseIntent error:', msg2);
+    await sendMessage(token, chatId, `⚠️ Lỗi phân tích: ${msg2}`, msgId);
     return;
   }
 
   if (intent.type === 'unknown') {
     await sendMessage(
-      token, replyChatId,
-      '🤔 Tôi chỉ trả lời câu hỏi về data marketing (reach, leads, ads, kênh...).\n\nVí dụ: <i>"leads tháng 7 là bao nhiêu?"</i>',
-      msg.message_id,
+      token, chatId,
+      '🤔 Tôi chỉ trả lời câu hỏi về data marketing.\nVí dụ: <i>"leads tuần này bao nhiêu?"</i>',
+      msgId,
     );
     return;
   }
@@ -119,13 +108,14 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
   let answer: string;
   try {
     answer = await executeIntent(intent, question);
-    console.log('[telegram-bot] answer ready, length:', answer.length);
+    console.log('[bot] answer len:', answer.length);
   } catch (err) {
-    console.error('[telegram-bot] executeIntent error:', err instanceof Error ? err.message : String(err));
-    await sendMessage(token, replyChatId, '⚠️ Lỗi truy vấn data, thử lại sau.', msg.message_id);
+    const msg2 = err instanceof Error ? err.message : String(err);
+    console.error('[bot] executeIntent error:', msg2);
+    await sendMessage(token, chatId, `⚠️ Lỗi truy vấn: ${msg2}`, msgId);
     return;
   }
 
-  await sendMessage(token, replyChatId, answer, msg.message_id);
-  console.log('[telegram-bot] done');
+  await sendMessage(token, chatId, answer, msgId);
+  console.log('[bot] done');
 }
