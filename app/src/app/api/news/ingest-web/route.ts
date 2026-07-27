@@ -72,6 +72,8 @@ function mapWebClip(raw: unknown): MappedNewsArticle | null {
     authorHandle: domain,
     authorName: domain,
     authorAvatar: null,
+    likesCount: null,
+    sharesCount: null,
     rawPayload: it,
   };
 }

@@ -28,6 +28,32 @@ function formatRelativeDate(isoStr: string | null): string {
   }).format(d);
 }
 
+/** Rút gọn số: 1234 → "1.2k", 1_200_000 → "1.2M" */
+function fmtCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
+/** Hiển thị inline likes + shares nếu có giá trị. */
+function EngagementBadge({
+  likesCount,
+  sharesCount,
+}: {
+  likesCount: number | null;
+  sharesCount: number | null;
+}) {
+  const hasLikes = typeof likesCount === 'number' && likesCount > 0;
+  const hasShares = typeof sharesCount === 'number' && sharesCount > 0;
+  if (!hasLikes && !hasShares) return null;
+  return (
+    <span className="flex items-center gap-1.5 shrink-0 text-[10px] text-zinc-400">
+      {hasLikes && <span title="Likes">❤ {fmtCount(likesCount!)}</span>}
+      {hasShares && <span title="Shares">↻ {fmtCount(sharesCount!)}</span>}
+    </span>
+  );
+}
+
 const FALLBACK_GRADIENT = 'from-zinc-400 to-zinc-600';
 
 // Gradient + label cho social source mới (twitter:user, facebook:page).
@@ -131,11 +157,14 @@ export function NewsItemCard({ item }: NewsItemCardProps) {
         )}
 
         <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-500 mt-auto pt-2 border-t border-zinc-100">
-          {item.pubDate ? (
-            <time dateTime={item.pubDate}>{formatRelativeDate(item.pubDate)}</time>
-          ) : (
-            <span>Mới ingest</span>
-          )}
+          <div className="flex items-center gap-2 min-w-0">
+            {item.pubDate ? (
+              <time dateTime={item.pubDate}>{formatRelativeDate(item.pubDate)}</time>
+            ) : (
+              <span>Mới ingest</span>
+            )}
+            <EngagementBadge likesCount={item.likesCount} sharesCount={item.sharesCount} />
+          </div>
           <RewriteButton
             sourceType="news"
             sourceTitle={item.title}

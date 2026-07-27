@@ -11,7 +11,12 @@
 //   - 5 phút đủ để hấp thụ traffic spike, đủ tươi vì cron chạy 1h/lần
 
 import { unstable_cache } from 'next/cache';
-import { listNewsArticles, countNewsArticles, type StoredNewsItem } from './news-db';
+import {
+  listNewsArticles,
+  countNewsArticles,
+  type StoredNewsItem,
+  type NewsSortOrder,
+} from './news-db';
 
 const CACHE_TTL_SECONDS = 300; // 5 phút
 
@@ -25,21 +30,25 @@ export interface NewsPage {
 }
 
 /**
- * Lấy 1 trang tin tức, optional filter theo source id.
+ * Lấy 1 trang tin tức, optional filter theo source id và sort order.
  *
- * @param sourceId — undefined: all sources. 'venturebeat-ai'|'techcrunch-ai'|...
- * @param page — số trang (1-based). Offset = (page-1) * NEWS_PAGE_SIZE.
+ * @param sourceId  — undefined: all sources. 'venturebeat-ai'|'techcrunch-ai'|...
+ * @param page      — số trang (1-based). Offset = (page-1) * NEWS_PAGE_SIZE.
+ * @param sortOrder — 'newest' (default) | 'engagement' (nhiều likes+shares nhất)
  *
- * Cache key tự động bao gồm sourceId + page (closure capture) → mỗi (filter,
- * trang) có cache entry riêng, không nhiễm chéo.
+ * Cache key bao gồm sourceId + page + sortOrder → mỗi combo có entry riêng.
  */
 export const getAiNews = unstable_cache(
-  async (sourceId?: string, page: number = 1): Promise<NewsPage> => {
+  async (
+    sourceId?: string,
+    page: number = 1,
+    sortOrder: NewsSortOrder = 'newest'
+  ): Promise<NewsPage> => {
     const safePage = Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1;
     const offset = (safePage - 1) * NEWS_PAGE_SIZE;
     try {
       const [items, total] = await Promise.all([
-        listNewsArticles(sourceId, NEWS_PAGE_SIZE, offset),
+        listNewsArticles(sourceId, NEWS_PAGE_SIZE, offset, sortOrder),
         countNewsArticles(sourceId),
       ]);
       return { items, total, pageSize: NEWS_PAGE_SIZE };
@@ -49,6 +58,6 @@ export const getAiNews = unstable_cache(
       return { items: [], total: 0, pageSize: NEWS_PAGE_SIZE };
     }
   },
-  ['ai-news-list-v3'],
+  ['ai-news-list-v4'],
   { tags: ['news'], revalidate: CACHE_TTL_SECONDS }
 );

@@ -5,10 +5,12 @@
 
 import type { Metadata } from 'next';
 import type { StoredNewsItem } from '@/lib/news/news-db';
+import type { NewsSortOrder } from '@/lib/news/news-db';
 import { getAiNews } from '@/lib/news/fetch-news';
 import { VALID_SOURCE_IDS } from '@/lib/news/sources';
 import { NewsItemCard } from './news-item-card';
 import { NewsSourceTabs } from './news-source-tabs';
+import { NewsSortSelect } from './news-sort-select';
 import { NewsFetchNowButton } from './news-fetch-now-button';
 import { NewsPagination } from './news-pagination';
 
@@ -36,11 +38,18 @@ function parsePage(raw: string | string[] | undefined): number {
   return Number.isFinite(n) && n >= 1 ? n : 1;
 }
 
+/** Parse ?sort= → NewsSortOrder hợp lệ. Sai/thiếu → 'newest'. */
+function parseSortOrder(raw: string | string[] | undefined): NewsSortOrder {
+  if (raw === 'engagement') return 'engagement';
+  return 'newest';
+}
+
 export default async function NewsPage({ searchParams }: NewsPageProps) {
   const params = await searchParams;
   const sourceFilter = parseSourceFilter(params.source);
   const page = parsePage(params.page);
-  const { items, total, pageSize } = await getAiNews(sourceFilter, page);
+  const sortOrder = parseSortOrder(params.sort);
+  const { items, total, pageSize } = await getAiNews(sourceFilter, page, sortOrder);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
@@ -64,8 +73,9 @@ export default async function NewsPage({ searchParams }: NewsPageProps) {
         </div>
       </div>
 
-      {/* Source tabs */}
+      {/* Source tabs + sort */}
       <NewsSourceTabs />
+      <NewsSortSelect />
 
       {items.length === 0 ? (
         <EmptyState />

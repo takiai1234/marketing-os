@@ -30,6 +30,8 @@ export interface MappedNewsArticle {
   authorHandle: string | null;
   authorName: string | null;
   authorAvatar: string | null;
+  likesCount: number | null;   // likes/reactions (null = không có dữ liệu)
+  sharesCount: number | null;  // retweets/shares (null = không có dữ liệu)
   rawPayload: Record<string, unknown>;
 }
 
@@ -76,6 +78,19 @@ function parseDate(v: unknown): Date | null {
 function truncate(text: string, max: number): string {
   if (text.length <= max) return text;
   return text.slice(0, max - 1) + '…';
+}
+
+/** Lấy số nguyên ≥ 0 từ nhiều field name khác nhau. null = không tìm thấy. */
+function coalesceInt(item: Record<string, unknown>, keys: string[]): number | null {
+  for (const k of keys) {
+    const v = item[k];
+    if (typeof v === 'number' && Number.isFinite(v) && v >= 0) return Math.round(v);
+    if (typeof v === 'string') {
+      const n = Number.parseInt(v.replace(/,/g, ''), 10);
+      if (Number.isFinite(n) && n >= 0) return n;
+    }
+  }
+  return null;
 }
 
 // ─── Twitter mapper ─────────────────────────────────────────────────────
@@ -127,6 +142,16 @@ export function mapTwitterItem(
   const title = truncate(text.replace(/\s+/g, ' ').trim(), 120);
   const description = truncate(text, 500);
 
+  // Engagement: thử nhiều field name (apidojo, quacker, kaitoeasyapi, Twitter API v1)
+  const likesCount = coalesceInt(item, [
+    'likeCount', 'likes', 'favorite_count', 'favorites',
+    'favoriteCount', 'likesCount',
+  ]);
+  const sharesCount = coalesceInt(item, [
+    'retweetCount', 'retweet_count', 'retweets', 'reshareCount',
+    'retweetsCount', 'sharesCount',
+  ]);
+
   return {
     source: authorHandle ? `twitter:${authorHandle}` : 'twitter:unknown',
     sourceType: 'twitter',
@@ -138,6 +163,8 @@ export function mapTwitterItem(
     authorHandle,
     authorName,
     authorAvatar,
+    likesCount,
+    sharesCount,
     rawPayload: item,
   };
 }
@@ -192,6 +219,21 @@ export function mapFacebookItem(
   const title = truncate(text.replace(/\s+/g, ' ').trim(), 120);
   const description = truncate(text, 500);
 
+  // Facebook: reactions (likes + các emoji) hoặc likes riêng
+  const reactionsObj = item.reactions as Record<string, unknown> | undefined;
+  const reactionsTotal =
+    typeof reactionsObj?.total === 'number' ? Math.round(reactionsObj.total) : null;
+  const likesCount =
+    reactionsTotal ??
+    coalesceInt(item, ['likesCount', 'likes', 'reactionsCount', 'reactions']);
+
+  const sharesObj = item.shares as Record<string, unknown> | undefined;
+  const sharesFromObj =
+    typeof sharesObj?.count === 'number' ? Math.round(sharesObj.count) : null;
+  const sharesCount =
+    sharesFromObj ??
+    coalesceInt(item, ['sharesCount', 'shares', 'shareCount']);
+
   return {
     source: authorHandle ? `facebook:${authorHandle}` : 'facebook:unknown',
     sourceType: 'facebook',
@@ -203,6 +245,8 @@ export function mapFacebookItem(
     authorHandle,
     authorName,
     authorAvatar,
+    likesCount,
+    sharesCount,
     rawPayload: item,
   };
 }
@@ -299,6 +343,8 @@ export function mapFacebookAdItem(
     authorHandle: pageName,
     authorName: pageName,
     authorAvatar,
+    likesCount: null,   // Ads Library không cung cấp engagement
+    sharesCount: null,
     rawPayload: item,
   };
 }
