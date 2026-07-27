@@ -12,10 +12,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-const ROLE_LABELS: Record<string, string> = {
-  admin: 'Admin (toàn quyền)',
-  member: 'Member (chỉ kênh được gán)',
-};
 
 export function CreateMemberForm() {
   const router = useRouter();
@@ -123,15 +119,11 @@ export function CreateMemberForm() {
             disabled={submitting}
           >
             <SelectTrigger className="h-9 w-full">
-              <SelectValue>
-                {(v: unknown) =>
-                  typeof v === 'string' ? ROLE_LABELS[v] ?? v : 'Chọn vai trò'
-                }
-              </SelectValue>
+              <SelectValue placeholder="Chọn vai trò" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="member">{ROLE_LABELS.member}</SelectItem>
-              <SelectItem value="admin">{ROLE_LABELS.admin}</SelectItem>
+              <SelectItem value="member">Member — chỉ kênh được gán</SelectItem>
+              <SelectItem value="admin">Admin — toàn quyền</SelectItem>
             </SelectContent>
           </Select>
         </label>
