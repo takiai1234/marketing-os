@@ -43,13 +43,12 @@ function EngagementBadge({
   likesCount: number | null;
   sharesCount: number | null;
 }) {
-  const hasLikes = typeof likesCount === 'number' && likesCount > 0;
-  const hasShares = typeof sharesCount === 'number' && sharesCount > 0;
-  if (!hasLikes && !hasShares) return null;
+  // null = nguồn không có engagement data (RSS, web clips) → ẩn hoàn toàn
+  if (likesCount === null && sharesCount === null) return null;
   return (
     <span className="flex items-center gap-1.5 shrink-0 text-[10px] text-zinc-400">
-      {hasLikes && <span title="Likes">❤ {fmtCount(likesCount!)}</span>}
-      {hasShares && <span title="Shares">↻ {fmtCount(sharesCount!)}</span>}
+      <span title="Likes">❤ {fmtCount(likesCount ?? 0)}</span>
+      <span title="Shares">↻ {fmtCount(sharesCount ?? 0)}</span>
     </span>
   );
 }
