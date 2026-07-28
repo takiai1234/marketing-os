@@ -21,7 +21,7 @@ export const maxDuration = 60;
 
 interface Ctx { params: Promise<{ id: string }> }
 
-const MODEL = 'anthropic/claude-sonnet-4.6';
+const MODEL = 'cc/claude-sonnet-4-5-20250929';
 
 interface ProductCpl {
   name: string;

@@ -1,9 +1,8 @@
 'use client';
 
-// Form input cho OpenRouter API key — admin only.
+// Form input cho 9Router API key — admin only.
 // 3 actions: Lưu (PUT), Test (POST /test), Xoá (DELETE).
-// OpenRouter = unified gateway → 1 key access tới mọi model
-// (Claude, GPT, Gemini, Grok, open-source).
+// 9Router = local proxy dùng Claude Max + ChatGPT Pro subscription.
 
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
@@ -13,7 +12,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import {
-  KeyRoundIcon,
   CheckCircleIcon,
   AlertCircleIcon,
   Trash2Icon,
@@ -69,7 +67,7 @@ export function OpenRouterKeyForm({
   const sourceText = isSet
     ? `✓ Đã set trong DB (encrypted) ${updatedByName ? `bởi ${updatedByName}` : ''} ${formatRelativeTime(updatedAt)}`
     : hasEnvFallback
-      ? '⚙ Đang dùng env var OPENROUTER_API_KEY. Set qua UI để override.'
+      ? '⚙ Đang dùng env var NINE_ROUTER_API_KEY. Set qua UI để override.'
       : '✗ CHƯA SET — chưa có ở DB lẫn env. Feature Chat sẽ bị tắt.';
 
   async function onSave(e: FormEvent) {
@@ -91,7 +89,7 @@ export function OpenRouterKeyForm({
         toast.error(data.error ?? 'Lưu thất bại');
         return;
       }
-      toast.success('Đã lưu OpenRouter API key (encrypted)');
+      toast.success('Đã lưu 9Router API key (encrypted)');
       setApiKey('');
       setIsSet(true);
       setUpdatedAt(new Date().toISOString());
@@ -121,7 +119,7 @@ export function OpenRouterKeyForm({
   }
 
   async function onDelete() {
-    if (!confirm('Xoá OpenRouter API key đã lưu? Feature Chat sẽ tắt (trừ khi có env fallback).')) return;
+    if (!confirm('Xoá 9Router API key đã lưu? Feature Chat sẽ tắt (trừ khi có env fallback).')) return;
     setDeleting(true);
     try {
       const res = await fetch('/api/settings/integrations/openrouter', {
@@ -153,29 +151,15 @@ export function OpenRouterKeyForm({
         </div>
         <div className="min-w-0 flex-1">
           <h4 className="text-sm font-semibold text-zinc-900">
-            OpenRouter API (Unified LLM Gateway)
+            9Router API (Claude Max + ChatGPT Pro)
           </h4>
           <p className="text-xs text-zinc-500 mt-0.5">
-            1 API key cho mọi model — Claude, GPT, Gemini, Grok, Llama, ...
-            Bật feature "Chat với Skill". Lấy key tại{' '}
-            <a
-              href="https://openrouter.ai/keys"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline text-violet-600 hover:text-violet-800"
-            >
-              openrouter.ai/keys
-            </a>{' '}
-            (cần nạp credit:{' '}
-            <a
-              href="https://openrouter.ai/credits"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline text-violet-600 hover:text-violet-800"
-            >
-              openrouter.ai/credits
-            </a>
-            ).
+            Dùng subscription sẵn có thay vì trả thêm API cost. Bật feature &quot;Chat với Skill&quot;.
+            Copy API key từ{' '}
+            <span className="font-mono bg-zinc-100 px-1 rounded text-zinc-700">
+              9Router Dashboard → API Keys
+            </span>
+            {' '}sau khi kết nối Claude Max và ChatGPT Pro qua OAuth.
           </p>
 
           <div
@@ -201,7 +185,7 @@ export function OpenRouterKeyForm({
       <form onSubmit={onSave} className="flex flex-col gap-3">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="openrouter-key" className="text-sm">
-            {isSet ? 'Cập nhật API key mới' : 'Paste API key'}
+            {isSet ? 'Cập nhật API key mới' : 'Paste API key từ 9Router Dashboard'}
           </Label>
           <div className="flex gap-2">
             <div className="relative flex-1">
@@ -210,7 +194,7 @@ export function OpenRouterKeyForm({
                 type={showKey ? 'text' : 'password'}
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-or-v1-..."
+                placeholder="Paste key từ 9Router Dashboard..."
                 autoComplete="off"
                 disabled={saving}
                 className="pr-10 font-mono text-xs"
@@ -229,7 +213,6 @@ export function OpenRouterKeyForm({
             </Button>
           </div>
           <p className="text-[11px] text-zinc-500">
-            Bắt đầu <code className="bg-zinc-100 px-1 rounded">sk-or-v1-</code>.
             Encrypted bằng AES-256 (pgcrypto) trước khi lưu DB.
           </p>
         </div>
@@ -249,7 +232,7 @@ export function OpenRouterKeyForm({
                   Đang test...
                 </>
               ) : (
-                'Test key (cost ~$0.0001 — dùng Gemini Flash)'
+                'Test kết nối (Claude Haiku ping)'
               )}
             </Button>
             <Button
@@ -277,10 +260,10 @@ export function OpenRouterKeyForm({
           >
             {testResult.ok ? (
               <div>
-                <div className="font-semibold mb-1">✓ Key hoạt động OK</div>
+                <div className="font-semibold mb-1">✓ 9Router kết nối OK</div>
                 <div className="text-emerald-800 space-y-0.5">
                   <div>
-                    Model echo: <code className="bg-white px-1 rounded">{testResult.model}</code>
+                    Model: <code className="bg-white px-1 rounded">{testResult.model}</code>
                   </div>
                   {testResult.usage && (
                     <div>
@@ -300,30 +283,27 @@ export function OpenRouterKeyForm({
         )}
       </form>
 
-      {/* Quick model reference — flagship tier (June 2026) */}
+      {/* Model reference */}
       <details className="mt-3">
         <summary className="text-xs text-zinc-500 cursor-pointer hover:text-zinc-700">
-          Xem 8 flagship model available
+          Xem model available qua 9Router
         </summary>
         <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px]">
           {[
-            ['anthropic/claude-sonnet-4.6', 'Claude Sonnet 4.6 · $3/$15 · 1M ctx'],
-            ['anthropic/claude-opus-4.8', 'Claude Opus 4.8 · $5/$25 · 1M ctx'],
-            ['anthropic/claude-opus-4.8-fast', 'Claude Opus 4.8 fast · $10/$50'],
-            ['anthropic/claude-haiku-4.5', 'Claude Haiku 4.5 · $1/$5 · 200K ctx'],
-            ['openai/gpt-5.5', 'GPT-5.5 · $5/$30 · 1.05M ctx'],
-            ['openai/gpt-5.5-pro', 'GPT-5.5 Pro · $30/$180 (top reasoning)'],
-            ['google/gemini-3.5-flash', 'Gemini 3.5 Flash · $1.5/$9 · 1M ctx'],
-            ['x-ai/grok-4.20', 'Grok 4.20 · $1.25/$2.5 · 2M ctx (lớn nhất!)'],
+            ['cc/claude-sonnet-4-5-20250929', 'Claude Sonnet 4.5 · Claude Max · default'],
+            ['cc/claude-opus-4-5-20251101', 'Claude Opus 4.5 · Claude Max · task phức tạp'],
+            ['cc/claude-haiku-4-5-20251001', 'Claude Haiku 4.5 · Claude Max · nhanh nhất'],
+            ['cx/gpt-5.2-codex', 'GPT-5.2 Codex · ChatGPT Pro · coding mới nhất'],
+            ['cx/gpt-5.1-codex-max', 'GPT-5.1 Codex Max · ChatGPT Pro · context tối đa'],
+            ['cx/gpt-5.2', 'GPT-5.2 · ChatGPT Pro · task chung'],
           ].map(([id, label]) => (
             <div key={id} className="text-zinc-600 truncate" title={id}>
-              {label}
+              <code className="text-violet-700 mr-1">{id}</code>{label?.split(' · ').slice(1).join(' · ')}
             </div>
           ))}
         </div>
         <p className="text-[10px] text-zinc-400 mt-2 italic">
-          Đã bỏ low-tier (gpt-4o-mini, gemini-flash-lite, llama). Default: Claude
-          Sonnet — balance quality/cost cho hầu hết task.
+          Quota reset mỗi 5 giờ (Claude Max / ChatGPT Pro). Dashboard 9Router xem realtime usage.
         </p>
       </details>
     </section>

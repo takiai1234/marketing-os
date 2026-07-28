@@ -15,17 +15,12 @@ import {
 
 export const runtime = 'nodejs';
 
-// OpenRouter key format: sk-or-v1-... (64 char hex sau prefix)
 const bodySchema = z.object({
   apiKey: z
     .string()
     .trim()
-    .min(20, 'API key quá ngắn — kiểm tra lại')
-    .max(500, 'API key quá dài — kiểm tra lại')
-    .regex(
-      /^sk-or-/,
-      'API key phải bắt đầu "sk-or-" (OpenRouter). Bạn có paste nhầm key khác?'
-    ),
+    .min(10, 'API key quá ngắn — kiểm tra lại')
+    .max(500, 'API key quá dài — kiểm tra lại'),
 });
 
 export async function PUT(req: NextRequest): Promise<NextResponse> {
@@ -56,7 +51,7 @@ export async function PUT(req: NextRequest): Promise<NextResponse> {
     OPENROUTER_KEY_NAME,
     parsed.data.apiKey,
     user.userId,
-    'OpenRouter API key — unified gateway cho Claude/GPT/Gemini/Grok'
+    '9Router API key — proxy qua Claude Max + ChatGPT Pro subscription'
   );
 
   invalidateOpenRouterKeyCache();

@@ -46,7 +46,7 @@ Nếu câu hỏi không liên quan marketing data → type: "unknown".`;
 
 export async function parseIntent(question: string): Promise<Intent> {
   const result = await chatComplete({
-    model: 'anthropic/claude-haiku-4.5',
+    model: 'cc/claude-haiku-4-5-20251001',
     maxTokens: 256,
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },

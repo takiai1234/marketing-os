@@ -14,7 +14,7 @@ import { parseRangeFromSearchParams } from '@/lib/ads/date-ranges';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const MODEL = 'anthropic/claude-sonnet-4.6';
+const MODEL = 'cc/claude-sonnet-4-5-20250929';
 
 interface ProductCpl {
   name: string;

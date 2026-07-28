@@ -1,22 +1,23 @@
-// OpenRouter — unified API gateway cho LLMs (Claude / GPT / Gemini / Grok / OSS).
+// 9Router — local OpenAI-compatible proxy, routes qua Claude Max + ChatGPT Pro subscription.
 // OpenAI-compatible format → dùng `openai` SDK với baseURL override.
 //
-// 1 API key, nhiều model. User chọn model per session (Claude cho creative,
-// GPT cho structured, Gemini cho long context, etc.). Pricing ~same với
-// direct Anthropic, có markup nhỏ ~5%.
+// Không tốn API cost — dùng subscription sẵn có ($100/tháng Claude Max,
+// $200/tháng ChatGPT Pro). User chọn model per session.
+//
+// baseURL: đọc từ env NINE_ROUTER_URL (vd http://9router:20128). Default localhost.
 //
 // Server-only — KHÔNG import vào client component.
 //
-// MULTI-MODAL: OpenRouter chấp nhận OpenAI Chat Completions content blocks
-// dạng [{type:'text',text}, {type:'image_url',image_url:{url}}] — work cho
-// mọi vision model (Claude/GPT-4o/Gemini). String content vẫn backward-compat.
+// MULTI-MODAL: 9Router pass-through OpenAI Chat Completions content blocks
+// dạng [{type:'text',text}, {type:'image_url',image_url:{url}}].
+// String content vẫn backward-compat.
 
 import OpenAI from 'openai';
 import { getSettingOrEnv } from '@/lib/settings/api-keys';
 import { isValidModelId } from './openrouter-models';
 
-// Key trong app_setting table — admin paste qua UI ghi vào đây
-export const OPENROUTER_KEY_NAME = 'OPENROUTER_API_KEY';
+// Key trong app_setting table — admin copy từ 9Router dashboard rồi paste qua UI
+export const OPENROUTER_KEY_NAME = 'NINE_ROUTER_API_KEY';
 
 // Model list được CLIENT-SAFE — tách sang openrouter-models.ts (không
 // import pg/openai SDK). Re-export tại đây cho server caller dùng cùng nguồn.
@@ -48,23 +49,21 @@ async function loadKey(): Promise<string | null> {
 }
 
 /**
- * Returns OpenAI-compatible client cấu hình cho OpenRouter.
+ * Returns OpenAI-compatible client cấu hình cho 9Router.
  * Throws nếu key chưa có ở DB lẫn env.
  */
 export async function getOpenRouter(): Promise<OpenAI> {
   const key = await loadKey();
   if (!key) {
     throw new Error(
-      'OPENROUTER_API_KEY chưa được cấu hình. Admin vào /settings/integrations để set.'
+      'NINE_ROUTER_API_KEY chưa được cấu hình. Admin vào /settings/integrations để set.'
     );
   }
+  const baseURL =
+    (process.env.NINE_ROUTER_URL ?? 'http://localhost:20128').replace(/\/$/, '') + '/v1';
   return new OpenAI({
     apiKey: key,
-    baseURL: 'https://openrouter.ai/api/v1',
-    defaultHeaders: {
-      'HTTP-Referer': process.env.APP_URL ?? 'https://marketing-os.local',
-      'X-Title': 'Marketing OS',
-    },
+    baseURL,
   });
 }
 
@@ -173,12 +172,12 @@ export async function chatComplete(
 
     if (!content) {
       console.error(
-        `[openrouter] EMPTY-CONTENT model=${params.model} elapsed=${elapsedMs}ms ` +
+        `[9router] EMPTY-CONTENT model=${params.model} elapsed=${elapsedMs}ms ` +
           `tokens=${tokensIn}/${tokensOut} finish=${choice?.finish_reason ?? '?'}`
       );
     } else {
       console.log(
-        `[openrouter] OK model=${params.model} elapsed=${elapsedMs}ms tokens=${tokensIn}/${tokensOut}`
+        `[9router] OK model=${params.model} elapsed=${elapsedMs}ms tokens=${tokensIn}/${tokensOut}`
       );
     }
 
@@ -193,7 +192,7 @@ export async function chatComplete(
     const elapsedMs = Date.now() - reqStart;
     const msg = err instanceof Error ? err.message : String(err);
     console.error(
-      `[openrouter] FAIL model=${params.model} elapsed=${elapsedMs}ms err=${msg}`
+      `[9router] FAIL model=${params.model} elapsed=${elapsedMs}ms err=${msg}`
     );
     throw err;
   }
