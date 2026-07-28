@@ -60,6 +60,12 @@ const LENGTH_GUIDE: Record<RewriteLength, string> = {
   long: 'Dài — 500+ từ. Phân tích sâu, nhiều ví dụ.',
 };
 
+export interface SkillContext {
+  skillName: string;
+  mainContent: string;
+  supporting?: string;
+}
+
 export interface RewriteParams {
   sourceType: RewriteSourceType;
   /** Nội dung gốc — Library: post.content. News: title + "\n\n" + excerpt */
@@ -73,6 +79,8 @@ export interface RewriteParams {
   length: RewriteLength;
   /** Hướng dẫn riêng từ user — paste thêm thông tin, sản phẩm, ... */
   customInstructions: string;
+  /** Skill từ Thư viện Skill — inject content vào system prompt để guide rewrite */
+  skillContext?: SkillContext | null;
 }
 
 export interface BuiltPrompt {
@@ -106,6 +114,23 @@ export function buildRewritePrompt(params: RewriteParams): BuiltPrompt {
     LENGTH_GUIDE[params.length],
     ``
   );
+
+  if (params.skillContext) {
+    parts.push(
+      `## SKILL ÁP DỤNG — ${params.skillContext.skillName}`,
+      `Tham khảo và áp dụng phong cách, ngôn ngữ, framework theo skill sau khi viết lại bài. Ưu tiên style trong skill nhưng vẫn tuân theo TONE + ĐỊNH DẠNG XUẤT + ĐỘ DÀI ở trên.`,
+      ``,
+      params.skillContext.mainContent,
+      ``
+    );
+    if (params.skillContext.supporting?.trim()) {
+      parts.push(
+        `### Tài liệu tham chiếu trong skill`,
+        params.skillContext.supporting,
+        ``
+      );
+    }
+  }
 
   if (params.customInstructions.trim()) {
     parts.push(

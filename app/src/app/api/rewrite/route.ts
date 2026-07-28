@@ -39,7 +39,10 @@ import {
   type RewriteTone,
   type RewritePlatform,
   type RewriteLength,
+  type SkillContext,
 } from '@/lib/rewrite/build-prompt';
+import { getSkillById, getSkillStoragePath } from '@/lib/queries/skill-lib';
+import { loadSkillContent } from '@/lib/skill-lib/load-skill-content';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -65,6 +68,7 @@ const bodySchema = z.object({
   ]),
   length: z.enum(['short', 'medium', 'long']),
   customInstructions: z.string().max(5_000).default(''),
+  skillId: z.string().uuid().optional(),
 });
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -81,7 +85,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 async function handlePost(req: NextRequest): Promise<NextResponse> {
   if (!(await isOpenRouterConfigured())) {
     return NextResponse.json(
-      { error: 'OPENROUTER_API_KEY chưa cấu hình. Admin vào /settings/integrations để set.' },
+      { error: 'NINE_ROUTER_API_KEY chưa cấu hình. Admin vào /settings/integrations để set.' },
       { status: 503 }
     );
   }
@@ -103,6 +107,30 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     );
   }
 
+  // Load skill content nếu user chọn skill
+  let skillContext: SkillContext | null = null;
+  if (parsed.data.skillId) {
+    const [storage, skill] = await Promise.all([
+      getSkillStoragePath(parsed.data.skillId),
+      getSkillById(parsed.data.skillId),
+    ]);
+    if (storage && skill) {
+      try {
+        const content = loadSkillContent(storage.storage_path);
+        if (content.main) {
+          skillContext = {
+            skillName: skill.name,
+            mainContent: content.main,
+            supporting: content.supporting || undefined,
+          };
+        }
+      } catch (err) {
+        console.warn('[POST /rewrite] skill content load failed:', err);
+        // Không fail request — chỉ bỏ qua skill
+      }
+    }
+  }
+
   const { system, user: userMsg } = buildRewritePrompt({
     sourceType: parsed.data.sourceType as RewriteSourceType,
     sourceContent: parsed.data.sourceContent,
@@ -112,6 +140,7 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     platform: parsed.data.platform as RewritePlatform,
     length: parsed.data.length as RewriteLength,
     customInstructions: parsed.data.customInstructions,
+    skillContext,
   });
 
   try {

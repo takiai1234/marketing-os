@@ -6,7 +6,7 @@
 // length/model + optional custom instructions → POST /api/rewrite → hiển
 // thị kết quả với Copy + Regenerate buttons.
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -25,6 +25,7 @@ import {
   RefreshCwIcon,
   CheckIcon,
   Loader2Icon,
+  BrainCircuitIcon,
 } from 'lucide-react';
 import {
   TONE_OPTIONS,
@@ -84,6 +85,9 @@ export function RewriteDialog({
   const [result, setResult] = useState<string>('');
   const [copied, setCopied] = useState(false);
   const [usage, setUsage] = useState<{ tokensIn: number; tokensOut: number } | null>(null);
+  const [skillId, setSkillId] = useState<string | null>(null);
+  const [skills, setSkills] = useState<{ id: string; name: string }[] | null>(null);
+  const skillsFetched = useRef(false);
 
   // Reset form khi đóng dialog
   useEffect(() => {
@@ -91,6 +95,19 @@ export function RewriteDialog({
       setResult('');
       setUsage(null);
       setCopied(false);
+    }
+  }, [open]);
+
+  // Lazy-load skills khi dialog mở lần đầu
+  useEffect(() => {
+    if (open && !skillsFetched.current) {
+      skillsFetched.current = true;
+      fetch('/api/skills')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data: { items?: { id: string; name: string }[] } | null) => {
+          if (data?.items) setSkills(data.items);
+        })
+        .catch(() => {});
     }
   }, [open]);
 
@@ -113,6 +130,7 @@ export function RewriteDialog({
           platform,
           length,
           customInstructions,
+          ...(skillId ? { skillId } : {}),
         }),
       });
 
@@ -280,6 +298,38 @@ export function RewriteDialog({
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* Skill selector */}
+            <div className="flex flex-col gap-1.5 col-span-2">
+              <Label htmlFor="skill" className="text-xs flex items-center gap-1">
+                <BrainCircuitIcon className="size-3.5 text-violet-500" />
+                Skill (tùy chọn)
+              </Label>
+              <select
+                id="skill"
+                value={skillId ?? ''}
+                onChange={(e) => setSkillId(e.target.value || null)}
+                className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm"
+              >
+                <option value="">— Không dùng Skill —</option>
+                {skills === null ? (
+                  <option disabled>Đang tải...</option>
+                ) : skills.length === 0 ? (
+                  <option disabled>Chưa có skill nào</option>
+                ) : (
+                  skills.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))
+                )}
+              </select>
+              {skillId && (
+                <p className="text-[10px] text-violet-600">
+                  AI sẽ áp dụng phong cách + framework của skill này khi viết lại.
+                </p>
+              )}
             </div>
 
             {/* Custom instructions */}
