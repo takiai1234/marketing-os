@@ -102,7 +102,7 @@ export default async function SkillDetailPage({ params }: PageProps) {
                 buttonVariants({ variant: 'default' }),
                 'bg-blue-600 hover:bg-blue-700 text-white'
               )}
-              title="Mở chat với skill này qua OpenRouter (Claude/GPT/Gemini/...)"
+              title="Mở chat với skill này qua 9Router (Claude Max/ChatGPT Pro)"
             >
               <MessageSquareIcon className="size-4" />
               Chat với skill

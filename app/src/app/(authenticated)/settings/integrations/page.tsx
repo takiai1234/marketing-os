@@ -195,7 +195,7 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
       />
 
       <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 px-5 py-4 text-xs text-zinc-500 italic">
-        <strong>OpenRouter</strong> cho Chat LLM (Claude/GPT/Gemini/Grok/Llama) ·{' '}
+        <strong>9Router</strong> cho Chat LLM (Claude Max + ChatGPT Pro) ·{' '}
         <strong>kie.ai</strong> cho Tạo ảnh + Tạo video ·{' '}
         <strong>Apify</strong> cho pull Twitter/Facebook vào /news. Mỗi feature
         1 key riêng — fail provider này không ảnh hưởng provider kia.

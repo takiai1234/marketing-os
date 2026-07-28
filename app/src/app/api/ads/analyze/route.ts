@@ -165,7 +165,7 @@ Viết tiếng Việt. Số cụ thể. Không bịa.`;
     client = await getOpenRouter();
   } catch {
     return NextResponse.json(
-      { error: 'OpenRouter chưa cấu hình. Admin vào /settings/integrations để set API key.' },
+      { error: '9Router chưa cấu hình. Admin vào /settings/integrations để set API key.' },
       { status: 503 }
     );
   }

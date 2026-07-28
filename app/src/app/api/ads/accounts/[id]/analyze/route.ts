@@ -213,7 +213,7 @@ Viết bằng tiếng Việt. Dùng số liệu cụ thể. Không tô hồng. K
     client = await getOpenRouter();
   } catch {
     return NextResponse.json(
-      { error: 'OpenRouter chưa cấu hình. Admin vào /settings/integrations để set API key.' },
+      { error: '9Router chưa cấu hình. Admin vào /settings/integrations để set API key.' },
       { status: 503 }
     );
   }

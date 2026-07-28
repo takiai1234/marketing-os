@@ -138,7 +138,7 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
 async function handlePost(req: NextRequest, { params }: Ctx): Promise<NextResponse> {
   if (!(await isOpenRouterConfigured())) {
     return NextResponse.json(
-      { error: 'OPENROUTER_API_KEY chưa cấu hình. Admin vào /settings/integrations để set.' },
+      { error: 'NINE_ROUTER_API_KEY chưa cấu hình. Admin vào /settings/integrations để set.' },
       { status: 503 }
     );
   }

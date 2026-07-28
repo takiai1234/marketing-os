@@ -60,7 +60,7 @@ export default async function ProjectsPage() {
       {!llmReady && (
         <div className="rounded-xl bg-amber-50 ring-1 ring-amber-200 px-4 py-3 text-sm text-amber-900">
           <strong>Chú ý:</strong> Chat trong project cần{' '}
-          <code className="bg-white px-1 rounded">OPENROUTER_API_KEY</code>.
+          <code className="bg-white px-1 rounded">NINE_ROUTER_API_KEY</code>.
           Admin set tại{' '}
           <Link href="/settings/integrations" className="underline font-semibold">
             /settings/integrations

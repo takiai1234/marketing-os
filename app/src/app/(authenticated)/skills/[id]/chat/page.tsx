@@ -43,7 +43,7 @@ export default async function SkillChatPage({
             Feature Chat chưa được bật
           </h2>
           <p className="text-sm text-amber-800">
-            Admin cần set <code className="bg-white px-1 rounded">OPENROUTER_API_KEY</code>{' '}
+            Admin cần set <code className="bg-white px-1 rounded">NINE_ROUTER_API_KEY</code>{' '}
             tại{' '}
             <Link
               href="/settings/integrations"
@@ -51,15 +51,6 @@ export default async function SkillChatPage({
             >
               /settings/integrations
             </Link>
-            . Lấy key tại{' '}
-            <a
-              href="https://openrouter.ai/keys"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline font-semibold"
-            >
-              openrouter.ai/keys
-            </a>
             .
           </p>
         </div>

@@ -41,7 +41,7 @@ export default async function ProjectChatPage({ params, searchParams }: PageProp
             Feature Chat chưa được bật
           </h2>
           <p className="text-sm text-amber-800">
-            Admin cần set <code className="bg-white px-1 rounded">OPENROUTER_API_KEY</code>{' '}
+            Admin cần set <code className="bg-white px-1 rounded">NINE_ROUTER_API_KEY</code>{' '}
             tại{' '}
             <Link href="/settings/integrations" className="underline font-semibold">
               /settings/integrations
