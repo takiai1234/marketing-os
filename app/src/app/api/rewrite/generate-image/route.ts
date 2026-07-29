@@ -1,38 +1,31 @@
 // POST /api/rewrite/generate-image
 //
-// Tạo ảnh minh hoạ cho bài viết đã viết lại — dùng kie.ai (không cần skillId).
+// Tạo ảnh minh hoạ qua 9Router (gpt-image-2 / dall-e-3).
+// Đồng bộ — trả về URL ảnh ngay, không cần polling.
 //
-// Body: { model, prompt, input?: { aspect_ratio?, resolution? } }
-// Response: { assetId, assetType }
-// Frontend poll GET /api/generate/[assetId]/status để biết khi xong.
+// Body: { prompt, size? }
+// size: "1024x1024" | "1792x1024" | "1024x1792" (default 1024x1024)
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getCurrentUser } from '@/lib/auth/get-session';
-import {
-  isKieConfigured,
-  isValidKieModelId,
-  getModel,
-  createTask,
-} from '@/lib/llm/kie-ai';
-import { createAsset, setAssetTaskId, updateAssetStatus } from '@/lib/queries/generated-asset';
+import { getOpenRouter, isOpenRouterConfigured } from '@/lib/llm/openrouter';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 120;
+
+const VALID_SIZES = ['1024x1024', '1792x1024', '1024x1792'] as const;
+type ImageSize = (typeof VALID_SIZES)[number];
 
 const bodySchema = z.object({
-  model: z.string().refine(isValidKieModelId, 'Unknown image model'),
-  prompt: z.string().trim().min(3, 'Prompt quá ngắn').max(10_000, 'Prompt quá dài'),
-  input: z.object({
-    aspect_ratio: z.string().optional(),
-    resolution: z.string().optional(),
-  }).optional(),
+  prompt: z.string().trim().min(3, 'Prompt quá ngắn').max(4_000, 'Prompt quá dài'),
+  size: z.enum(VALID_SIZES).default('1024x1024'),
 });
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  if (!(await isKieConfigured())) {
+  if (!(await isOpenRouterConfigured())) {
     return NextResponse.json(
-      { error: 'KIE_AI_API_KEY chưa cấu hình. Admin vào /settings/integrations để set.' },
+      { error: 'NINE_ROUTER_API_KEY chưa cấu hình. Admin vào /settings/integrations để set.' },
       { status: 503 }
     );
   }
@@ -41,11 +34,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
-  }
+  try { body = await req.json(); }
+  catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
@@ -55,32 +45,30 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const model = getModel(parsed.data.model);
-  if (!model || model.type !== 'image') {
-    return NextResponse.json({ error: 'Chỉ hỗ trợ image model' }, { status: 400 });
-  }
-
-  const asset = await createAsset({
-    skillId: null,
-    userId: user.userId,
-    assetType: 'image',
-    model: model.id,
-    prompt: parsed.data.prompt,
-    inputParams: parsed.data.input ?? {},
-  });
-
-  const kieInput: Record<string, unknown> = {
-    prompt: parsed.data.prompt,
-    ...(parsed.data.input ?? {}),
-  };
-
   try {
-    const { taskId, raw } = await createTask({ model: model.id, input: kieInput });
-    await setAssetTaskId(asset.id, taskId, raw);
-    return NextResponse.json({ assetId: asset.id, assetType: 'image' });
+    const client = await getOpenRouter();
+    const response = await client.images.generate({
+      model: 'gpt-image-2',
+      prompt: parsed.data.prompt,
+      n: 1,
+      size: parsed.data.size as ImageSize,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    const imageData = response.data?.[0];
+    const url = imageData?.url ?? null;
+    const b64 = (imageData as Record<string, unknown>)?.b64_json as string | undefined;
+
+    if (!url && !b64) {
+      return NextResponse.json({ error: 'Không nhận được ảnh từ 9Router' }, { status: 502 });
+    }
+
+    return NextResponse.json({
+      url: url ?? `data:image/png;base64,${b64}`,
+    });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'kie.ai error';
-    await updateAssetStatus(asset.id, { status: 'failed', errorMessage: msg });
+    const msg = err instanceof Error ? err.message : '9Router image generation error';
+    console.error('[POST /rewrite/generate-image]', msg);
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 }
