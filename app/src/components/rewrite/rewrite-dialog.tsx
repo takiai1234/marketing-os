@@ -6,7 +6,7 @@
 // length/model + optional custom instructions → POST /api/rewrite → hiển
 // thị kết quả với Copy + Regenerate buttons.
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -26,7 +26,11 @@ import {
   CheckIcon,
   Loader2Icon,
   BrainCircuitIcon,
+  ImageIcon,
+  DownloadIcon,
+  ChevronDownIcon,
 } from 'lucide-react';
+import { IMAGE_MODELS_CLIENT } from '@/lib/llm/kie-ai-models';
 import {
   TONE_OPTIONS,
   PLATFORM_OPTIONS,
@@ -89,14 +93,79 @@ export function RewriteDialog({
   const [skills, setSkills] = useState<{ id: string; name: string }[] | null>(null);
   const skillsFetched = useRef(false);
 
+  // ── Image generation state ──────────────────────────────────────────────
+  const [imgExpanded, setImgExpanded] = useState(false);
+  const [imgModelId, setImgModelId] = useState(IMAGE_MODELS_CLIENT[0]?.id ?? '');
+  const [imgAspectRatio, setImgAspectRatio] = useState('1:1');
+  const [imgResolution, setImgResolution] = useState('');
+  const [imgPrompt, setImgPrompt] = useState('');
+  const [imgGenerating, setImgGenerating] = useState(false);
+  const [imgAssetId, setImgAssetId] = useState<string | null>(null);
+  const [imgStatus, setImgStatus] = useState<'pending' | 'running' | 'success' | 'failed' | null>(null);
+  const [imgResultUrl, setImgResultUrl] = useState<string | null>(null);
+  const [imgError, setImgError] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  }, []);
+
+  // Poll status khi có assetId
+  useEffect(() => {
+    if (!imgAssetId || imgStatus === 'success' || imgStatus === 'failed') {
+      stopPolling();
+      return;
+    }
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/generate/${imgAssetId}/status`);
+        if (!res.ok) return;
+        const data = await res.json() as { status: string; resultUrl?: string | null; errorMessage?: string | null };
+        if (data.status === 'success') {
+          setImgStatus('success');
+          setImgResultUrl(data.resultUrl ?? null);
+          setImgGenerating(false);
+          stopPolling();
+        } else if (data.status === 'failed') {
+          setImgStatus('failed');
+          setImgError(data.errorMessage ?? 'Tạo ảnh thất bại');
+          setImgGenerating(false);
+          stopPolling();
+        } else {
+          setImgStatus(data.status as 'pending' | 'running');
+        }
+      } catch {
+        // Retry on next tick
+      }
+    };
+    pollRef.current = setInterval(poll, 5_000);
+    poll();
+    return stopPolling;
+  }, [imgAssetId, imgStatus, stopPolling]);
+
+  // Đồng bộ aspect ratio / resolution khi đổi model ảnh
+  useEffect(() => {
+    const m = IMAGE_MODELS_CLIENT.find((m) => m.id === imgModelId);
+    setImgAspectRatio(m?.aspectRatios?.[0] ?? '1:1');
+    setImgResolution(m?.resolutions?.[0] ?? '');
+  }, [imgModelId]);
+
   // Reset form khi đóng dialog
   useEffect(() => {
     if (!open) {
       setResult('');
       setUsage(null);
       setCopied(false);
+      setImgExpanded(false);
+      setImgAssetId(null);
+      setImgStatus(null);
+      setImgResultUrl(null);
+      setImgError(null);
+      setImgGenerating(false);
+      setImgPrompt('');
+      stopPolling();
     }
-  }, [open]);
+  }, [open, stopPolling]);
 
   // Lazy-load skills khi dialog mở lần đầu
   useEffect(() => {
@@ -161,6 +230,40 @@ export function RewriteDialog({
       toast.error(`Lỗi kết nối: ${(err as Error).message}`);
     } finally {
       setGenerating(false);
+    }
+  }
+
+  async function onGenerateImage() {
+    if (!imgPrompt.trim()) { toast.error('Nhập prompt cho ảnh trước'); return; }
+    setImgGenerating(true);
+    setImgAssetId(null);
+    setImgStatus(null);
+    setImgResultUrl(null);
+    setImgError(null);
+    stopPolling();
+    try {
+      const model = IMAGE_MODELS_CLIENT.find((m) => m.id === imgModelId);
+      const input: Record<string, string> = {};
+      if (imgAspectRatio && imgAspectRatio !== 'auto') input.aspect_ratio = imgAspectRatio;
+      if (imgResolution && model?.resolutions?.length) input.resolution = imgResolution;
+
+      const res = await fetch('/api/rewrite/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: imgModelId, prompt: imgPrompt, input }),
+      });
+      if (!res.ok) {
+        const data = await res.json() as { error?: string };
+        toast.error(data.error ?? `HTTP ${res.status}`);
+        setImgGenerating(false);
+        return;
+      }
+      const data = await res.json() as { assetId: string };
+      setImgAssetId(data.assetId);
+      setImgStatus('pending');
+    } catch (err) {
+      toast.error(`Lỗi: ${(err as Error).message}`);
+      setImgGenerating(false);
     }
   }
 
@@ -351,10 +454,11 @@ export function RewriteDialog({
           </div>
           {/* /LEFT */}
 
-          {/* RIGHT: Result */}
+          {/* RIGHT: Result + Image gen */}
           {result && (
-            <div className="flex flex-col gap-2 min-w-0">
-              <div className="rounded-md border border-emerald-200 bg-emerald-50/40 px-4 py-4 space-y-3 flex-1">
+            <div className="flex flex-col gap-3 min-w-0">
+              {/* Text result */}
+              <div className="rounded-md border border-emerald-200 bg-emerald-50/40 px-4 py-4 space-y-3">
                 <div className="flex items-center justify-between gap-2 border-b border-emerald-200 pb-2">
                   <span className="text-xs uppercase tracking-wide font-semibold text-emerald-700 flex items-center gap-1">
                     <SparklesIcon className="size-3.5" />
@@ -369,6 +473,121 @@ export function RewriteDialog({
                 <p className="text-sm text-zinc-900 whitespace-pre-wrap leading-relaxed">
                   {result}
                 </p>
+              </div>
+
+              {/* Image generation section */}
+              <div className="rounded-md border border-zinc-200 bg-white overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!imgExpanded && !imgPrompt) {
+                      setImgPrompt(result.slice(0, 800));
+                    }
+                    setImgExpanded((v) => !v);
+                  }}
+                  className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <ImageIcon className="size-4 text-blue-500" />
+                    Tạo ảnh minh hoạ
+                  </span>
+                  <ChevronDownIcon className={cn('size-4 text-zinc-400 transition-transform', imgExpanded && 'rotate-180')} />
+                </button>
+
+                {imgExpanded && (
+                  <div className="border-t border-zinc-100 px-4 py-4 flex flex-col gap-3">
+                    {/* Model + aspect ratio */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex flex-col gap-1">
+                        <Label className="text-xs">Model ảnh</Label>
+                        <select
+                          value={imgModelId}
+                          onChange={(e) => setImgModelId(e.target.value)}
+                          className="rounded border border-zinc-300 bg-white px-2 py-1.5 text-xs"
+                        >
+                          {IMAGE_MODELS_CLIENT.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.label} ({m.estimatedCost})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <Label className="text-xs">Tỉ lệ khung</Label>
+                        <select
+                          value={imgAspectRatio}
+                          onChange={(e) => setImgAspectRatio(e.target.value)}
+                          className="rounded border border-zinc-300 bg-white px-2 py-1.5 text-xs"
+                        >
+                          {(IMAGE_MODELS_CLIENT.find((m) => m.id === imgModelId)?.aspectRatios ?? ['1:1']).map((r) => (
+                            <option key={r} value={r}>{r}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Prompt */}
+                    <div className="flex flex-col gap-1">
+                      <Label className="text-xs">Prompt ảnh</Label>
+                      <textarea
+                        value={imgPrompt}
+                        onChange={(e) => setImgPrompt(e.target.value)}
+                        rows={4}
+                        maxLength={2000}
+                        placeholder="Mô tả ảnh bạn muốn tạo — có thể chỉnh từ nội dung bên trên"
+                        className="rounded border border-zinc-300 bg-white px-3 py-2 text-xs resize-y focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      />
+                      <p className="text-[10px] text-zinc-400">{imgPrompt.length}/2000 ký tự</p>
+                    </div>
+
+                    {/* Generate button */}
+                    <Button
+                      size="sm"
+                      onClick={onGenerateImage}
+                      disabled={imgGenerating || !imgPrompt.trim()}
+                      className="self-start bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      {imgGenerating ? (
+                        <><Loader2Icon className="size-3.5 animate-spin" /> Đang tạo ảnh...</>
+                      ) : imgResultUrl ? (
+                        <><RefreshCwIcon className="size-3.5" /> Tạo lại</>
+                      ) : (
+                        <><ImageIcon className="size-3.5" /> Tạo ảnh</>
+                      )}
+                    </Button>
+
+                    {/* Result */}
+                    {imgGenerating && imgStatus !== 'success' && (
+                      <div className="flex items-center gap-2 text-xs text-zinc-500 py-2">
+                        <Loader2Icon className="size-4 animate-spin text-blue-500" />
+                        {imgStatus === 'running' ? 'Đang render ảnh...' : 'Đang xếp hàng...'}
+                      </div>
+                    )}
+                    {imgError && (
+                      <p className="text-xs text-rose-600 bg-rose-50 rounded px-3 py-2">{imgError}</p>
+                    )}
+                    {imgResultUrl && (
+                      <div className="flex flex-col gap-2">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={imgResultUrl}
+                          alt="Ảnh được tạo"
+                          className="rounded-md w-full object-contain max-h-64 border border-zinc-200"
+                        />
+                        <a
+                          href={imgResultUrl}
+                          download="generated-image.png"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:underline self-start"
+                        >
+                          <DownloadIcon className="size-3.5" />
+                          Tải ảnh về
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
