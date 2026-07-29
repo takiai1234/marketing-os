@@ -1,14 +1,15 @@
 import { db } from '@/lib/db';
 
 export interface InsertRewriteHistoryInput {
+  feature?: string;          // 'rewrite' | 'skill_chat' — default 'rewrite'
   userId: string;
   userName: string;
   model: string;
   sourceType: string;
   sourceContext?: string | null;
-  tone: string;
-  platform: string;
-  length: string;
+  tone?: string | null;      // null cho skill_chat
+  platform?: string | null;  // null cho skill_chat
+  length?: string | null;    // null cho skill_chat
   skillId?: string | null;
   skillName?: string | null;
   tokensIn: number;
@@ -19,19 +20,20 @@ export interface InsertRewriteHistoryInput {
 export async function insertRewriteHistory(input: InsertRewriteHistoryInput): Promise<void> {
   await db.query(
     `INSERT INTO rewrite_history
-       (user_id, user_name, model, source_type, source_context,
+       (feature, user_id, user_name, model, source_type, source_context,
         tone, platform, length, skill_id, skill_name,
         tokens_in, tokens_out, finish_reason)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
     [
+      input.feature ?? 'rewrite',
       input.userId,
       input.userName,
       input.model,
       input.sourceType,
       input.sourceContext ?? null,
-      input.tone,
-      input.platform,
-      input.length,
+      input.tone ?? null,
+      input.platform ?? null,
+      input.length ?? null,
       input.skillId ?? null,
       input.skillName ?? null,
       input.tokensIn,
@@ -43,14 +45,15 @@ export async function insertRewriteHistory(input: InsertRewriteHistoryInput): Pr
 
 export interface RewriteHistoryRow {
   id: string;
+  feature: string;
   userId: string | null;
   userName: string | null;
   model: string;
   sourceType: string;
   sourceContext: string | null;
-  tone: string;
-  platform: string;
-  length: string;
+  tone: string | null;
+  platform: string | null;
+  length: string | null;
   skillId: string | null;
   skillName: string | null;
   tokensIn: number;
@@ -86,14 +89,15 @@ export async function listRewriteHistory(opts: {
 
   const res = await db.query<{
     id: string;
+    feature: string;
     user_id: string | null;
     user_name: string | null;
     model: string;
     source_type: string;
     source_context: string | null;
-    tone: string;
-    platform: string;
-    length: string;
+    tone: string | null;
+    platform: string | null;
+    length: string | null;
     skill_id: string | null;
     skill_name: string | null;
     tokens_in: number;
@@ -101,7 +105,7 @@ export async function listRewriteHistory(opts: {
     finish_reason: string | null;
     created_at: Date;
   }>(
-    `SELECT id, user_id, user_name, model, source_type, source_context,
+    `SELECT id, feature, user_id, user_name, model, source_type, source_context,
             tone, platform, length, skill_id, skill_name,
             tokens_in, tokens_out, finish_reason, created_at
      FROM rewrite_history
@@ -115,6 +119,7 @@ export async function listRewriteHistory(opts: {
   const hasMore = rows.length > PAGE_SIZE;
   const items = (hasMore ? rows.slice(0, PAGE_SIZE) : rows).map((r) => ({
     id: r.id,
+    feature: r.feature ?? 'rewrite',
     userId: r.user_id,
     userName: r.user_name,
     model: r.model,

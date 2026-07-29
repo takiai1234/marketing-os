@@ -1,4 +1,4 @@
-// /rewrite-history — lịch sử sử dụng AI viết lại nội dung.
+// /rewrite-history — lịch sử dùng AI (viết lại nội dung + chat Skill Library).
 // Admin thấy toàn bộ team; member thường chỉ thấy của mình.
 
 import { redirect } from 'next/navigation';
@@ -7,7 +7,7 @@ import { getUserRole } from '@/lib/auth/get-role';
 import { listRewriteHistory } from '@/lib/queries/rewrite-history';
 
 export const metadata = {
-  title: 'Lịch sử Viết lại — Marketing OS',
+  title: 'Lịch sử dùng AI — Marketing OS',
 };
 
 const DATE_FMT = new Intl.DateTimeFormat('vi-VN', {
@@ -50,6 +50,16 @@ function modelBadgeClass(model: string): string {
   return 'bg-zinc-50 text-zinc-700 ring-zinc-200';
 }
 
+function featureLabel(feature: string): string {
+  if (feature === 'skill_chat') return 'Chat Skill';
+  return 'Viết lại';
+}
+
+function featureBadgeClass(feature: string): string {
+  if (feature === 'skill_chat') return 'bg-blue-50 text-blue-700 ring-blue-200';
+  return 'bg-orange-50 text-orange-700 ring-orange-200';
+}
+
 export default async function RewriteHistoryPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
@@ -68,11 +78,11 @@ export default async function RewriteHistoryPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-xl font-bold text-zinc-900">Lịch sử Viết lại</h2>
+          <h2 className="text-xl font-bold text-zinc-900">Lịch sử dùng AI</h2>
           <p className="text-sm text-zinc-500 mt-0.5">
             {isAdmin
-              ? 'Toàn bộ lịch sử sử dụng AI viết lại nội dung của team.'
-              : 'Lịch sử sử dụng AI viết lại nội dung của bạn.'}
+              ? 'Toàn bộ lịch sử sử dụng AI của team (viết lại nội dung + chat Skill).'
+              : 'Lịch sử sử dụng AI của bạn (viết lại nội dung + chat Skill).'}
           </p>
         </div>
 
@@ -95,7 +105,7 @@ export default async function RewriteHistoryPage() {
 
       {items.length === 0 ? (
         <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-zinc-50/30 px-6 py-12 text-center">
-          <p className="text-sm text-zinc-500">Chưa có lịch sử viết lại nào.</p>
+          <p className="text-sm text-zinc-500">Chưa có lịch sử dùng AI nào.</p>
         </div>
       ) : (
         <div className="rounded-xl border border-zinc-200 bg-white overflow-hidden">
@@ -109,19 +119,19 @@ export default async function RewriteHistoryPage() {
                     </th>
                   )}
                   <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide whitespace-nowrap">
+                    Tính năng
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide whitespace-nowrap">
                     Model
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide whitespace-nowrap">
-                    Nguồn
+                    Nguồn / Skill
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide whitespace-nowrap">
                     Định dạng
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide whitespace-nowrap">
                     Tone / Dài
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide whitespace-nowrap">
-                    Skill
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-500 uppercase tracking-wide whitespace-nowrap">
                     Tokens
@@ -140,26 +150,40 @@ export default async function RewriteHistoryPage() {
                       </td>
                     )}
                     <td className="px-4 py-3">
+                      <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ring-1 ${featureBadgeClass(row.feature)}`}>
+                        {featureLabel(row.feature)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
                       <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ring-1 ${modelBadgeClass(row.model)}`}>
                         {modelLabel(row.model)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-zinc-600 text-xs">
-                      <div>{row.sourceType === 'news' ? 'Tin tức' : 'Thư viện'}</div>
-                      {row.sourceContext && (
-                        <div className="text-zinc-400 truncate max-w-[140px]">{row.sourceContext}</div>
+                      {row.feature === 'skill_chat' ? (
+                        <div className="text-zinc-700 font-medium">{row.skillName ?? row.sourceContext ?? '—'}</div>
+                      ) : (
+                        <>
+                          <div>{row.sourceType === 'news' ? 'Tin tức' : 'Thư viện'}</div>
+                          {row.sourceContext && (
+                            <div className="text-zinc-400 truncate max-w-[140px]">{row.sourceContext}</div>
+                          )}
+                        </>
                       )}
                     </td>
                     <td className="px-4 py-3 text-zinc-700 text-xs whitespace-nowrap">
-                      {PLATFORM_LABEL[row.platform] ?? row.platform}
+                      {row.platform ? (PLATFORM_LABEL[row.platform] ?? row.platform) : <span className="text-zinc-300">—</span>}
                     </td>
                     <td className="px-4 py-3 text-zinc-600 text-xs whitespace-nowrap">
-                      {TONE_LABEL[row.tone] ?? row.tone}
-                      <span className="text-zinc-400 mx-1">·</span>
-                      {LENGTH_LABEL[row.length] ?? row.length}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-zinc-500">
-                      {row.skillName ?? <span className="text-zinc-300">—</span>}
+                      {row.tone || row.length ? (
+                        <>
+                          {TONE_LABEL[row.tone ?? ''] ?? row.tone ?? '—'}
+                          <span className="text-zinc-400 mx-1">·</span>
+                          {LENGTH_LABEL[row.length ?? ''] ?? row.length ?? '—'}
+                        </>
+                      ) : (
+                        <span className="text-zinc-300">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right text-xs text-zinc-500 tabular-nums whitespace-nowrap">
                       {row.tokensIn.toLocaleString('vi-VN')} in

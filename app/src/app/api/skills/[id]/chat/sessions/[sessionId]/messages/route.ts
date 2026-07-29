@@ -31,6 +31,7 @@ import {
 } from '@/lib/llm/openrouter';
 import { processAttachments } from '@/lib/chat-attachments/process';
 import type { MessageAttachment } from '@/lib/chat-attachments/storage';
+import { insertRewriteHistory } from '@/lib/queries/rewrite-history';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -243,6 +244,21 @@ async function handlePost(req: NextRequest, { params }: Ctx): Promise<NextRespon
     tokensOut,
     []
   );
+
+  // 7b. Ghi lịch sử dùng AI — fire-and-forget
+  insertRewriteHistory({
+    feature: 'skill_chat',
+    userId: user.userId,
+    userName: user.name,
+    model: session.model,
+    sourceType: 'skill_chat',
+    sourceContext: skill.name,
+    skillId,
+    skillName: skill.name,
+    tokensIn,
+    tokensOut,
+    finishReason,
+  }).catch((e) => console.warn('[POST /skills/chat/messages] history insert failed:', e));
 
   // 8. Auto-set session title
   if (

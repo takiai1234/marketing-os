@@ -39,7 +39,7 @@ const BASE_ITEMS = [
 const ADMIN_ITEMS = [
   { href: '/team', label: 'Quản lý team', icon: Users },
   { href: '/cron-logs', label: 'Lịch sử cron', icon: Activity },
-  { href: '/rewrite-history', label: 'Lịch sử Viết lại', icon: ScrollText },
+  { href: '/rewrite-history', label: 'Lịch sử dùng AI', icon: ScrollText },
 ];
 
 interface SidebarProps {
