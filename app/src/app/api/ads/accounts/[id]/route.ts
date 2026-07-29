@@ -4,6 +4,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getCurrentUser } from '@/lib/auth/get-session';
+import { getUserRole } from '@/lib/auth/get-role';
 import {
   activateAdAccount,
   disconnectAdAccount,
@@ -47,11 +48,14 @@ export async function PATCH(req: NextRequest, { params }: Ctx): Promise<NextResp
     );
   }
 
+  const role = await getUserRole(user.userId);
+  const isAdmin = role === 'admin';
+
   let ok = false;
   if (parsed.data.action === 'activate') {
-    ok = await activateAdAccount(id, user.userId);
+    ok = await activateAdAccount(id, user.userId, isAdmin);
   } else {
-    ok = await disconnectAdAccount(id, user.userId);
+    ok = await disconnectAdAccount(id, user.userId, isAdmin);
   }
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
@@ -68,7 +72,8 @@ export async function DELETE(_req: NextRequest, { params }: Ctx): Promise<NextRe
     return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
   }
 
-  const ok = await deleteAdAccount(id, user.userId);
+  const role = await getUserRole(user.userId);
+  const ok = await deleteAdAccount(id, user.userId, role === 'admin');
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json({ ok: true });
 }

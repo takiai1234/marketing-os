@@ -148,25 +148,49 @@ export async function upsertAdAccount(input: UpsertAdAccountInput): Promise<AdAc
   return mapAdAccount(row);
 }
 
-/** Activate — user click "Kết nối" trong UI sau khi see list pending */
-export async function activateAdAccount(id: string, userId: string): Promise<boolean> {
-  const res = await db.query(
-    `UPDATE ad_account
-        SET status = 'active', connected_at = NOW(), updated_at = NOW(),
-            disconnected_at = NULL, last_error = NULL
-      WHERE id = $1 AND owner_id = $2`,
-    [id, userId]
-  );
+/** Activate — user click "Kết nối" trong UI sau khi see list pending.
+ *  Admin có thể activate bất kỳ account nào (adminBypass = true). */
+export async function activateAdAccount(
+  id: string,
+  userId: string,
+  adminBypass = false
+): Promise<boolean> {
+  const res = adminBypass
+    ? await db.query(
+        `UPDATE ad_account
+            SET status = 'active', connected_at = NOW(), updated_at = NOW(),
+                disconnected_at = NULL, last_error = NULL
+          WHERE id = $1`,
+        [id]
+      )
+    : await db.query(
+        `UPDATE ad_account
+            SET status = 'active', connected_at = NOW(), updated_at = NOW(),
+                disconnected_at = NULL, last_error = NULL
+          WHERE id = $1 AND owner_id = $2`,
+        [id, userId]
+      );
   return (res.rowCount ?? 0) > 0;
 }
 
-export async function disconnectAdAccount(id: string, userId: string): Promise<boolean> {
-  const res = await db.query(
-    `UPDATE ad_account
-        SET status = 'disconnected', disconnected_at = NOW(), updated_at = NOW()
-      WHERE id = $1 AND owner_id = $2`,
-    [id, userId]
-  );
+export async function disconnectAdAccount(
+  id: string,
+  userId: string,
+  adminBypass = false
+): Promise<boolean> {
+  const res = adminBypass
+    ? await db.query(
+        `UPDATE ad_account
+            SET status = 'disconnected', disconnected_at = NOW(), updated_at = NOW()
+          WHERE id = $1`,
+        [id]
+      )
+    : await db.query(
+        `UPDATE ad_account
+            SET status = 'disconnected', disconnected_at = NOW(), updated_at = NOW()
+          WHERE id = $1 AND owner_id = $2`,
+        [id, userId]
+      );
   return (res.rowCount ?? 0) > 0;
 }
 
@@ -218,11 +242,14 @@ export async function markAdAccountSynced(id: string): Promise<void> {
   );
 }
 
-export async function deleteAdAccount(id: string, userId: string): Promise<boolean> {
-  const res = await db.query(
-    `DELETE FROM ad_account WHERE id = $1 AND owner_id = $2`,
-    [id, userId]
-  );
+export async function deleteAdAccount(
+  id: string,
+  userId: string,
+  adminBypass = false
+): Promise<boolean> {
+  const res = adminBypass
+    ? await db.query(`DELETE FROM ad_account WHERE id = $1`, [id])
+    : await db.query(`DELETE FROM ad_account WHERE id = $1 AND owner_id = $2`, [id, userId]);
   return (res.rowCount ?? 0) > 0;
 }
 
