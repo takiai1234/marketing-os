@@ -78,6 +78,7 @@ function requireEnv(name: string): string {
 const OAUTH_SCOPES = [
   'pages_show_list',
   'pages_read_engagement',
+  'pages_read_user_content',
   'ads_read',
 ].join(',');
 

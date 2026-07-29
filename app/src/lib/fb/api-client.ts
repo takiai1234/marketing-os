@@ -73,19 +73,17 @@ const POSTS_FIELDS_FULL = [
   'comments.summary(true){id,message,created_time,from}',
   'shares',
   'reactions.summary(true)',
-  // Insights metric — mix deprecated (giữ tương thích) + modern (FB v23+):
-  //   post_media_view              (deprecated, fallback)  → impressions
-  //   post_total_media_view_unique (deprecated, fallback)  → reach
-  //   post_clicks_by_type          (deprecated, fallback)  → clicks
-  //   post_reactions_by_type_total (deprecated, fallback)  → reactions
-  //   post_clicks                  (modern, primary)       → clicks
-  //   post_impressions_unique      (modern, primary)       → reach
-  //   post_video_views             (modern, primary)       → video_views
-  // Parser prefers modern names when available, falls back to deprecated.
-  // Adding modern alongside deprecated (vs replacing) so existing DB rows
-  // populated from deprecated metric names don't suddenly drop to 0 during
-  // the transition window.
-  'insights.metric(post_media_view,post_total_media_view_unique,post_clicks_by_type,post_reactions_by_type_total,post_clicks,post_impressions_unique,post_video_views)',
+  // Insights metric — modern only (FB Graph API v25+).
+  // Deprecated metrics (post_media_view, post_total_media_view_unique,
+  // post_clicks_by_type, post_reactions_by_type_total) đã bị FB xóa khỏi
+  // v25 → gây error #100 → toàn bộ insights request fail → fallback
+  // xuống MINIMAL tier → tất cả metrics = 0. Chỉ dùng modern:
+  //   post_clicks          → clicks
+  //   post_impressions_unique → reach (unique viewers)
+  //   post_video_views     → video_views
+  // reactions + comments lấy từ reactions.summary(true) và comments.summary(true)
+  // ở trên (cần pages_read_user_content scope).
+  'insights.metric(post_clicks,post_impressions_unique,post_video_views)',
 ].join(',');
 
 /** Mid-tier: keeps insights + shares, drops user-content (comments/reactions).
@@ -99,8 +97,8 @@ const POSTS_FIELDS_NO_USER_CONTENT = [
   'full_picture',
   'attachments{media_type,type,title,description,media,subattachments}',
   'shares',
-  // Same metric set as FULL — comments/reactions dropped, insights kept.
-  'insights.metric(post_media_view,post_total_media_view_unique,post_clicks_by_type,post_reactions_by_type_total,post_clicks,post_impressions_unique,post_video_views)',
+  // Modern metrics only — same rationale as FULL tier above.
+  'insights.metric(post_clicks,post_impressions_unique,post_video_views)',
 ].join(',');
 
 /** Bottom tier: drops insights too. Used when even NO_USER_CONTENT

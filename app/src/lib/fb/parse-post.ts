@@ -114,52 +114,34 @@ export function parsePost(
   post: FBPagePost,
   fallbackInsights: Record<string, number> = {}
 ): ParsedPost {
-  // impressions: total media views (post_media_view). Cho text post FB v25
-  // không có total metric → giữ 0.
-  const impressions =
-    sumInsightValue(getInsight(post.insights, 'post_media_view')) ||
-    fallbackInsights['post_media_view'] ||
-    0;
+  // impressions: FB v25 không còn total media view insight (post_media_view bị
+  // deprecated và xóa). Giữ 0 — UI sẽ dùng reach thay thế.
+  const impressions = 0;
 
-  // reach: TỔNG VIEW (industry meaning), KHÔNG phải unique users.
-  // Priority:
-  //   1. post_media_view (total media views) ← preferred cho media post
-  //   2. post_impressions_unique (unique viewers) ← fallback cho text post
-  //   3. post_total_media_view_unique (deprecated unique) ← legacy fallback
-  // UI check `impressions === 0 && reach > 0` → show "(unique)" badge.
+  // reach: post_impressions_unique (unique viewers) — modern metric duy nhất
+  // còn hoạt động trong FB Graph API v25+. Deprecated post_media_view /
+  // post_total_media_view_unique bị xóa → gây #100 → không request nữa.
+  // UI badge "(unique)" hiện khi impressions === 0 && reach > 0.
   const reach =
-    sumInsightValue(getInsight(post.insights, 'post_media_view')) ||
-    fallbackInsights['post_media_view'] ||
     sumInsightValue(getInsight(post.insights, 'post_impressions_unique')) ||
-    sumInsightValue(getInsight(post.insights, 'post_total_media_view_unique')) ||
     fallbackInsights['post_impressions_unique'] ||
-    fallbackInsights['post_total_media_view_unique'] ||
     0;
 
-  // clicks: ưu tiên modern `post_clicks` (scalar), fallback deprecated
-  // `post_clicks_by_type` (object summed). Modern trả 1 số duy nhất (tổng
-  // click), deprecated breakdown by type (other/photo/video).
+  // clicks: post_clicks (modern scalar).
   const clicks =
     sumInsightValue(getInsight(post.insights, 'post_clicks')) ||
-    sumInsightValue(getInsight(post.insights, 'post_clicks_by_type')) ||
     fallbackInsights['post_clicks'] ||
-    fallbackInsights['post_clicks_by_type'] ||
     0;
 
-  // video_views: modern `post_video_views` (scalar). Trước đây hardcode 0
-  // vì không request — giờ request rồi, parse được.
+  // video_views: post_video_views (modern scalar).
   const video_views =
     sumInsightValue(getInsight(post.insights, 'post_video_views')) ||
     fallbackInsights['post_video_views'] ||
     0;
 
-  const reactionsFromInsight =
-    sumInsightValue(getInsight(post.insights, 'post_reactions_by_type_total')) ||
-    fallbackInsights['post_reactions_by_type_total'] ||
-    0;
-  // reactions.summary is current count — used when insights aggregate is 0/null
-  const reactions =
-    reactionsFromInsight || post.reactions?.summary?.total_count || 0;
+  // reactions: deprecated post_reactions_by_type_total không còn request.
+  // Lấy từ reactions.summary.total_count (cần pages_read_user_content scope).
+  const reactions = post.reactions?.summary?.total_count || 0;
 
   return {
     external_id: post.id,
