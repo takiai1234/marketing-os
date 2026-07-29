@@ -11,7 +11,6 @@ import { readZipTree, SkillFileMissingError } from '@/lib/skill-lib/zip-reader';
 import type { ZipEntryNode } from '@/lib/skill-lib/zip-reader';
 import { AlertTriangle } from 'lucide-react';
 import { resolveSkillPath } from '@/lib/skill-lib/storage';
-import { isKieConfigured } from '@/lib/llm/kie-ai';
 import { isOpenRouterConfigured } from '@/lib/llm/openrouter';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -32,12 +31,11 @@ export default async function SkillDetailPage({ params }: PageProps) {
   if (!user) redirect('/login');
 
   const { id } = await params;
-  const [skill, storage, role, llmReady, kieReady] = await Promise.all([
+  const [skill, storage, role, llmReady] = await Promise.all([
     getSkillById(id),
     getSkillStoragePath(id),
     getUserRole(user.userId),
-    isOpenRouterConfigured(), // Chat
-    isKieConfigured(),         // Media
+    isOpenRouterConfigured(),
   ]);
 
   if (!skill || !storage) notFound();
@@ -109,18 +107,18 @@ export default async function SkillDetailPage({ params }: PageProps) {
             </Link>
           )}
 
-          {/* Generate media button — chỉ hiện nếu kie.ai configured */}
-          {kieReady && (
+          {/* Generate image button — dùng 9Router (GPT Image 2) */}
+          {llmReady && (
             <Link
               href={`/skills/${skill.id}/generate`}
               className={cn(
                 buttonVariants({ variant: 'default' }),
                 'bg-pink-600 hover:bg-pink-700 text-white'
               )}
-              title="Tạo ảnh hoặc video qua kie.ai (GPT Image 2 / Grok Imagine / Flux / Veo)"
+              title="Tạo ảnh qua 9Router (GPT Image 2)"
             >
               <SparklesIcon className="size-4" />
-              Tạo media
+              Tạo ảnh
             </Link>
           )}
           <a href={`/api/skills/${skill.id}/download`} download>

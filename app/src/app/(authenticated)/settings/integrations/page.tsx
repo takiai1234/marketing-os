@@ -6,11 +6,9 @@ import { getCurrentUser } from '@/lib/auth/get-session';
 import { getUserRole } from '@/lib/auth/get-role';
 import { listSettingsMetadata, getSetting } from '@/lib/settings/api-keys';
 import { OPENROUTER_KEY_NAME } from '@/lib/llm/openrouter';
-import { KIE_AI_KEY_NAME } from '@/lib/llm/kie-ai';
 import { FB_APP_ID_KEY, FB_APP_SECRET_KEY } from '@/lib/fb/oauth-flow';
 import { GOOGLE_CLIENT_ID_KEY, GOOGLE_CLIENT_SECRET_KEY, isGoogleConnected } from '@/lib/google/oauth';
 import { OpenRouterKeyForm } from './openrouter-key-form';
-import { KieAiKeyForm } from './kieai-key-form';
 import { FacebookAppForm } from './facebook-app-form';
 import { ApifyForm } from './apify-form';
 import { AdsTokenForm } from './ads-token-form';
@@ -52,13 +50,12 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
     );
   }
 
-  const [orMeta, kieMeta, fbIdMeta, fbSecretMeta, apifyTokenMeta, adsTokenMeta, googleIdMeta, googleSecretMeta,
+  const [orMeta, fbIdMeta, fbSecretMeta, apifyTokenMeta, adsTokenMeta, googleIdMeta, googleSecretMeta,
          larkAppIdMeta, larkAppSecretMeta,
          larkMktAppTokenMeta, larkMktTableIdMeta, larkOrderAppTokenMeta, larkOrderTableIdMeta,
          telegramBotTokenMeta, telegramChatIdMeta] =
     await listSettingsMetadata([
       OPENROUTER_KEY_NAME,
-      KIE_AI_KEY_NAME,
       FB_APP_ID_KEY,
       FB_APP_SECRET_KEY,
       'APIFY_API_TOKEN',
@@ -84,12 +81,6 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
   ]);
   const openrouter = orMeta ?? {
     key: OPENROUTER_KEY_NAME,
-    isSet: false,
-    updatedAt: null,
-    updatedByName: null,
-  };
-  const kieai = kieMeta ?? {
-    key: KIE_AI_KEY_NAME,
     isSet: false,
     updatedAt: null,
     updatedByName: null,
@@ -144,13 +135,6 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
         hasEnvFallback={Boolean(process.env[OPENROUTER_KEY_NAME])}
       />
 
-      <KieAiKeyForm
-        initialIsSet={kieai.isSet}
-        initialUpdatedAt={kieai.updatedAt}
-        initialUpdatedByName={kieai.updatedByName}
-        hasEnvFallback={Boolean(process.env[KIE_AI_KEY_NAME])}
-      />
-
       <ApifyForm
         apiTokenIsSet={apifyTokenMeta?.isSet ?? false}
         twitterHandles={twitterHandles ?? ''}
@@ -195,10 +179,8 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
       />
 
       <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 px-5 py-4 text-xs text-zinc-500 italic">
-        <strong>9Router</strong> cho Chat LLM (Claude Max + ChatGPT Pro) ·{' '}
-        <strong>kie.ai</strong> cho Tạo ảnh + Tạo video ·{' '}
-        <strong>Apify</strong> cho pull Twitter/Facebook vào /news. Mỗi feature
-        1 key riêng — fail provider này không ảnh hưởng provider kia.
+        <strong>9Router</strong> cho Chat LLM (Claude Max + ChatGPT Pro) và Tạo ảnh (GPT Image 2) ·{' '}
+        <strong>Apify</strong> cho pull Twitter/Facebook vào /news.
       </div>
     </div>
   );
