@@ -43,6 +43,7 @@ import {
 } from '@/lib/rewrite/build-prompt';
 import { getSkillById, getSkillStoragePath } from '@/lib/queries/skill-lib';
 import { loadSkillContent } from '@/lib/skill-lib/load-skill-content';
+import { insertRewriteHistory } from '@/lib/queries/rewrite-history';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -170,6 +171,23 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
         { status: 502 }
       );
     }
+
+    // Ghi lịch sử — fire-and-forget, không block response
+    insertRewriteHistory({
+      userId: user.userId,
+      userName: user.name,
+      model: result.model,
+      sourceType: parsed.data.sourceType,
+      sourceContext: parsed.data.sourceContext ?? null,
+      tone: parsed.data.tone,
+      platform: parsed.data.platform,
+      length: parsed.data.length,
+      skillId: parsed.data.skillId ?? null,
+      skillName: skillContext?.skillName ?? null,
+      tokensIn: result.tokensIn,
+      tokensOut: result.tokensOut,
+      finishReason: result.finishReason,
+    }).catch((e) => console.warn('[POST /rewrite] history insert failed:', e));
 
     return NextResponse.json({
       content: result.content,
