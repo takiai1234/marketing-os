@@ -158,7 +158,7 @@ function buildGoals(row: MemberAggregateRow): MemberGoals {
     numChannels: row.num_channels,
     progress: {
       follow: {
-        label: 'Follow growth (30d)',
+        label: 'Follow growth',
         actual: row.follow_growth_30d,
         goal: row.goal_follow_growth_30d,
         actualLabel: formatCompact(row.follow_growth_30d),
@@ -168,7 +168,7 @@ function buildGoals(row: MemberAggregateRow): MemberGoals {
         progressPct: pct(row.follow_growth_30d, row.goal_follow_growth_30d),
       },
       reach: {
-        label: 'Reach (30d)',
+        label: 'Reach',
         actual: row.reach_30d,
         goal: row.goal_reach_30d,
         actualLabel: formatCompact(row.reach_30d),
@@ -178,7 +178,7 @@ function buildGoals(row: MemberAggregateRow): MemberGoals {
         progressPct: pct(row.reach_30d, row.goal_reach_30d),
       },
       postsPerChannel: {
-        label: 'Bài viết (30d)',
+        label: 'Bài viết',
         actual: totalPosts,
         goal: row.goal_posts_per_channel_30d,
         // Chỉ hiện TỔNG bài toàn bộ kênh; goal & % cũng theo tổng.

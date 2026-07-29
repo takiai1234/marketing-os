@@ -137,7 +137,7 @@ function GoalsSection({ goals }: { goals: TeamMemberKpi['goals'] }) {
     <div className="border-t border-zinc-100 pt-3">
       <div className="flex items-center justify-between mb-2">
         <h4 className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-          Mục tiêu 30 ngày
+          Mục tiêu tháng
         </h4>
         {goals.numChannels > 0 && (
           <span className="text-[10px] text-zinc-400">

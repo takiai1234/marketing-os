@@ -80,8 +80,12 @@ export interface TeamKpiPayload {
 
 export { EMPTY_ROLE_LABEL };
 
-export async function fetchTeamKpi(): Promise<TeamKpiPayload> {
-  const rows = await fetchMemberAggregates();
+// month = "YYYY-MM" (vd "2026-07"), mặc định tháng hiện tại.
+export async function fetchTeamKpi(month?: string): Promise<TeamKpiPayload> {
+  const now = new Date();
+  const ym = month ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const monthIso = `${ym}-01`;
+  const rows = await fetchMemberAggregates(monthIso);
   const members = rows.map(deriveKpiFromAggregate);
 
   // Sort by score DESC; only top-1 gets the rank badge.

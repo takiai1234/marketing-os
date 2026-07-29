@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/lib/auth/get-session';
 import { getUserRole } from '@/lib/auth/get-role';
 import { TeamKpiSummaryCards } from '@/components/team/team-kpi-summary';
 import { TeamMemberGrid } from '@/components/team/team-member-grid';
+import { MonthPicker } from '@/components/team/month-picker';
 import { AddMemberDialog } from './add-member-dialog';
 import { DeleteMemberButton } from './delete-member-button';
 import { ResetPasswordDialog } from './reset-password-dialog';
@@ -14,9 +15,18 @@ export const metadata: Metadata = {
   title: 'Team — Marketing OS',
 };
 
-export default async function TeamPage() {
+type Props = {
+  searchParams: Promise<{ month?: string }>;
+};
+
+export default async function TeamPage({ searchParams }: Props) {
+  const sp = await searchParams;
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const month = sp.month ?? currentMonth;
+
   const [{ summary, members }, user] = await Promise.all([
-    fetchTeamKpi(),
+    fetchTeamKpi(month),
     getCurrentUser(),
   ]);
 
@@ -26,15 +36,18 @@ export default async function TeamPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Header — title + subtitle + CTA dialog */}
+      {/* Header — title + month picker + CTA dialog */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-zinc-900">KPI đội ngũ</h2>
           <p className="text-sm text-zinc-500 mt-0.5">
-            Hiệu suất từng thành viên · radar 5 dimension · xếp hạng tuần
+            Hiệu suất từng thành viên · radar 5 dimension · theo tháng
           </p>
         </div>
-        <AddMemberDialog />
+        <div className="flex items-center gap-3">
+          <MonthPicker current={month} />
+          <AddMemberDialog />
+        </div>
       </div>
 
       {/* Tier 1: 4 summary cards */}

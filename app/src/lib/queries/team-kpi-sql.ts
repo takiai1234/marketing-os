@@ -56,10 +56,16 @@ export interface MemberAggregateRow {
 //     chia: đây là đặc tính nội dung của kênh, mọi thành viên chia sẻ như nhau.
 // Lý do không chia theo "ai đăng bài": social_post thuộc về KÊNH và được import
 // từ nền tảng (Bundle/FB) nên không có thông tin tác giả là thành viên nào.
+//
+// $1 = ngày đầu tháng cần xem, vd '2026-07-01'.
+// w30 = đầu tháng, month_end = đầu tháng kế tiếp, w7 = 7 ngày cuối tháng.
 const TEAM_KPI_SQL = `
 WITH windows AS (
-  SELECT NOW() - INTERVAL '7 days'  AS w7,
-         NOW() - INTERVAL '30 days' AS w30
+  SELECT
+    date_trunc('month', $1::timestamptz)                             AS w30,
+    date_trunc('month', $1::timestamptz) + INTERVAL '1 month'       AS month_end,
+    date_trunc('month', $1::timestamptz) + INTERVAL '1 month'
+      - INTERVAL '7 days'                                            AS w7
 ),
 
 -- post_metric_daily is keyed (post_id, date) — multiple snapshots per post.
@@ -111,6 +117,7 @@ agg_30d AS (
     MODE() WITHIN GROUP (ORDER BY mp.platform) AS top_platform_30d
   FROM member_posts mp, windows w
   WHERE mp.published_at >= w.w30
+    AND mp.published_at < w.month_end
   GROUP BY mp.member_id
 ),
 
@@ -123,6 +130,7 @@ viral_30d AS (
   FROM member_posts mp
   JOIN agg_30d a USING (member_id), windows w
   WHERE mp.published_at >= w.w30
+    AND mp.published_at < w.month_end
     AND a.median_reach_30d IS NOT NULL
     AND a.median_reach_30d > 0
     AND mp.reach > 3 * a.median_reach_30d
@@ -138,6 +146,7 @@ agg_7d AS (
     COALESCE(AVG(mp.engagement_rate), 0)::FLOAT           AS avg_er_7d
   FROM member_posts mp, windows w
   WHERE mp.published_at >= w.w7
+    AND mp.published_at < w.month_end
   GROUP BY mp.member_id
 ),
 
@@ -149,6 +158,7 @@ brief_30d AS (
   FROM briefs b, windows w
   WHERE b.created_by_member_id IS NOT NULL
     AND b.created_at >= w.w30
+    AND b.created_at < w.month_end
   GROUP BY b.created_by_member_id
 ),
 
@@ -159,6 +169,7 @@ brief_activity_30d AS (
     COUNT(*) FILTER (WHERE ba.action = 'status_changed')::INT  AS brief_status_changes_30d
   FROM brief_activity ba, windows w
   WHERE ba.created_at >= w.w30
+    AND ba.created_at < w.month_end
     AND ba.actor_member_id IS NOT NULL
   GROUP BY ba.actor_member_id
 ),
@@ -191,7 +202,7 @@ channel_count AS (
   GROUP BY sam.member_id
 ),
 
--- Follower growth 30d: chia đều theo số thành viên của kênh (weight 1/n).
+-- Follower growth trong tháng: chia đều theo số thành viên của kênh (weight 1/n).
 -- Cả primary lẫn editor đều nhận phần.
 follow_growth AS (
   SELECT
@@ -200,8 +211,10 @@ follow_growth AS (
   FROM social_account_member sam
   JOIN channel_member_count cmc ON cmc.account_id = sam.account_id
   JOIN social_account sa ON sa.id = sam.account_id
-  JOIN account_metric_daily amd ON amd.account_id = sa.id
-  WHERE amd.date >= CURRENT_DATE - INTERVAL '30 days'
+  JOIN account_metric_daily amd ON amd.account_id = sa.id,
+  windows w
+  WHERE amd.date >= w.w30::date
+    AND amd.date < w.month_end::date
   GROUP BY sam.member_id
 )
 
@@ -247,8 +260,9 @@ ORDER BY tm.created_at ASC;
 
 // pg returns NUMERIC columns as strings — coerce defensively even though
 // SQL ::INT/::FLOAT casts cover most cases.
-export async function fetchMemberAggregates(): Promise<MemberAggregateRow[]> {
-  const res = await db.query<MemberAggregateRow>(TEAM_KPI_SQL);
+// monthIso = ngày đầu tháng ISO, vd '2026-07-01'.
+export async function fetchMemberAggregates(monthIso: string): Promise<MemberAggregateRow[]> {
+  const res = await db.query<MemberAggregateRow>(TEAM_KPI_SQL, [monthIso]);
 
   return res.rows.map((row) => ({
     ...row,
