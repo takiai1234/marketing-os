@@ -12,12 +12,12 @@ const METRICS_LATERAL = `
   LEFT JOIN LATERAL (
     SELECT
       AVG(engagement_rate)::numeric(10,4) AS avg_er,
-      SUM(reach)::bigint                  AS total_reach,         -- = total views sau migration 036
-      SUM(impressions)::bigint            AS total_impressions,   -- = total media views (0 cho text post)
-      SUM(reactions)::bigint              AS total_reactions,
-      SUM(comments)::bigint               AS total_comments,
-      SUM(shares)::bigint                 AS total_shares,
-      SUM(video_views)::bigint            AS total_video_views
+      MAX(reach)::bigint                  AS total_reach,         -- snapshot (lifetime cumulative) → MAX not SUM
+      MAX(impressions)::bigint            AS total_impressions,
+      MAX(reactions)::bigint              AS total_reactions,
+      MAX(comments)::bigint               AS total_comments,
+      MAX(shares)::bigint                 AS total_shares,
+      MAX(video_views)::bigint            AS total_video_views
     FROM post_metric_daily
     WHERE post_id = sp.id
   ) metrics ON TRUE`;
