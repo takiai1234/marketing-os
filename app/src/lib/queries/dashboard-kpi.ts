@@ -75,13 +75,12 @@ async function fetchWithDays(days: number, tagSlug: string | null): Promise<KpiD
   const [reachRes, erRes, convRes, revenueRes, followersRes] = await Promise.all([
     db.query<{ reach: string; reach_prev: string }>(
       `
-      -- PLATFORM-AWARE reach (xem dashboard-channels-table.ts):
+      -- PLATFORM-AWARE reach:
       --   • Facebook: total_reach = daily delta → SUM trong window.
       --   • Bundle (TikTok/YT/IG): total_reach = snapshot cumulative lifetime
-      --     → reach trong window = (snapshot cuối − snapshot trước window).
-      --     Anchor 2 nấc giống channels-table: ưu tiên snapshot TRƯỚC window,
-      --     fallback snapshot SỚM NHẤT trong window (account vừa connect).
-      -- Tính per-account rồi SUM — KHÔNG SUM thẳng cumulative snapshot (inflate).
+      --     → reach_cur = row mới nhất (không lọc theo ngày vì dữ liệu lịch sử
+      --     có thể = 0 nếu sync mới chạy lần đầu hôm nay).
+      --     reach_prev = snapshot tại cuối kỳ trước (trước window).
       SELECT
         COALESCE(SUM(r.reach_cur), 0)::text  AS reach,
         COALESCE(SUM(r.reach_prev), 0)::text AS reach_prev
@@ -93,7 +92,7 @@ async function fetchWithDays(days: number, tagSlug: string | null): Promise<KpiD
                            WHERE account_id = sa.id
                              AND date >= CURRENT_DATE - $1::int AND date < CURRENT_DATE), 0)
             ELSE COALESCE((SELECT total_reach FROM account_metric_daily
-                           WHERE account_id = sa.id AND (date < CURRENT_DATE OR sa.is_manual)
+                           WHERE account_id = sa.id
                            ORDER BY date DESC LIMIT 1), 0)
           END AS reach_cur,
           CASE WHEN (sa.platform = 'facebook' AND NOT sa.is_manual)
@@ -190,10 +189,12 @@ async function fetchWithDays(days: number, tagSlug: string | null): Promise<KpiD
     db.query<{ total_followers: string; total_followers_prev: string }>(
       `
       WITH latest_now AS (
+        -- Lấy row MỚI NHẤT (không lọc date) vì dữ liệu lịch sử có thể = 0
+        -- nếu sync mới chạy lần đầu hôm nay (TikTok/Bundle).
         SELECT DISTINCT ON (amd.account_id) amd.account_id, amd.followers
         FROM account_metric_daily amd
         INNER JOIN social_account sa ON sa.id = amd.account_id
-        WHERE (amd.date < CURRENT_DATE OR sa.is_manual) AND sa.status != 'disconnected'
+        WHERE sa.status != 'disconnected'
           ${tagFilter}
         ORDER BY amd.account_id, amd.date DESC
       ),
@@ -246,8 +247,9 @@ async function fetchWithDateRange(
       -- Total Reach = TỔNG reach mọi nền tảng (per-account rồi SUM):
       --   • Facebook: total_reach = daily delta → SUM trong window [$1,$2].
       --   • Bundle (TikTok = views, YT/IG…): total_reach = snapshot cumulative
-      --     → lấy GIÁ TRỊ TUYỆT ĐỐI mới nhất (views lũy kế), khớp với card kênh,
-      --     KHÔNG lấy delta. prev = snapshot tại cuối kỳ trước để so %.
+      --     → reach_cur = row mới nhất (không lọc date vì dữ liệu lịch sử có
+      --     thể = 0 nếu sync mới chạy lần đầu hôm nay).
+      --     reach_prev = snapshot cuối kỳ trước.
       SELECT
         COALESCE(SUM(r.reach_cur), 0)::text  AS reach,
         COALESCE(SUM(r.reach_prev), 0)::text AS reach_prev
@@ -258,7 +260,7 @@ async function fetchWithDateRange(
             THEN COALESCE((SELECT SUM(total_reach) FROM account_metric_daily
                            WHERE account_id = sa.id AND date >= $1::date AND date <= $2::date), 0)
             ELSE COALESCE((SELECT total_reach FROM account_metric_daily
-                           WHERE account_id = sa.id AND (date <= $2::date OR sa.is_manual)
+                           WHERE account_id = sa.id
                            ORDER BY date DESC LIMIT 1), 0)
           END AS reach_cur,
           CASE WHEN (sa.platform = 'facebook' AND NOT sa.is_manual)
@@ -369,10 +371,12 @@ async function fetchWithDateRange(
       return db.query<{ total_followers: string; total_followers_prev: string }>(
         `
         WITH latest_now AS (
+          -- Lấy row MỚI NHẤT (không lọc date) vì dữ liệu lịch sử có thể = 0
+          -- nếu sync mới chạy lần đầu hôm nay (TikTok/Bundle).
           SELECT DISTINCT ON (amd.account_id) amd.account_id, amd.followers
           FROM account_metric_daily amd
           INNER JOIN social_account sa ON sa.id = amd.account_id
-          WHERE (amd.date <= $1::date OR sa.is_manual) AND sa.status != 'disconnected'
+          WHERE sa.status != 'disconnected'
             ${followersTagFilter}
           ORDER BY amd.account_id, amd.date DESC
         ),
