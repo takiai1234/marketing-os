@@ -37,7 +37,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
          sa.bundle_team_id,
          sa.bundle_social_account_id,
          sa.last_synced_at::text,
-         COUNT(amd.id)::text              AS metric_rows,
+         COUNT(amd.date)::text            AS metric_rows,
          MAX(amd.date)::text              AS latest_date,
          (SELECT amd2.followers::text FROM account_metric_daily amd2
           WHERE amd2.account_id = sa.id ORDER BY amd2.date DESC LIMIT 1) AS latest_followers,
