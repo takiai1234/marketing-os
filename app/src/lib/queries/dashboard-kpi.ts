@@ -352,22 +352,21 @@ async function fetchWithDateRange(
     `,
       params
     ),
-    // Followers query CHỈ dùng untilIso + prevUntilIso (anchor points).
-    // KHÔNG share params array với 4 query trên — vì nếu share, $1/$3 (sinceIso,
-    // prevSinceIso) sẽ unused trong query này → PG 42P18 "could not determine
-    // data type" trên position unreferenced. Pass riêng params [untilIso,
-    // prevUntilIso] + tagSlug nếu có. Tag pad sang $3.
+    // Followers query — latest_now không cần date filter (lấy mới nhất bất kể
+    // ngày). latest_prev dùng $1 = prevUntilIso. Tag pad sang $2 nếu có.
+    // KHÔNG pass untilIso (đã bỏ khỏi latest_now) để tránh PG 42P18 "could
+    // not determine data type of parameter" với param không được reference.
     (() => {
       const followersTagFilter = tagSlug
         ? `AND sa.id IN (
             SELECT sat.account_id FROM social_account_tag sat
             INNER JOIN channel_tag ct ON ct.id = sat.tag_id
-            WHERE ct.slug = $3
+            WHERE ct.slug = $2
           )`
         : '';
       const followersParams: unknown[] = tagSlug
-        ? [range.untilIso, range.prevUntilIso, tagSlug]
-        : [range.untilIso, range.prevUntilIso];
+        ? [range.prevUntilIso, tagSlug]
+        : [range.prevUntilIso];
       return db.query<{ total_followers: string; total_followers_prev: string }>(
         `
         WITH latest_now AS (
@@ -384,7 +383,7 @@ async function fetchWithDateRange(
           SELECT DISTINCT ON (amd.account_id) amd.account_id, amd.followers
           FROM account_metric_daily amd
           INNER JOIN social_account sa ON sa.id = amd.account_id
-          WHERE amd.date <= $2::date AND sa.status != 'disconnected'
+          WHERE amd.date <= $1::date AND sa.status != 'disconnected'
             ${followersTagFilter}
           ORDER BY amd.account_id, amd.date DESC
         )
