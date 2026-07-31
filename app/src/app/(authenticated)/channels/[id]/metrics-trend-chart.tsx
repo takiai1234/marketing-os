@@ -66,14 +66,18 @@ export function MetricsTrendChart({ data }: Props) {
     );
   }
 
+  // Followers là snapshot — dùng giá trị mới nhất (max) cho mọi ngày để
+  // tránh ngày sync 0 kéo đường xuống đáy (khớp subtitle "snapshot hiện tại").
+  const currentFollowers = data.reduce((max, d) => Math.max(max, d.followers ?? 0), 0);
+
   // Display fields cho log scale: 0 → 1 (log10(1) = 0, nằm đáy chart).
   // Giữ followers/reach gốc trên row để tooltip đọc đúng giá trị thật.
   const chartData = data.map((d) => ({
     date: format(parseISO(d.date), 'dd/MM', { locale: vi }),
-    followers: d.followers ?? 0,
+    followers: currentFollowers,
     reach: d.totalReach ?? 0,
     posts: d.postsCount ?? 0,
-    followersDisplay: (d.followers ?? 0) > 0 ? d.followers! : 1,
+    followersDisplay: currentFollowers > 0 ? currentFollowers : 1,
     reachDisplay: (d.totalReach ?? 0) > 0 ? d.totalReach! : 1,
   }));
 

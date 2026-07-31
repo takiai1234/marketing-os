@@ -162,8 +162,10 @@ export async function fetchMetricsRange(
   accountId: string,
   days: number
 ): Promise<ChannelMetricDay[]> {
-  // Lấy 7 ngày gần nhất NHƯNG loại trừ hôm nay (data hôm nay chưa đủ → tránh tụt cuối chart)
-  // Khoảng: [CURRENT_DATE - 7, CURRENT_DATE - 1] → 7 điểm dữ liệu
+  // Lấy N ngày gần nhất bao gồm hôm nay. Bundle channels (TikTok/YT/IG) sync
+  // sáng nay đã có đủ data hôm nay — exclude hôm nay gây tụt chart khi ngày
+  // hôm qua chưa có data (cron fail / sync lần đầu).
+  // Khoảng: [CURRENT_DATE - days, CURRENT_DATE] → days+1 điểm dữ liệu tối đa.
   //
   // posts_count: COUNT từ social_post group by VN date (KHÔNG đọc column
   // account_metric_daily.posts_count). Cùng pattern với dashboard-trend.ts +
@@ -194,7 +196,7 @@ export async function fetchMetricsRange(
      ) pc ON pc.date = amd.date
      WHERE amd.account_id = $1
        AND amd.date >= CURRENT_DATE - $2::int
-       AND amd.date < CURRENT_DATE
+       AND amd.date <= CURRENT_DATE
      ORDER BY amd.date ASC`,
     [accountId, days]
   );
