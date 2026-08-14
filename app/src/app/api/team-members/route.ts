@@ -7,6 +7,7 @@ import { db } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { fetchTeamMembers } from '@/lib/queries/team-members';
 import { hashPassword } from '@/lib/auth/hash-password';
+import { USER_ROLES } from '@/lib/auth/roles';
 
 export const runtime = 'nodejs';
 
@@ -16,8 +17,9 @@ const PG_UNIQUE_VIOLATION = '23505';
 const createSchema = z.object({
   email: z.string().email().max(255),
   name: z.string().min(1).max(255),
-  // role: 'admin' = full quyền; 'member' = chỉ xem/thao tác kênh được gán
-  role: z.enum(['admin', 'member']),
+  // role: 'admin' = full quyền; 'member' = chỉ xem/thao tác kênh được gán;
+  // 'guest' = chỉ xem, không thấy Quảng cáo/Landing Pages/Doanh thu/Lark
+  role: z.enum(USER_ROLES),
   password: z.string().min(8).max(72), // bcrypt giới hạn 72 bytes
 });
 

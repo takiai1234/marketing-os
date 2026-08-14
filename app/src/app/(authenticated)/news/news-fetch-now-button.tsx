@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { RefreshCw } from 'lucide-react';
+import { useCanEdit } from '@/components/auth/role-provider';
 
 const COOLDOWN_MS = 30_000;
 
@@ -22,6 +23,7 @@ export function NewsFetchNowButton() {
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   // useTransition: trigger router.refresh() mà không freeze UI
   const [, startTransition] = useTransition();
+  const canEdit = useCanEdit();
 
   const isCoolingDown = cooldownUntil !== null && Date.now() < cooldownUntil;
   const disabled = loading || isCoolingDown;
@@ -48,6 +50,9 @@ export function NewsFetchNowButton() {
       setLoading(false);
     }
   }
+
+  // Khách (chỉ xem): POST /api/news/ingest bị chặn → ẩn nút.
+  if (!canEdit) return null;
 
   return (
     <Button

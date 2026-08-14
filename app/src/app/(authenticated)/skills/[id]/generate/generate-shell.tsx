@@ -18,6 +18,7 @@ import {
   RefreshCwIcon,
 } from 'lucide-react';
 import type { GeneratedAsset } from '@/lib/queries/generated-asset';
+import { useCanEdit } from '@/components/auth/role-provider';
 
 interface Props {
   skillId: string;
@@ -41,6 +42,8 @@ interface Result {
 export function GenerateShell({ skillId, initialAssets }: Props) {
   const [prompt, setPrompt] = useState('');
   const [size, setSize] = useState<Size>('1024x1024');
+  // Khách (chỉ xem): POST /api/skills/[id]/generate bị chặn → khoá nút.
+  const canEdit = useCanEdit();
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -153,7 +156,11 @@ export function GenerateShell({ skillId, initialAssets }: Props) {
         </div>
 
         <div className="p-3 border-t border-zinc-100 bg-zinc-50/50 rounded-b-xl">
-          <Button onClick={onGenerate} disabled={generating} className="w-full">
+          <Button
+            onClick={onGenerate}
+            disabled={generating || !canEdit}
+            className="w-full"
+          >
             {generating ? (
               <><Loader2Icon className="size-4 animate-spin" /> Đang tạo ảnh...</>
             ) : result ? (

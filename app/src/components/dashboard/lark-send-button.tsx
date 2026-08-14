@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Loader2Icon } from 'lucide-react';
+import { useCanEdit } from '@/components/auth/role-provider';
 
 // Lark logo inline SVG (simplified)
 function LarkIcon({ className }: { className?: string }) {
@@ -27,6 +28,8 @@ interface Props {
 
 export function LarkSendButton({ days, tagSlug }: Props) {
   const [busy, setBusy] = useState(false);
+  // Khách (chỉ xem): /api/lark bị proxy chặn → ẩn nút.
+  const canEdit = useCanEdit();
 
   async function onClick() {
     setBusy(true);
@@ -46,6 +49,8 @@ export function LarkSendButton({ days, tagSlug }: Props) {
       setBusy(false);
     }
   }
+
+  if (!canEdit) return null;
 
   return (
     <Button

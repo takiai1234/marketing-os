@@ -21,6 +21,7 @@ import { RevealTokenButton } from './reveal-token-button';
 import { StatusDot } from '../_components/status-dot';
 import { CopyIdButton } from '../_components/copy-id-button';
 import { PlatformIcon } from '../_components/platform-icon';
+import { useCanEdit } from '@/components/auth/role-provider';
 
 interface MemberOption {
   id: string;
@@ -63,6 +64,7 @@ export function ChannelHeader({
   isManual,
 }: Props) {
   const router = useRouter();
+  const canEdit = useCanEdit();
   const [syncing, setSyncing] = useState(false);
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
 
@@ -201,14 +203,16 @@ export function ChannelHeader({
           )
         ) : (
           <>
-            <Button
-              onClick={handleSync}
-              disabled={syncing || isCoolingDown}
-              variant="default"
-              size="sm"
-            >
-              {syncing ? 'Đang đồng bộ…' : 'Đồng bộ ngay'}
-            </Button>
+            {canEdit && (
+              <Button
+                onClick={handleSync}
+                disabled={syncing || isCoolingDown}
+                variant="default"
+                size="sm"
+              >
+                {syncing ? 'Đang đồng bộ…' : 'Đồng bộ ngay'}
+              </Button>
+            )}
             {isAdmin && (
               <UpdateTokenDialog
                 accountId={accountId}

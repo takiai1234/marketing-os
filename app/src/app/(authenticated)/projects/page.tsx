@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { FolderPlusIcon, FilesIcon, MessageSquareIcon } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth/get-session';
+import { getUserRole } from '@/lib/auth/get-role';
+import { isGuest } from '@/lib/auth/roles';
 import { listProjectsForUser } from '@/lib/queries/projects';
 import { isOpenRouterConfigured } from '@/lib/llm/openrouter';
 import { Button } from '@/components/ui/button';
@@ -34,10 +36,12 @@ export default async function ProjectsPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
-  const [projects, llmReady] = await Promise.all([
+  const [projects, llmReady, role] = await Promise.all([
     listProjectsForUser(user.userId),
     isOpenRouterConfigured(),
+    getUserRole(user.userId),
   ]);
+  const readOnly = isGuest(role);
 
   return (
     <div className="flex flex-col gap-6">
@@ -49,12 +53,14 @@ export default async function ProjectsPage() {
             Giống Claude.ai Projects. Mỗi project có chat session riêng.
           </p>
         </div>
-        <Link href="/projects/new">
-          <Button className="bg-violet-600 hover:bg-violet-700 text-white">
-            <FolderPlusIcon className="size-4" />
-            Tạo project mới
-          </Button>
-        </Link>
+        {!readOnly && (
+          <Link href="/projects/new">
+            <Button className="bg-violet-600 hover:bg-violet-700 text-white">
+              <FolderPlusIcon className="size-4" />
+              Tạo project mới
+            </Button>
+          </Link>
+        )}
       </div>
 
       {!llmReady && (
@@ -79,12 +85,14 @@ export default async function ProjectsPage() {
             Tạo project đầu tiên — paste custom instructions + upload file
             knowledge (PDF/DOCX/MD/...) để chat với AI dùng context riêng.
           </p>
-          <Link href="/projects/new">
-            <Button className="bg-violet-600 hover:bg-violet-700 text-white">
-              <FolderPlusIcon className="size-4" />
-              Tạo project đầu tiên
-            </Button>
-          </Link>
+          {!readOnly && (
+            <Link href="/projects/new">
+              <Button className="bg-violet-600 hover:bg-violet-700 text-white">
+                <FolderPlusIcon className="size-4" />
+                Tạo project đầu tiên
+              </Button>
+            </Link>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

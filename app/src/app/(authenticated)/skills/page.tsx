@@ -34,7 +34,7 @@ export default async function SkillsPage() {
             Upload, lưu trữ và preview các skill bundle (.zip / .skill).
           </p>
         </div>
-        <UploadButton />
+        {role !== 'guest' && <UploadButton />}
       </div>
 
       <div className="text-xs text-zinc-500">
@@ -49,7 +49,9 @@ export default async function SkillsPage() {
             <SkillCard
               key={s.id}
               skill={s}
-              canDelete={isAdmin || s.uploaded_by === user.userId}
+              canDelete={
+                role !== 'guest' && (isAdmin || s.uploaded_by === user.userId)
+              }
             />
           ))}
         </div>

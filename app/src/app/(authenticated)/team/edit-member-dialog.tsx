@@ -17,6 +17,7 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { normalizeRole } from '@/lib/auth/roles';
 
 interface Props {
   id: string;
@@ -38,7 +39,7 @@ export function EditMemberDialog({
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(initialName);
   const [email, setEmail] = useState(initialEmail);
-  const [role, setRole] = useState(initialRole === 'admin' ? 'admin' : 'member');
+  const [role, setRole] = useState(normalizeRole(initialRole));
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -48,7 +49,7 @@ export function EditMemberDialog({
       // Reset về giá trị gốc mỗi lần mở (đề phòng sửa dở rồi đóng).
       setName(initialName);
       setEmail(initialEmail);
-      setRole(initialRole === 'admin' ? 'admin' : 'member');
+      setRole(normalizeRole(initialRole));
       setError(null);
     }
     if (!next) setLoading(false);
@@ -145,12 +146,15 @@ export function EditMemberDialog({
             <select
               id="edit-role"
               value={role}
-              onChange={(e) => setRole(e.target.value)}
+              onChange={(e) => setRole(normalizeRole(e.target.value))}
               disabled={loading || isSelf}
               className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 transition-colors focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 disabled:opacity-50"
             >
               <option value="member">Member — chỉ xem/thao tác kênh được gán</option>
               <option value="admin">Admin — toàn quyền</option>
+              <option value="guest">
+                Khách — chỉ xem, không thấy Quảng cáo/Landing Pages/Doanh thu/Lark
+              </option>
             </select>
             {isSelf && (
               <p className="text-[11px] text-amber-600">

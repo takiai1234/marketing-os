@@ -26,6 +26,7 @@ import {
   MessageSquareIcon,
 } from 'lucide-react';
 import type { ChatSession, ChatMessage } from '@/lib/queries/skill-chat';
+import { useCanEdit } from '@/components/auth/role-provider';
 import { AttachmentInput, type AttachmentInputSubmit } from '@/components/chat/attachment-input';
 import { MessageAttachments } from '@/components/chat/message-attachments';
 
@@ -76,6 +77,7 @@ export function ChatShell({
   const [selectedModel, setSelectedModel] = useState(
     availableModels[0]?.id ?? 'cc/claude-sonnet-4-5-20250929'
   );
+  const canEdit = useCanEdit();
   const [sending, setSending] = useState(false);
   const [creating, setCreating] = useState(false);
   const [lastFinishReason, setLastFinishReason] = useState<string>('stop');
@@ -259,17 +261,19 @@ export function ChatShell({
     <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-4 min-h-0 flex-1">
       {/* ─── Sidebar: session list ───────────────────────────────────── */}
       <aside className="rounded-xl bg-white ring-1 ring-zinc-200 shadow-sm flex flex-col min-h-0">
-        <div className="p-3 border-b border-zinc-100">
-          <Button
-            onClick={handleNewChat}
-            disabled={creating}
-            className="w-full"
-            size="sm"
-          >
-            <PlusIcon className="size-4" />
-            {creating ? 'Đang tạo...' : 'Cuộc trò chuyện mới'}
-          </Button>
-        </div>
+        {canEdit && (
+          <div className="p-3 border-b border-zinc-100">
+            <Button
+              onClick={handleNewChat}
+              disabled={creating}
+              className="w-full"
+              size="sm"
+            >
+              <PlusIcon className="size-4" />
+              {creating ? 'Đang tạo...' : 'Cuộc trò chuyện mới'}
+            </Button>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto p-2">
           {sessions.length === 0 ? (
@@ -301,14 +305,16 @@ export function ChatShell({
                         >
                           {s.title}
                         </p>
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteSession(s.id, e)}
-                          className="opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-rose-600 shrink-0"
-                          title="Xoá"
-                        >
-                          <Trash2Icon className="size-3" />
-                        </button>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteSession(s.id, e)}
+                            className="opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-rose-600 shrink-0"
+                            title="Xoá"
+                          >
+                            <Trash2Icon className="size-3" />
+                          </button>
+                        )}
                       </div>
                       <div className="flex items-center gap-1.5 mt-1 text-[10px] text-zinc-500">
                         <span className="font-mono">{s.model}</span>
@@ -408,16 +414,22 @@ export function ChatShell({
           </div>
         )}
 
-        {/* Input */}
-        <AttachmentInput
-          placeholder={
-            activeSession
-              ? `Hỏi skill "${skillName}"... (kéo file/ảnh để đính kèm)`
-              : `Bắt đầu cuộc trò chuyện với skill "${skillName}"...`
-          }
-          disabled={sending || creating}
-          onSubmit={handleSubmit}
-        />
+        {/* Input — Khách (chỉ xem) không gửi được tin nhắn. */}
+        {canEdit ? (
+          <AttachmentInput
+            placeholder={
+              activeSession
+                ? `Hỏi skill "${skillName}"... (kéo file/ảnh để đính kèm)`
+                : `Bắt đầu cuộc trò chuyện với skill "${skillName}"...`
+            }
+            disabled={sending || creating}
+            onSubmit={handleSubmit}
+          />
+        ) : (
+          <p className="rounded-lg bg-zinc-50 px-3 py-2.5 text-xs text-zinc-500 ring-1 ring-zinc-200">
+            Tài khoản Khách chỉ xem được lịch sử trò chuyện.
+          </p>
+        )}
       </main>
     </div>
   );

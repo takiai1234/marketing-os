@@ -13,6 +13,7 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { ChevronUp, LogOut, Settings } from 'lucide-react';
+import { useCanEdit } from '@/components/auth/role-provider';
 
 interface Props {
   user: SessionData;
@@ -23,6 +24,8 @@ interface Props {
 export function UserMenu({ user }: Props) {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
+  // Khách không được đổi mật khẩu → /settings/account bị proxy chặn, ẩn link đi.
+  const canEdit = useCanEdit();
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -69,11 +72,15 @@ export function UserMenu({ user }: Props) {
           </DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => router.push('/settings/account')}>
-          <Settings className="size-4" />
-          Cài đặt tài khoản
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
+        {canEdit && (
+          <>
+            <DropdownMenuItem onClick={() => router.push('/settings/account')}>
+              <Settings className="size-4" />
+              Cài đặt tài khoản
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuItem variant="destructive" onClick={handleLogout}>
           <LogOut className="size-4" />
           {loggingOut ? 'Đang đăng xuất…' : 'Đăng xuất'}

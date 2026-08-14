@@ -12,6 +12,7 @@ import { ArrowLeft, ArrowRight, Check, RotateCcw, Send, X } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Button } from '@/components/ui/button';
 import type { BriefStatusT } from '@/lib/briefs/brief-types';
+import { useCanEdit } from '@/components/auth/role-provider';
 
 interface StatusAction {
   label: string;
@@ -51,8 +52,11 @@ export function BriefStatusActions({
   currentStatus,
   onChangeStatus,
 }: BriefStatusActionsProps) {
+  const canEdit = useCanEdit();
   const actions = ACTIONS_BY_STATUS[currentStatus];
   if (actions.length === 0) return null;
+  // Khách (chỉ xem): PATCH /api/briefs/[id] bị chặn → ẩn action bar.
+  if (!canEdit) return null;
 
   return (
     <div className="flex flex-wrap items-center gap-2 pt-4 border-t border-zinc-100">

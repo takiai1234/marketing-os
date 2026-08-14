@@ -22,6 +22,7 @@ import {
   CheckIcon,
 } from 'lucide-react';
 import type { Project, ProjectFile } from '@/lib/queries/projects';
+import { useCanEdit } from '@/components/auth/role-provider';
 
 interface Props {
   initialProject: Project;
@@ -44,6 +45,7 @@ export function ProjectDetailShell({ initialProject, initialFiles }: Props) {
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const canEdit = useCanEdit();
   const [deleteProjectConfirm, setDeleteProjectConfirm] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -239,6 +241,7 @@ export function ProjectDetailShell({ initialProject, initialFiles }: Props) {
           id="instructions"
           value={instructions}
           onChange={(e) => setInstructions(e.target.value)}
+          readOnly={!canEdit}
           rows={20}
           maxLength={50_000}
           placeholder="Custom instructions cho mọi chat trong project này..."
@@ -249,67 +252,71 @@ export function ProjectDetailShell({ initialProject, initialFiles }: Props) {
           làm system prompt cho mọi chat session trong project.
         </p>
 
-        <div className="border-t border-zinc-100 pt-3 mt-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onDeleteProject}
-            className={cn(
-              'text-rose-600 hover:text-rose-700 hover:bg-rose-50',
-              deleteProjectConfirm && 'bg-rose-50 ring-1 ring-rose-300'
-            )}
-          >
-            <Trash2Icon className="size-3.5" />
-            {deleteProjectConfirm
-              ? 'Click lần nữa để xoá hẳn project (cascade tất cả file + chat)'
-              : 'Xoá project'}
-          </Button>
-        </div>
+        {canEdit && (
+          <div className="border-t border-zinc-100 pt-3 mt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onDeleteProject}
+              className={cn(
+                'text-rose-600 hover:text-rose-700 hover:bg-rose-50',
+                deleteProjectConfirm && 'bg-rose-50 ring-1 ring-rose-300'
+              )}
+            >
+              <Trash2Icon className="size-3.5" />
+              {deleteProjectConfirm
+                ? 'Click lần nữa để xoá hẳn project (cascade tất cả file + chat)'
+                : 'Xoá project'}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* ─── RIGHT: File manager ─── */}
       <div className="flex flex-col gap-4">
-        <div
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
-          className={cn(
-            'rounded-xl border-2 border-dashed cursor-pointer transition px-4 py-8 text-center',
-            dragOver
-              ? 'border-violet-400 bg-violet-50'
-              : 'border-zinc-300 bg-zinc-50/30 hover:border-violet-300 hover:bg-violet-50/30'
-          )}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={async (e) => {
-              if (e.target.files && e.target.files.length > 0) {
-                await uploadFiles(e.target.files);
-                e.target.value = '';
-              }
-            }}
-            disabled={uploading}
-          />
-          {uploading ? (
-            <div className="text-sm text-zinc-600">
-              <Loader2Icon className="size-6 mx-auto mb-2 animate-spin text-violet-600" />
-              Đang upload + parse...
-            </div>
-          ) : (
-            <div className="text-sm text-zinc-600">
-              <UploadCloudIcon className="size-7 mx-auto mb-2 text-violet-500" />
-              <div className="font-medium">Kéo file vào đây hoặc click chọn</div>
-              <p className="text-xs text-zinc-500 mt-1">
-                PDF, DOCX, MD, TXT, JSON, CSV, code... (max 20 MB/file)
-              </p>
-            </div>
-          )}
-        </div>
+        {canEdit && (
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className={cn(
+              'rounded-xl border-2 border-dashed cursor-pointer transition px-4 py-8 text-center',
+              dragOver
+                ? 'border-violet-400 bg-violet-50'
+                : 'border-zinc-300 bg-zinc-50/30 hover:border-violet-300 hover:bg-violet-50/30'
+            )}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={async (e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  await uploadFiles(e.target.files);
+                  e.target.value = '';
+                }
+              }}
+              disabled={uploading}
+            />
+            {uploading ? (
+              <div className="text-sm text-zinc-600">
+                <Loader2Icon className="size-6 mx-auto mb-2 animate-spin text-violet-600" />
+                Đang upload + parse...
+              </div>
+            ) : (
+              <div className="text-sm text-zinc-600">
+                <UploadCloudIcon className="size-7 mx-auto mb-2 text-violet-500" />
+                <div className="font-medium">Kéo file vào đây hoặc click chọn</div>
+                <p className="text-xs text-zinc-500 mt-1">
+                  PDF, DOCX, MD, TXT, JSON, CSV, code... (max 20 MB/file)
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="rounded-xl bg-white ring-1 ring-zinc-200 shadow-sm p-3">
           <div className="flex items-center justify-between mb-2 px-1">
@@ -351,6 +358,7 @@ function FileRow({
   onDelete: () => void;
   isDeleting: boolean;
 }) {
+  const canEdit = useCanEdit();
   const hasText = file.contentText.length > 0;
   return (
     <div className="group flex items-center gap-2 px-2 py-1.5 rounded hover:bg-zinc-50">
@@ -378,19 +386,21 @@ function FileRow({
           {!hasText && ' · (binary, no text)'}
         </p>
       </div>
-      <button
-        type="button"
-        onClick={onDelete}
-        disabled={isDeleting}
-        className="opacity-0 group-hover:opacity-100 transition text-zinc-400 hover:text-rose-600 p-1"
-        title="Xoá"
-      >
-        {isDeleting ? (
-          <Loader2Icon className="size-3.5 animate-spin" />
-        ) : (
-          <Trash2Icon className="size-3.5" />
-        )}
-      </button>
+      {canEdit && (
+        <button
+          type="button"
+          onClick={onDelete}
+          disabled={isDeleting}
+          className="opacity-0 group-hover:opacity-100 transition text-zinc-400 hover:text-rose-600 p-1"
+          title="Xoá"
+        >
+          {isDeleting ? (
+            <Loader2Icon className="size-3.5 animate-spin" />
+          ) : (
+            <Trash2Icon className="size-3.5" />
+          )}
+        </button>
+      )}
     </div>
   );
 }

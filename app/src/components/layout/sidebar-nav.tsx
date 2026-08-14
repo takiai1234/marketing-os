@@ -20,6 +20,7 @@ import {
   ScrollText,
 } from 'lucide-react';
 import type { SessionData } from '@/lib/auth/session-config';
+import { isPathDeniedForGuest, type UserRole } from '@/lib/auth/roles';
 import { UserMenu } from './user-menu';
 
 const BASE_ITEMS = [
@@ -44,13 +45,19 @@ const ADMIN_ITEMS = [
 
 interface SidebarProps {
   user: SessionData;
-  isAdmin?: boolean;
+  role: UserRole;
 }
 
-export function SidebarNav({ user, isAdmin = false }: SidebarProps) {
+export function SidebarNav({ user, role }: SidebarProps) {
   const pathname = usePathname();
   // Gộp menu admin nếu user là admin — non-admin sẽ không thấy link "Quản lý team"
-  const NAV_ITEMS = isAdmin ? [...BASE_ITEMS, ...ADMIN_ITEMS] : BASE_ITEMS;
+  const withAdmin =
+    role === 'admin' ? [...BASE_ITEMS, ...ADMIN_ITEMS] : BASE_ITEMS;
+  // Khách: ẩn luôn các trang bị cấm (proxy vẫn chặn nếu gõ URL trực tiếp).
+  const NAV_ITEMS =
+    role === 'guest'
+      ? withAdmin.filter((item) => !isPathDeniedForGuest(item.href))
+      : withAdmin;
 
   return (
     <aside className="flex flex-col w-56 shrink-0 min-h-screen bg-zinc-900 text-zinc-100 py-6">

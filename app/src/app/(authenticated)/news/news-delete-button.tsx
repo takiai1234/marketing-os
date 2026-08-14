@@ -9,11 +9,13 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Trash2, Loader2 } from 'lucide-react';
+import { useCanEdit } from '@/components/auth/role-provider';
 
 export function NewsDeleteButton({ id }: { id: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [, startTransition] = useTransition();
+  const canEdit = useCanEdit();
 
   async function onClick(e: React.MouseEvent) {
     e.preventDefault();
@@ -36,6 +38,9 @@ export function NewsDeleteButton({ id }: { id: string }) {
       setBusy(false);
     }
   }
+
+  // Khách (chỉ xem): DELETE /api/news/[id] bị chặn → ẩn nút.
+  if (!canEdit) return null;
 
   return (
     <button

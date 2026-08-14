@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { unsealData } from 'iron-session';
 import type { SessionData } from '@/lib/auth/session-config';
+import { getUserRoleCached } from '@/lib/auth/role-cache';
+import { isPathDeniedForGuest, isWriteBlockedForGuest } from '@/lib/auth/roles';
 
 // Next.js 16 proxy convention (replaces deprecated middleware).
 // Runtime is Node.js — Edge is not supported here. bcryptjs/pg/next-headers
 // could technically be imported now, but we keep this file minimal to stay
 // fast on every matched request.
+//
+// Ngoại lệ: role `guest` cần 1 query role → dùng getUserRoleCached (TTL 15s)
+// nên chi phí thêm gần như bằng 0 sau request đầu tiên.
 
 const COOKIE_NAME = 'mos_session';
 
@@ -59,7 +64,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
       });
 
       if (session.userId) {
-        return NextResponse.next();
+        return enforceGuestPolicy(request, session.userId);
       }
     } catch {
       // Tampered or expired cookie — fall through to redirect
@@ -67,4 +72,51 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   }
 
   return NextResponse.redirect(new URL('/login', request.url));
+}
+
+/**
+ * Chốt chặn tập trung cho role `guest` (Khách — chỉ xem).
+ *
+ * Đặt ở proxy thay vì rải guard vào ~72 API route vì fail-closed: route mới
+ * thêm sau này tự động được bảo vệ, không phụ thuộc việc ai đó nhớ thêm guard.
+ *
+ * Chặn hai thứ:
+ *  1. /ads, /landing-pages, /revenue, /lark-base và các API đứng sau chúng.
+ *  2. Mọi request ghi (POST/PUT/PATCH/DELETE) — kể cả Server Action, vốn là
+ *     POST tới chính URL của trang.
+ *
+ * LƯU Ý: các đường dẫn bị matcher loại trừ ở trên (vd `api/skills/upload`,
+ * `api/auth/change-password`) KHÔNG đi qua đây — chúng phải tự guard bằng
+ * `rejectGuest()` (src/lib/auth/guards.ts) trong route handler.
+ */
+async function enforceGuestPolicy(
+  request: NextRequest,
+  userId: string
+): Promise<NextResponse> {
+  const role = await getUserRoleCached(userId);
+  if (role !== 'guest') return NextResponse.next();
+
+  const { pathname } = request.nextUrl;
+  const isApi = pathname.startsWith('/api/');
+
+  if (isPathDeniedForGuest(pathname)) {
+    return isApi
+      ? NextResponse.json(
+          { error: 'Không có quyền truy cập dữ liệu này.' },
+          { status: 403 }
+        )
+      : NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+
+  if (isWriteBlockedForGuest(pathname, request.method)) {
+    const message = 'Tài khoản Khách chỉ có quyền xem, không được chỉnh sửa.';
+    return isApi
+      ? NextResponse.json({ error: message }, { status: 403 })
+      : new NextResponse(message, {
+          status: 403,
+          headers: { 'content-type': 'text/plain; charset=utf-8' },
+        });
+  }
+
+  return NextResponse.next();
 }

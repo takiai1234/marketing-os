@@ -17,6 +17,7 @@ import {
   clearFailures,
 } from '@/lib/auth/rate-limit-login';
 import { passwordSchema } from '@/lib/validation/password';
+import { rejectGuest } from '@/lib/auth/guards';
 
 // bcryptjs + pg không chạy trên Edge runtime
 export const runtime = 'nodejs';
@@ -34,6 +35,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  // /api/auth nằm ngoài matcher của proxy → phải tự chặn guest ở đây.
+  const guestBlocked = await rejectGuest(user.userId);
+  if (guestBlocked) return guestBlocked;
 
   // Parse + validate body
   let body: unknown;

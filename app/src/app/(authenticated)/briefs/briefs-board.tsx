@@ -11,6 +11,7 @@ import { BriefFormDialog } from './brief-form-dialog';
 import { BriefContentEditor } from './brief-content-editor';
 import { LoadMoreBriefsButton } from './load-more-briefs-button';
 import { useBriefsState } from './use-briefs-state';
+import { useCanEdit } from '@/components/auth/role-provider';
 import { useState } from 'react';
 import {
   STATUS_ORDER,
@@ -30,6 +31,7 @@ export function BriefsBoard({
   initialCursor,
   initialCounts,
 }: BriefsBoardProps) {
+  const canEdit = useCanEdit();
   const {
     currentTab,
     counts,
@@ -100,13 +102,15 @@ export function BriefsBoard({
             Nhận brief · sản xuất content · auto-score trước khi publish
           </p>
         </div>
-        <Button
-          onClick={handleNewClick}
-          className="bg-amber-600 hover:bg-amber-700 text-white"
-        >
-          <Plus className="size-4" />
-          Brief mới
-        </Button>
+        {canEdit && (
+          <Button
+            onClick={handleNewClick}
+            className="bg-amber-600 hover:bg-amber-700 text-white"
+          >
+            <Plus className="size-4" />
+            Brief mới
+          </Button>
+        )}
       </div>
 
       {/* Error banner — dismissable */}

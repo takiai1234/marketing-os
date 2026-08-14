@@ -17,6 +17,7 @@ import {
 } from './brief-detail-sections';
 import { BriefStatusActions } from './brief-status-actions';
 import { BriefActivityTimeline } from './brief-activity-timeline';
+import { useCanEdit } from '@/components/auth/role-provider';
 
 interface BriefDetailViewProps {
   brief: Brief | null;
@@ -59,6 +60,9 @@ export function BriefDetailView({
   onEditContent,
   activityRefetchKey,
 }: BriefDetailViewProps) {
+  // Gọi trước mọi early-return để không vi phạm rules-of-hooks.
+  const canEdit = useCanEdit();
+
   if (!brief) {
     return (
       <div className="rounded-xl bg-white ring-1 ring-zinc-200 py-24 text-center">
@@ -77,35 +81,38 @@ export function BriefDetailView({
           <h1 className="text-xl font-bold text-zinc-900 leading-tight flex-1">
             {brief.title}
           </h1>
-          <div className="flex items-center gap-1.5 shrink-0">
-            {/* Sửa brief metadata — chỉ cho status=mine, sau đó brief đã chốt */}
-            {brief.status === 'mine' && (
+          {/* Khách (chỉ xem): mọi thao tác ghi bị proxy chặn → ẩn cả cụm nút. */}
+          {canEdit && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* Sửa brief metadata — chỉ cho status=mine, sau đó brief đã chốt */}
+              {brief.status === 'mine' && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onEditBrief(brief)}
+                >
+                  <Pencil className="size-3.5" />
+                  Sửa brief
+                </Button>
+              )}
+              {/* Viết/sửa nội dung — cho mọi status, primary action khi đã sang draft */}
               <Button
                 type="button"
-                variant="outline"
                 size="sm"
-                onClick={() => onEditBrief(brief)}
+                onClick={() => onEditContent(brief)}
+                className={
+                  brief.status === 'mine'
+                    ? ''
+                    : 'bg-amber-600 hover:bg-amber-700 text-white'
+                }
+                variant={brief.status === 'mine' ? 'outline' : 'default'}
               >
-                <Pencil className="size-3.5" />
-                Sửa brief
+                <FileText className="size-3.5" />
+                {brief.draft_content ? 'Sửa bài viết' : 'Viết bài'}
               </Button>
-            )}
-            {/* Viết/sửa nội dung — cho mọi status, primary action khi đã sang draft */}
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => onEditContent(brief)}
-              className={
-                brief.status === 'mine'
-                  ? ''
-                  : 'bg-amber-600 hover:bg-amber-700 text-white'
-              }
-              variant={brief.status === 'mine' ? 'outline' : 'default'}
-            >
-              <FileText className="size-3.5" />
-              {brief.draft_content ? 'Sửa bài viết' : 'Viết bài'}
-            </Button>
-          </div>
+            </div>
+          )}
         </div>
         {meta && <p className="text-sm text-zinc-500">{meta}</p>}
       </div>

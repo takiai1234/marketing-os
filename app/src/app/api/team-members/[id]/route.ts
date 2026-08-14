@@ -13,6 +13,8 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth/get-session';
 import { getUserRole } from '@/lib/auth/get-role';
+import { USER_ROLES } from '@/lib/auth/roles';
+import { invalidateRoleCache } from '@/lib/auth/role-cache';
 
 export const runtime = 'nodejs';
 
@@ -23,7 +25,7 @@ const UUID_RE =
 const updateSchema = z.object({
   email: z.string().email().max(255),
   name: z.string().min(1).max(255),
-  role: z.enum(['admin', 'member']),
+  role: z.enum(USER_ROLES),
 });
 
 interface RouteContext {
@@ -85,6 +87,8 @@ export async function PUT(
     if (result.rowCount === 0) {
       return NextResponse.json({ error: 'Member not found' }, { status: 404 });
     }
+    // Proxy cache role 15s — xoá ngay để đổi quyền có hiệu lực tức thì.
+    invalidateRoleCache(id);
     return NextResponse.json({ ok: true });
   } catch (err) {
     if (

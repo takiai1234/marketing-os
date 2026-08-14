@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useCanEdit } from '@/components/auth/role-provider';
 
 interface Props {
   accountId: string;
@@ -17,6 +18,7 @@ interface Props {
 
 export function KpiEditor({ accountId, initialKpiPerDay }: Props) {
   const router = useRouter();
+  const canEdit = useCanEdit();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(String(initialKpiPerDay));
   const [saving, setSaving] = useState(false);
@@ -74,14 +76,16 @@ export function KpiEditor({ accountId, initialKpiPerDay }: Props) {
             </span>
           </span>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setEditing(true)}
-          className="ml-auto"
-        >
-          ✎ Sửa
-        </Button>
+        {canEdit && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setEditing(true)}
+            className="ml-auto"
+          >
+            ✎ Sửa
+          </Button>
+        )}
       </div>
     );
   }

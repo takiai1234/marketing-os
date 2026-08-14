@@ -11,6 +11,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { useCanEdit } from '@/components/auth/role-provider';
 
 interface Props {
   accountId: string;
@@ -19,6 +20,7 @@ interface Props {
 
 export function PersonaPanel({ accountId, personaJson }: Props) {
   const router = useRouter();
+  const canEdit = useCanEdit();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
   const [parseError, setParseError] = useState<string | null>(null);
@@ -78,9 +80,11 @@ export function PersonaPanel({ accountId, personaJson }: Props) {
     <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-base font-semibold text-zinc-900">Persona kênh</h2>
-        <Button variant="outline" size="sm" onClick={openModal}>
-          Sửa persona
-        </Button>
+        {canEdit && (
+          <Button variant="outline" size="sm" onClick={openModal}>
+            Sửa persona
+          </Button>
+        )}
       </div>
 
       {personaJson && Object.keys(personaJson).length > 0 ? (

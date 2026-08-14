@@ -10,6 +10,7 @@ import { useState, lazy, Suspense, type MouseEvent } from 'react';
 import { SparklesIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { RewriteSourceType } from '@/lib/rewrite/build-prompt';
+import { useCanEdit } from '@/components/auth/role-provider';
 
 const RewriteDialog = lazy(() =>
   import('./rewrite-dialog').then((m) => ({ default: m.RewriteDialog }))
@@ -37,6 +38,7 @@ export function RewriteButton({
   className,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const canEdit = useCanEdit();
 
   function handleClick(e: MouseEvent) {
     // Card thường là <a target="_blank"> wrap toàn bộ → ngăn parent navigate
@@ -51,6 +53,9 @@ export function RewriteButton({
   if (!sourceContent || sourceContent.trim().length < 5) {
     return null;
   }
+
+  // Khách (chỉ xem): POST /api/rewrite bị proxy chặn → ẩn nút cho gọn.
+  if (!canEdit) return null;
 
   return (
     <>

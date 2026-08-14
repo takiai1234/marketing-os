@@ -29,6 +29,7 @@ import {
   deleteFile,
 } from '@/lib/skill-lib/storage';
 import { insertSkill, generateUniqueSlug } from '@/lib/queries/skill-lib';
+import { rejectGuest } from '@/lib/auth/guards';
 
 export const runtime = 'nodejs';
 // Force dynamic — POST mặc định đã dynamic, nhưng khai báo rõ cho ai đọc code.
@@ -39,6 +40,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  // Route này nằm ngoài matcher của proxy (xem src/proxy.ts) → tự chặn guest.
+  const guestBlocked = await rejectGuest(user.userId);
+  if (guestBlocked) return guestBlocked;
 
   if (!req.body) {
     return NextResponse.json({ error: 'Missing request body' }, { status: 400 });

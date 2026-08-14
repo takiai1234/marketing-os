@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import type { UserRole } from '@/lib/auth/roles';
 
 
 export function CreateMemberForm() {
@@ -18,7 +19,7 @@ export function CreateMemberForm() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'admin' | 'member'>('member');
+  const [role, setRole] = useState<UserRole>('member');
   const [submitting, setSubmitting] = useState(false);
 
   function reset() {
@@ -115,7 +116,7 @@ export function CreateMemberForm() {
           <span className="text-sm text-zinc-600">Vai trò</span>
           <Select
             value={role}
-            onValueChange={(v) => v && setRole(v as 'admin' | 'member')}
+            onValueChange={(v) => v && setRole(v as UserRole)}
             disabled={submitting}
           >
             <SelectTrigger className="h-9 w-full">
@@ -124,6 +125,7 @@ export function CreateMemberForm() {
             <SelectContent>
               <SelectItem value="member">Member — chỉ kênh được gán</SelectItem>
               <SelectItem value="admin">Admin — toàn quyền</SelectItem>
+              <SelectItem value="guest">Khách — chỉ xem, không sửa</SelectItem>
             </SelectContent>
           </Select>
         </label>

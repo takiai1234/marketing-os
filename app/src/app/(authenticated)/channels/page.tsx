@@ -66,11 +66,13 @@ export default async function ChannelsPage({ searchParams }: PageProps) {
             Quản lý kênh · trạng thái kết nối · health score
           </p>
         </div>
-        <Link href="/channels/new">
-          <Button className="bg-orange-500 hover:bg-orange-600 text-white">
-            + Onboard kênh mới
-          </Button>
-        </Link>
+        {role !== 'guest' && (
+          <Link href="/channels/new">
+            <Button className="bg-orange-500 hover:bg-orange-600 text-white">
+              + Onboard kênh mới
+            </Button>
+          </Link>
+        )}
       </div>
 
       {/* ─── KPI summary cards ──────────────────────────────────────── */}
