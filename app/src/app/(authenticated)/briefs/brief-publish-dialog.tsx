@@ -107,7 +107,9 @@ export function BriefPublishDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      {/* max-h + overflow: 19+ kênh từng đẩy footer "Đăng ngay" ra ngoài viewport
+          màn laptop → không bấm được. Body cuộn, footer luôn nhìn thấy. */}
+      <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Đăng lên kênh</DialogTitle>
           <DialogDescription>
@@ -115,7 +117,7 @@ export function BriefPublishDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 overflow-y-auto min-h-0 flex-1">
           {/* Chọn kênh */}
           <div>
             <p className="text-sm font-medium text-zinc-900 mb-2">Chọn kênh</p>
@@ -127,7 +129,7 @@ export function BriefPublishDialog({
                 Channels trước.
               </p>
             ) : (
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5 max-h-52 overflow-y-auto pr-1">
                 {channels.map((ch) => (
                   <button
                     key={ch.id}
