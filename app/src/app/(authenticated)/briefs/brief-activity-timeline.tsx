@@ -39,6 +39,10 @@ function describe(activity: BriefActivity): string {
       return activity.detail
         ? `${who} sửa: ${activity.detail}`
         : `${who} sửa nội dung`;
+    case 'published_to_channel':
+      return activity.detail
+        ? `${who} ${activity.detail}`
+        : `${who} đăng bài lên kênh`;
     default:
       return `${who} thực hiện ${activity.action}`;
   }
@@ -48,6 +52,7 @@ const ACTION_DOT_COLOR: Record<BriefActivity['action'], string> = {
   created: 'bg-emerald-500',
   status_changed: 'bg-amber-500',
   content_edited: 'bg-blue-500',
+  published_to_channel: 'bg-violet-500',
 };
 
 export function BriefActivityTimeline({ briefId, refetchKey }: BriefActivityTimelineProps) {

@@ -237,6 +237,49 @@ export function useBriefsState({
     [activeTab]
   );
 
+  /** Áp brief server trả về sau khi đăng kênh — status có thể đã đổi
+   *  (submitted → published) nên phải move giữa các tab giống changeStatus,
+   *  nhưng KHÔNG gọi API (server đã đổi rồi). */
+  const applyPublishedBrief = useCallback(
+    (updated: Brief) => {
+      setTabs((prev) => {
+        const next = { ...prev };
+        for (const status of Object.keys(next) as BriefStatusT[]) {
+          const inTab = next[status].briefs.some((b) => b.id === updated.id);
+          if (!inTab) continue;
+          if (status === updated.status) {
+            next[status] = {
+              ...next[status],
+              briefs: next[status].briefs.map((b) => (b.id === updated.id ? updated : b)),
+            };
+          } else {
+            next[status] = {
+              ...next[status],
+              briefs: next[status].briefs.filter((b) => b.id !== updated.id),
+            };
+          }
+        }
+        // Prepend vào tab đích nếu đã load và chưa có (giống changeStatus)
+        if (
+          next[updated.status].loaded &&
+          !next[updated.status].briefs.some((b) => b.id === updated.id)
+        ) {
+          next[updated.status] = {
+            ...next[updated.status],
+            briefs: [updated, ...next[updated.status].briefs],
+          };
+        }
+        return next;
+      });
+      // Counts đổi khi status đổi — refetch từ server cho chính xác
+      void refetchCounts();
+      setActiveTab(updated.status);
+      setSelectedBriefId(updated.id);
+      setActivityRefetchKey((k) => k + 1);
+    },
+    [refetchCounts]
+  );
+
   // ─── Derived ──────────────────────────────────────────────────────────────────
   const currentTab = tabs[activeTab];
   const selectedBrief =
@@ -259,6 +302,7 @@ export function useBriefsState({
     editBrief,
     editDraftContent,
     changeStatus,
+    applyPublishedBrief,
     refetchCounts,
   };
 }

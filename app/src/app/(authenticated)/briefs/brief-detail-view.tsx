@@ -3,7 +3,7 @@
 
 'use client';
 
-import { FileText, Pencil } from 'lucide-react';
+import { FileText, Pencil, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Brief, BriefStatusT } from '@/lib/briefs/brief-types';
 import {
@@ -17,6 +17,7 @@ import {
 } from './brief-detail-sections';
 import { BriefStatusActions } from './brief-status-actions';
 import { BriefActivityTimeline } from './brief-activity-timeline';
+import { BriefPublicationsList } from './brief-publications-list';
 import { useCanEdit } from '@/components/auth/role-provider';
 
 interface BriefDetailViewProps {
@@ -27,6 +28,8 @@ interface BriefDetailViewProps {
   onEditBrief: (brief: Brief) => void;
   /** Sửa nội dung bài viết (draft_content) — cho status >= draft */
   onEditContent: (brief: Brief) => void;
+  /** Mở dialog đăng lên kênh — cho status submitted/published có draft_content */
+  onPublish: (brief: Brief) => void;
   /** Bump để force activity timeline refetch sau mutation */
   activityRefetchKey: number;
 }
@@ -58,6 +61,7 @@ export function BriefDetailView({
   onChangeStatus,
   onEditBrief,
   onEditContent,
+  onPublish,
   activityRefetchKey,
 }: BriefDetailViewProps) {
   // Gọi trước mọi early-return để không vi phạm rules-of-hooks.
@@ -203,6 +207,27 @@ export function BriefDetailView({
               </p>
             </div>
           )}
+        </section>
+      )}
+
+      {/* Đăng kênh — chỉ hiện khi brief đã qua review (submitted/published) */}
+      {(brief.status === 'submitted' || brief.status === 'published') && (
+        <section>
+          <div className="flex items-center justify-between mb-2 [&>h4]:mb-0">
+            <SectionHeader emoji="📣" label="Đăng lên kênh" />
+            {canEdit && brief.draft_content && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => onPublish(brief)}
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+              >
+                <Send className="size-3.5" />
+                Đăng lên kênh
+              </Button>
+            )}
+          </div>
+          <BriefPublicationsList briefId={brief.id} refetchKey={activityRefetchKey} />
         </section>
       )}
 

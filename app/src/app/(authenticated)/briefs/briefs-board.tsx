@@ -9,6 +9,7 @@ import { BriefInboxList } from './brief-inbox-list';
 import { BriefDetailView } from './brief-detail-view';
 import { BriefFormDialog } from './brief-form-dialog';
 import { BriefContentEditor } from './brief-content-editor';
+import { BriefPublishDialog } from './brief-publish-dialog';
 import { LoadMoreBriefsButton } from './load-more-briefs-button';
 import { useBriefsState } from './use-briefs-state';
 import { useCanEdit } from '@/components/auth/role-provider';
@@ -48,6 +49,7 @@ export function BriefsBoard({
     editBrief,
     editDraftContent,
     changeStatus,
+    applyPublishedBrief,
   } = useBriefsState({ initialBriefs, initialCursor, initialCounts });
 
   // 2 dialog tách biệt:
@@ -58,6 +60,9 @@ export function BriefsBoard({
 
   const [isContentEditorOpen, setIsContentEditorOpen] = useState(false);
   const [editingContentBrief, setEditingContentBrief] = useState<Brief | null>(null);
+
+  const [isPublishOpen, setIsPublishOpen] = useState(false);
+  const [publishingBrief, setPublishingBrief] = useState<Brief | null>(null);
 
   function handleEditBriefClick(brief: Brief) {
     setEditingBrief(brief);
@@ -78,6 +83,14 @@ export function BriefsBoard({
   function handleContentEditorOpenChange(open: boolean) {
     setIsContentEditorOpen(open);
     if (!open) setEditingContentBrief(null);
+  }
+  function handlePublishClick(brief: Brief) {
+    setPublishingBrief(brief);
+    setIsPublishOpen(true);
+  }
+  function handlePublishOpenChange(open: boolean) {
+    setIsPublishOpen(open);
+    if (!open) setPublishingBrief(null);
   }
   // Form submit handler — branch theo mode
   async function handleFormSubmit(input: unknown) {
@@ -182,6 +195,7 @@ export function BriefsBoard({
           onChangeStatus={changeStatus}
           onEditBrief={handleEditBriefClick}
           onEditContent={handleEditContentClick}
+          onPublish={handlePublishClick}
           activityRefetchKey={activityRefetchKey}
         />
       </div>
@@ -198,6 +212,13 @@ export function BriefsBoard({
         onOpenChange={handleContentEditorOpenChange}
         brief={editingContentBrief}
         onSubmit={editDraftContent}
+      />
+
+      <BriefPublishDialog
+        open={isPublishOpen}
+        onOpenChange={handlePublishOpenChange}
+        brief={publishingBrief}
+        onPublished={applyPublishedBrief}
       />
     </div>
   );

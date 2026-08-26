@@ -6,7 +6,11 @@ import type { PoolClient } from 'pg';
 import { db } from '@/lib/db';
 import type { BriefStatusT } from '@/lib/briefs/brief-types';
 
-export type BriefActivityAction = 'created' | 'status_changed' | 'content_edited';
+export type BriefActivityAction =
+  | 'created'
+  | 'status_changed'
+  | 'content_edited'
+  | 'published_to_channel';
 
 export interface BriefActivity {
   id: string;
