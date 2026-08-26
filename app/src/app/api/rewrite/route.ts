@@ -197,8 +197,26 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
       finishReason: result.finishReason,
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'OpenRouter API error';
-    console.error('[POST /rewrite] OpenRouter ERROR:', msg);
-    return NextResponse.json({ error: msg }, { status: 502 });
+    const raw = err instanceof Error ? err.message : 'OpenRouter API error';
+    console.error('[POST /rewrite] OpenRouter ERROR:', raw);
+    return NextResponse.json({ error: friendlyLlmError(raw) }, { status: 502 });
   }
+}
+
+/** Map lỗi 9router/upstream thành message tiếng Việt actionable.
+ *  Upstream (Claude/ChatGPT session) đôi khi trả nguyên trang HTML —
+ *  tuyệt đối không đẩy HTML thô ra toast của user. */
+function friendlyLlmError(raw: string): string {
+  if (/oauth access token has expired|authentication_error|re-authenticate/i.test(raw)) {
+    return (
+      'Phiên đăng nhập Claude/ChatGPT trong 9Router đã hết hạn. ' +
+      'Admin vào dashboard 9Router → Providers → Re-authenticate để kết nối lại.'
+    );
+  }
+  if (/<html|<!doctype/i.test(raw)) {
+    return 'LLM upstream trả lỗi bất thường (HTML) — thử lại sau ít phút hoặc đổi model khác. Nếu vẫn lỗi, admin kiểm tra 9Router dashboard.';
+  }
+  // Message thường: strip tag sót + cắt gọn cho toast
+  const cleaned = raw.replace(/<[^>]*>?/g, ' ').replace(/\s+/g, ' ').trim();
+  return cleaned.slice(0, 300) || 'Lỗi không xác định từ LLM provider';
 }
