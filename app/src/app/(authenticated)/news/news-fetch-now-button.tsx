@@ -40,7 +40,12 @@ export function NewsFetchNowButton() {
         return;
       }
 
-      toast.success('Đã fetch tin mới — đang refresh.');
+      const data = (await res.json().catch(() => ({}))) as { social?: string };
+      toast.success(
+        data.social === 'started'
+          ? 'Đã fetch RSS — Facebook/Twitter đang quét nền (1-3 phút), bấm Fetch lại sau để thấy.'
+          : 'Đã fetch RSS — Facebook/Twitter đang quét dở từ lần trước, đợi thêm chút.'
+      );
       setCooldownUntil(Date.now() + COOLDOWN_MS);
       // router.refresh() re-runs server component → page render lại với data mới
       startTransition(() => router.refresh());
