@@ -138,6 +138,19 @@ export async function fetchFbPageAvatar(pageRef: string): Promise<string | null>
   return typeof uri === 'string' && uri ? uri : null;
 }
 
+/** Numeric page id để tra Ads Library (meta-ads-cli cần id, không nhận slug).
+ *  Profile-page kiểu mới (vd huanyoutube) chạy ads dưới delegate page →
+ *  ưu tiên delegate_page_id. Null nếu không resolve được. */
+export async function fetchFbPageId(pageRef: string): Promise<string | null> {
+  const items = await runFb(['page', pageRef, '--fields', 'id,delegate_page_id,name']);
+  const rec = items[0];
+  if (!rec) return null;
+  const delegate = rec.delegate_page_id;
+  if (typeof delegate === 'string' && delegate) return delegate;
+  const id = rec.id;
+  return typeof id === 'string' && id ? id : null;
+}
+
 /** Full image URL của 1 photo id (feed attachment chỉ ship id, không ship URL). */
 export async function fetchFbPhotoUrl(photoId: string): Promise<string | null> {
   const items = await runFb(['photo', photoId, '--fields', 'id,image']);

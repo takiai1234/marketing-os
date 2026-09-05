@@ -89,6 +89,12 @@ COPY --from=deps --chown=nextjs:nodejs /app/node_modules/node-cron ./node_module
 COPY --from=fbcli /tmp/fb /usr/local/bin/fb
 ENV FB_DATA_DIR=/app/storage/fb-cli
 
+# meta-ads-collector — quét Facebook Ads Library free (lib/news/meta-ads-cli.ts,
+# route /api/news/scan). Python CLI; curl_cffi có wheel musllinux nên không cần
+# toolchain build. Pin version để build reproducible.
+RUN apk add --no-cache python3 py3-pip && \
+    pip3 install --no-cache-dir --break-system-packages meta-ads-collector==1.4.0
+
 # Skill library storage. WORKDIR `/app` is root-owned, so the runtime
 # `mkdir -p /app/storage/skills` from ensureStorageDir() would fail with
 # EACCES when running as nextjs (UID 1001). Pre-create here with the right
