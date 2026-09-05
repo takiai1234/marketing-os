@@ -50,7 +50,7 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
     );
   }
 
-  const [orMeta, fbIdMeta, fbSecretMeta, apifyTokenMeta, adsTokenMeta, googleIdMeta, googleSecretMeta,
+  const [orMeta, fbIdMeta, fbSecretMeta, apifyTokenMeta, fbSessionMeta, adsTokenMeta, googleIdMeta, googleSecretMeta,
          larkAppIdMeta, larkAppSecretMeta,
          larkMktAppTokenMeta, larkMktTableIdMeta, larkOrderAppTokenMeta, larkOrderTableIdMeta,
          telegramBotTokenMeta, telegramChatIdMeta] =
@@ -59,6 +59,7 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
       FB_APP_ID_KEY,
       FB_APP_SECRET_KEY,
       'APIFY_API_TOKEN',
+      'FB_SESSION_C_USER',
       'ADS_INGEST_TOKEN',
       GOOGLE_CLIENT_ID_KEY,
       GOOGLE_CLIENT_SECRET_KEY,
@@ -71,13 +72,12 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
       TELEGRAM_BOT_TOKEN_KEY,
       TELEGRAM_CHAT_ID_KEY,
     ]);
-  // Load plaintext Apify lists (not secret — hiển thị OK trong UI)
-  const [googleConnected, twitterHandles, facebookPages, twitterActor, facebookActor] = await Promise.all([
+  // Load plaintext lists (not secret — hiển thị OK trong UI)
+  const [googleConnected, twitterHandles, facebookPages, twitterActor] = await Promise.all([
     isGoogleConnected().catch(() => false),
     getSetting('APIFY_TWITTER_HANDLES'),
     getSetting('APIFY_FACEBOOK_PAGES'),
     getSetting('APIFY_TWITTER_ACTOR'),
-    getSetting('APIFY_FACEBOOK_ACTOR'),
   ]);
   const openrouter = orMeta ?? {
     key: OPENROUTER_KEY_NAME,
@@ -137,10 +137,10 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
 
       <ApifyForm
         apiTokenIsSet={apifyTokenMeta?.isSet ?? false}
+        fbSessionIsSet={fbSessionMeta?.isSet ?? false}
         twitterHandles={twitterHandles ?? ''}
         facebookPages={facebookPages ?? ''}
         twitterActor={twitterActor ?? ''}
-        facebookActor={facebookActor ?? ''}
         updatedAt={apifyTokenMeta?.updatedAt ?? null}
         updatedByName={apifyTokenMeta?.updatedByName ?? null}
       />
@@ -180,7 +180,8 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
 
       <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 px-5 py-4 text-xs text-zinc-500 italic">
         <strong>9Router</strong> cho Chat LLM (Claude Max + ChatGPT Pro) và Tạo ảnh (GPT Image 2) ·{' '}
-        <strong>Apify</strong> cho pull Twitter/Facebook vào /news.
+        <strong>fb-cli</strong> (free) cho pull Facebook vào /news ·{' '}
+        <strong>Apify</strong> cho Twitter + Facebook Ads Library.
       </div>
     </div>
   );

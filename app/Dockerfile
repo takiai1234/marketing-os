@@ -16,6 +16,15 @@ COPY --from=deps-full /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
+# Stage 2b: fb binary (tamnd/facebook-cli) — scrape Facebook posts cho /news
+# không cần API token. Pure-Go static binary → chạy thẳng trên alpine/musl.
+FROM alpine:3.20 AS fbcli
+ARG FB_CLI_VERSION=0.3.0
+RUN wget -qO /tmp/fb.tgz "https://github.com/tamnd/facebook-cli/releases/download/v${FB_CLI_VERSION}/fb_${FB_CLI_VERSION}_linux_amd64.tar.gz" && \
+    wget -qO /tmp/checksums.txt "https://github.com/tamnd/facebook-cli/releases/download/v${FB_CLI_VERSION}/checksums.txt" && \
+    grep "fb_${FB_CLI_VERSION}_linux_amd64.tar.gz\$" /tmp/checksums.txt | awk '{print $1"  /tmp/fb.tgz"}' | sha256sum -c - && \
+    tar -xzf /tmp/fb.tgz -C /tmp fb && chmod +x /tmp/fb
+
 # Stage 3: Production runner
 FROM node:20-alpine AS runner
 WORKDIR /app
@@ -75,12 +84,17 @@ COPY --from=deps --chown=nextjs:nodejs /app/node_modules/pgpass ./node_modules/p
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/pg-connection-string ./node_modules/pg-connection-string
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/node-cron ./node_modules/node-cron
 
+# fb-cli binary — nhánh Facebook của cron news dùng (lib/news/fb-cli.ts).
+# FB_DATA_DIR = cache + session của fb, phải writable bởi nextjs (tạo bên dưới).
+COPY --from=fbcli /tmp/fb /usr/local/bin/fb
+ENV FB_DATA_DIR=/app/storage/fb-cli
+
 # Skill library storage. WORKDIR `/app` is root-owned, so the runtime
 # `mkdir -p /app/storage/skills` from ensureStorageDir() would fail with
 # EACCES when running as nextjs (UID 1001). Pre-create here with the right
 # ownership. If a host volume is mounted at this path, the host dir itself
 # must be owned by UID 1001 to remain writable.
-RUN mkdir -p /app/storage/skills && chown -R nextjs:nodejs /app/storage
+RUN mkdir -p /app/storage/skills /app/storage/fb-cli && chown -R nextjs:nodejs /app/storage
 
 USER nextjs
 EXPOSE 3000

@@ -1,13 +1,15 @@
-// PUT  /api/settings/apify — save APIFY settings (token + usernames + pages)
+// PUT  /api/settings/apify — save news ingestion settings (Apify + fb-cli)
 // POST /api/settings/apify — sync ngay (manual trigger cron)
-// DELETE /api/settings/apify — clear all Apify settings
+// DELETE /api/settings/apify — clear all settings
 //
 // Settings keys lưu (encrypted) trong app_setting:
-//   - APIFY_API_TOKEN        (required cho cron chạy)
+//   - APIFY_API_TOKEN        (chỉ cần cho Twitter — Facebook chạy fb-cli free)
 //   - APIFY_TWITTER_HANDLES  (csv: "sama,rubenhassid,...")
 //   - APIFY_FACEBOOK_PAGES   (csv: "huanyoutube,nghecontent,..." hoặc full URL)
 //   - APIFY_TWITTER_ACTOR    (optional override, default apidojo/twitter-scraper-lite)
-//   - APIFY_FACEBOOK_ACTOR   (optional override, default apify/facebook-posts-scraper)
+//   - APIFY_FACEBOOK_ACTOR   (legacy — không dùng nữa, FB đi qua fb-cli)
+//   - FB_SESSION_C_USER      (optional cookie → fb-cli tier 1: full timeline)
+//   - FB_SESSION_XS          (optional cookie, đi cùng c_user)
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -24,6 +26,8 @@ const KEYS = {
   FACEBOOK_PAGES: 'APIFY_FACEBOOK_PAGES',
   TWITTER_ACTOR: 'APIFY_TWITTER_ACTOR',
   FACEBOOK_ACTOR: 'APIFY_FACEBOOK_ACTOR',
+  FB_C_USER: 'FB_SESSION_C_USER',
+  FB_XS: 'FB_SESSION_XS',
 } as const;
 
 const putBodySchema = z.object({
@@ -32,6 +36,9 @@ const putBodySchema = z.object({
   facebookPages: z.string().trim().max(5000).optional(),
   twitterActor: z.string().trim().max(100).optional(),
   facebookActor: z.string().trim().max(100).optional(),
+  // fb-cli session cookies (tier 1). Gửi cả 2 cùng lúc mới có tác dụng.
+  fbCUser: z.string().trim().min(3).max(50).optional(),
+  fbXs: z.string().trim().min(8).max(500).optional(),
 });
 
 async function requireAdmin(): Promise<NextResponse | { userId: string }> {
@@ -95,6 +102,16 @@ export async function PUT(req: NextRequest): Promise<NextResponse> {
   if (parsed.data.facebookActor) {
     updates.push(setSetting(KEYS.FACEBOOK_ACTOR, parsed.data.facebookActor, auth.userId));
   }
+  if (parsed.data.fbCUser) {
+    updates.push(
+      setSetting(KEYS.FB_C_USER, parsed.data.fbCUser, auth.userId, 'fb-cli cookie c_user (tier 1)')
+    );
+  }
+  if (parsed.data.fbXs) {
+    updates.push(
+      setSetting(KEYS.FB_XS, parsed.data.fbXs, auth.userId, 'fb-cli cookie xs (tier 1)')
+    );
+  }
 
   await Promise.all(updates);
 
@@ -127,6 +144,8 @@ export async function DELETE(): Promise<NextResponse> {
     deleteSetting(KEYS.FACEBOOK_PAGES),
     deleteSetting(KEYS.TWITTER_ACTOR),
     deleteSetting(KEYS.FACEBOOK_ACTOR),
+    deleteSetting(KEYS.FB_C_USER),
+    deleteSetting(KEYS.FB_XS),
   ]);
 
   return NextResponse.json({ ok: true });
